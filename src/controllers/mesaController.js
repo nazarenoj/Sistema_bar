@@ -4,11 +4,11 @@ const Pedido = require('../models/pedidoModel');
 const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
 const Factura = require('../models/facturaModel');
+const Venta = require('../services/ventaService');
+const Mensajeria = require('../mensajeria/servicio');
 const afipService = require('../services/afipService');
 const afipConfig = require('../config/afipConfig');
 const logger = require('../utils/logger');
-
-const METODOS_PAGO_VALIDOS = ['efectivo', 'tarjeta_debito', 'tarjeta_credito', 'transferencia', 'otro'];
 
 const getAll = async (req, res) => {
   const salon_id = parseInt(req.query.salon_id, 10);
@@ -51,8 +51,9 @@ const cerrarCuenta = async (req, res) => {
 
   const { metodo_pago, tipo_comprobante, doc_tipo, doc_nro, condicion_iva_receptor_id, receptor_nombre, domicilio_receptor } = req.body;
 
-  if (!METODOS_PAGO_VALIDOS.includes(metodo_pago))
-    return res.status(400).json({ error: `"metodo_pago" debe ser uno de: ${METODOS_PAGO_VALIDOS.join(', ')}.` });
+  // Pago simple (`metodo_pago`: el total en una sola forma) o mixto (`pagos`: [{ forma, importe, referencia?, recibido? }]).
+  if (!Array.isArray(req.body.pagos) && typeof metodo_pago !== 'string')
+    return res.status(400).json({ error: 'Indicá "metodo_pago" o la lista "pagos".' });
 
   // Facturar es opcional: si "tipo_comprobante" viene null/undefined, la cuenta se cierra sin
   // emitir comprobante fiscal (sin fila en `facturas` ni llamado a ARCA), para no bloquear el
@@ -78,7 +79,7 @@ const cerrarCuenta = async (req, res) => {
   }
 
   const conn = await pool.getConnection();
-  let mesa, pedidoIds, totalAcumulado, factura;
+  let mesa, pedidoIds, totalAcumulado, factura, venta, metodoPago;
   try {
     await conn.beginTransaction();
 
@@ -113,7 +114,14 @@ const cerrarCuenta = async (req, res) => {
     await (await puertos.obtener('stock')).descontarPorVenta(items, conn);
 
     await Pedido.cerrarPedidosMesa(id, conn);
-    await Pedido.setMetodoPago(id, pedidosActivos[0].sesion_apertura, metodo_pago, conn);
+    const pagos = await Venta.validarPagos(conn, Array.isArray(req.body.pagos) ? req.body.pagos : [{ forma: metodo_pago, importe: totalAcumulado }], totalAcumulado);
+    metodoPago = Venta.metodoResumen(pagos);
+    await Pedido.setMetodoPago(id, pedidosActivos[0].sesion_apertura, metodoPago, conn);
+    // La venta y los mensajes de sus efectos se graban en esta misma transacción (Ventas RN58).
+    venta = await Venta.registrar(conn, {
+      mesa_id: id, sesion_apertura: pedidosActivos[0].sesion_apertura, items, total: totalAcumulado, pagos,
+      idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null,
+    });
     // La mesa sigue "ocupada": recién se libera cuando se confirma que se imprimió/descargó el
     // comprobante (ver confirmarTicket), para no dejar la mesa disponible sin haberlo entregado.
     await Mesa.setTicketPendiente(id, true, conn);
@@ -125,7 +133,7 @@ const cerrarCuenta = async (req, res) => {
       factura = await Factura.create({
         mesa_id: id,
         sesion_apertura: pedidosActivos[0].sesion_apertura,
-        metodo_pago,
+        metodo_pago: metodoPago,
         tipo_comprobante,
         punto_venta: afipConfig.puntoVenta,
         doc_tipo,
@@ -140,8 +148,10 @@ const cerrarCuenta = async (req, res) => {
     }
 
     await conn.commit();
+    Mensajeria.despertar();
   } catch (err) {
     await conn.rollback();
+    if (err instanceof Venta.PagoInvalido) return res.status(400).json({ error: err.message, codigo: 'PAGO_INVALIDO' });
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
     return res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
   } finally {
@@ -182,6 +192,7 @@ const cerrarCuenta = async (req, res) => {
     pedidos_cerrados: pedidoIds.length,
     total_acumulado: totalAcumulado,
     ticket_pendiente: true,
+    venta_id_global: venta.id_global,
     factura: factura ? await Factura.getById(factura.id) : null,
   });
 };

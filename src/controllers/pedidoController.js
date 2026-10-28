@@ -368,7 +368,6 @@ const marcarPedidoEntregado = async (req, res) => {
   }
 };
 
-const METODOS_PAGO_VALIDOS = ['efectivo', 'tarjeta_debito', 'tarjeta_credito', 'transferencia', 'otro'];
 const ESTADOS_FACTURA_VALIDOS = ['pendiente', 'aprobada', 'rechazada', 'error'];
 
 // Valida los filtros del historial y devuelve `{ error }` o `{ filtros }`. La comparte la consulta
@@ -386,8 +385,6 @@ const validarFiltrosHistorial = (req) => {
     return { error: '"desde" no puede ser posterior a "hasta".' };
   if (req.query.numero_mesa !== undefined && (isNaN(numero_mesa) || numero_mesa <= 0))
     return { error: '"numero_mesa" debe ser un entero positivo.' };
-  if (metodo_pago !== undefined && !METODOS_PAGO_VALIDOS.includes(metodo_pago))
-    return { error: `"metodo_pago" debe ser uno de: ${METODOS_PAGO_VALIDOS.join(', ')}.` };
   if (estado_factura !== undefined && !ESTADOS_FACTURA_VALIDOS.includes(estado_factura))
     return { error: `"estado_factura" debe ser uno de: ${ESTADOS_FACTURA_VALIDOS.join(', ')}.` };
   if (con_factura !== undefined && !['si', 'no'].includes(con_factura))

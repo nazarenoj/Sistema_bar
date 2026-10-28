@@ -6,6 +6,8 @@ const pool             = require('./config/db');
 const authRoutes       = require('./routes/authRoutes');
 const productoRoutes   = require('./routes/productoRoutes');
 const catalogoRoutes   = require('./routes/catalogoRoutes');
+const ventaRoutes      = require('./routes/ventaRoutes');
+const formaPagoRoutes  = require('./routes/formaPagoRoutes');
 const insumoRoutes     = require('./routes/insumoRoutes');
 const mesaRoutes       = require('./routes/mesaRoutes');
 const pedidoRoutes     = require('./routes/pedidoRoutes');
@@ -121,6 +123,8 @@ app.use('/api', horaCliente);
 app.use('/api', idempotencia);
 
 app.use('/api/productos',   productoRoutes);
+app.use('/api/ventas',      ventaRoutes);
+app.use('/api/formas-pago', formaPagoRoutes);
 app.use('/api/categorias',  catalogoRoutes.categorias);
 app.use('/api/sectores',    catalogoRoutes.sectores);
 app.use('/api/insumos',     insumoRoutes);

@@ -9,6 +9,7 @@ const TIPO_COMPROBANTE_LETRA = { 1: 'A', 6: 'B', 11: 'C' };
 
 const METODO_PAGO_LABEL = {
   efectivo: 'Efectivo',
+  mixto: 'Mixto',
   tarjeta_debito: 'Tarjeta débito',
   tarjeta_credito: 'Tarjeta crédito',
   transferencia: 'Transferencia',
