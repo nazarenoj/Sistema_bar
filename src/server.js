@@ -25,6 +25,7 @@ const funcionRoutes    = require('./routes/funcionRoutes');
 const integracionRoutes = require('./routes/integracionRoutes');
 const notificacionRoutes = require('./routes/notificacionRoutes');
 const trabajador       = require('./mensajeria/trabajador');
+const resolucion       = require('./services/resolucionService');
 const Funciones        = require('./funciones/servicio');
 const { ping }         = require('./controllers/terminalController');
 const requireAuth      = require('./middleware/authMiddleware');
@@ -167,6 +168,7 @@ if (process.env.NODE_ENV !== 'test') {
       app.listen(PORT, () => {
         logger.info(`Servidor corriendo en http://localhost:${PORT}`);
         trabajador.iniciar(); // entrega de mensajes entre módulos y mantenimiento (A10)
+        resolucion.iniciar(); // intentos de emisión indeterminados y validación de la numeración (B7)
       });
     })
     .catch(async (err) => {

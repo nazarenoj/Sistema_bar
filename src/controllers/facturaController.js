@@ -1,4 +1,7 @@
+const pool = require('../config/db');
 const Factura = require('../models/facturaModel');
+const Resolucion = require('../services/resolucionService');
+const { auditar, actorDe } = require('../utils/auditar');
 const Pedido = require('../models/pedidoModel');
 const afipService = require('../services/afipService');
 const afipConfig = require('../config/afipConfig');
@@ -80,6 +83,31 @@ const getPdf = async (req, res) => {
   }
 };
 
+// Vista de las claves del secuenciador (las "Resolviendo" con sus intentos pendientes) y su resolución (RF47, RN57).
+const getClaves = async (req, res, next) => {
+  try { res.json(await Resolucion.claves()); } catch (err) { next(err); }
+};
+
+// Libera una clave bloqueada a mano. La ruta pide la autorización de un supervisor; acá se exige el motivo.
+const liberarClave = async (req, res, next) => {
+  const { clave, motivo } = req.body;
+  if (typeof clave !== 'string' || !clave) return res.status(400).json({ error: 'El campo "clave" es obligatorio.' });
+  if (typeof motivo !== 'string' || !motivo.trim()) return res.status(400).json({ error: 'El motivo es obligatorio.' });
+  try {
+    const liberados = await Resolucion.liberarClave(clave, motivo.trim(), actorDe(req));
+    await auditar(req, { modulo: 'facturacion', accion: 'clave_liberada', entidad: 'clave', entidad_id: clave, detalle: motivo.trim() });
+    res.json({ clave, intentos_liberados: liberados });
+  } catch (err) { next(err); }
+};
+
+// Compara la numeración local con la de ARCA (RN51); si difieren la clave queda "Resolviendo".
+const validarNumeracion = async (req, res, next) => {
+  const tipo = Number(req.body.tipo_comprobante);
+  if (!afipService.TIPOS_VALIDOS_POR_CONDICION[afipConfig.condicionIvaEmisor].includes(tipo))
+    return res.status(400).json({ error: 'Tipo de comprobante inválido para la condición IVA configurada.' });
+  try { res.json(await Resolucion.validarNumeracion(afipConfig.puntoVenta, tipo)); } catch (err) { next(err); }
+};
+
 // Reintenta la emisión de una factura que quedó pendiente/rechazada/con error (por ejemplo, tras
 // una caída de ARCA al cerrar la cuenta). No vuelve a tocar pedidos ni stock: eso ya ocurrió al
 // cerrar la cuenta, acá solo se reintenta el trámite ante ARCA.
@@ -93,6 +121,11 @@ const reintentar = async (req, res) => {
     if (factura.estado === 'aprobada')
       return res.status(400).json({ error: 'Esta factura ya fue aprobada, no hace falta reintentar.' });
 
+    // No se emite otro comprobante para una venta con un intento indeterminado hasta resolverlo (RN54).
+    const [[abierto]] = await pool.query("SELECT id FROM intento_emision WHERE factura_id = ? AND estado = 'indeterminado' LIMIT 1", [id]);
+    if (abierto)
+      return res.status(409).json({ error: 'Esta factura tiene un intento pendiente de resolver con ARCA. Esperá a que se resuelva o liberá la clave.', codigo: 'INTENTO_INDETERMINADO' });
+
     try {
       const resultado = await afipService.emitirFactura({
         tipoComprobante: factura.tipo_comprobante,
@@ -101,6 +134,7 @@ const reintentar = async (req, res) => {
         condicionIvaReceptorId: factura.condicion_iva_receptor_id,
         importeTotal: Number(factura.importe_total),
         idIntento: req.get('X-ID-Solicitud'),
+        facturaId: id,
       });
       await Factura.updateResultado(id, resultado);
       return res.json({ message: 'Factura reintentada.', factura: await Factura.getById(id) });
@@ -211,4 +245,4 @@ const getEstadoAfip = async (req, res) => {
   }
 };
 
-module.exports = { getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte };
+module.exports = { getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion };

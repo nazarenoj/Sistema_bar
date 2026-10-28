@@ -56,4 +56,23 @@ const solicitarCAE = async (detalle) => {
   return result.FECAESolicitarResult;
 };
 
-module.exports = { dummy, compUltimoAutorizado, solicitarCAE };
+// Consulta un comprobante por número (para resolver un intento indeterminado). Devuelve null si ARCA no lo
+// tiene (código 602, "no existen datos") o { resultado, cae, caeVencimiento } si existe.
+const compConsultar = async (ptoVta, cbteTipo, cbteNro) => {
+  const client = await getClient();
+  const [result] = await client.FECompConsultarAsync({
+    Auth: await authHeader(),
+    FeCompConsReq: { CbteTipo: cbteTipo, CbteNro: cbteNro, PtoVta: ptoVta },
+  });
+  const res = result.FECompConsultarResult;
+  if (res.Errors) {
+    const lista = Array.isArray(res.Errors.Err) ? res.Errors.Err : [res.Errors.Err];
+    if (lista.some((e) => Number(e.Code) === 602)) return null;
+    throw new Error(_listarErrores(res.Errors));
+  }
+  const g = res.ResultGet;
+  const f = String(g.FchVto || '');
+  return { resultado: g.Resultado, cae: g.CodAutorizacion, caeVencimiento: f.length === 8 ? `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}` : null };
+};
+
+module.exports = { dummy, compUltimoAutorizado, solicitarCAE, compConsultar };

@@ -23,10 +23,17 @@ const conClave = async (k, trabajo, { esperaMs = ESPERA_MS, arrendamientoMs = AR
   for (;;) {
     const ahora = Date.now();
     const [r] = await pool.query(
-      "UPDATE secuenciador_claves SET propietario = ?, estado = 'ocupada', vence_ms = ? WHERE clave = ? AND (estado = 'libre' OR vence_ms < ?)",
+      "UPDATE secuenciador_claves SET propietario = ?, estado = 'ocupada', vence_ms = ? WHERE clave = ? AND (estado = 'libre' OR (estado = 'ocupada' AND vence_ms < ?))",
       [yo, ahora + arrendamientoMs, clave, ahora]
     );
     if (r.affectedRows) break;
+    // Una clave "resolviendo" (intento indeterminado) no se espera: se ofrece CAEA, otro punto de venta o no fiscal.
+    const [[actual]] = await pool.query('SELECT estado FROM secuenciador_claves WHERE clave = ?', [clave]);
+    if (actual?.estado === 'resolviendo') {
+      const err = new Error('Esta clave está resolviendo un comprobante pendiente con ARCA: no se puede emitir con ella hasta resolverlo.');
+      err.codigo = 'CLAVE_RESOLVIENDO';
+      throw err;
+    }
     if (ahora >= limite) {
       const err = new Error('Hay otra emisión en curso para este punto de venta y tipo de comprobante. Reintentá en unos segundos.');
       err.codigo = 'CLAVE_OCUPADA';

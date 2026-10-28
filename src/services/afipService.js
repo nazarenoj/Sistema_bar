@@ -3,6 +3,7 @@ const config = require('../config/afipConfig');
 const wsfeClient = require('../afip/wsfeClient');
 const Secuenciador = require('./secuenciadorService');
 const Parametro = require('../models/parametroModel');
+const Resolucion = require('./resolucionService');
 
 const TIPOS_VALIDOS_POR_CONDICION = {
   monotributista: [11], // Factura C únicamente, nunca discrimina IVA
@@ -97,10 +98,11 @@ const validarReceptor = async ({ tipoComprobante, docTipo, condicionIvaReceptorI
     throw rechazar(`El importe supera el tope de consumidor final ($${tope}): identificá al receptor.`);
 };
 
-const guardarIntento = (idIntento, clave, numero, estado, resultado = null) => pool.query(
-  `INSERT INTO intento_emision (id_intento, clave, numero, estado, resultado) VALUES (?, ?, ?, ?, ?)
-   ON DUPLICATE KEY UPDATE clave = VALUES(clave), numero = VALUES(numero), estado = VALUES(estado), resultado = VALUES(resultado)`,
-  [idIntento, clave, numero, estado, resultado && JSON.stringify(resultado)]
+const guardarIntento = (idIntento, clave, numero, estado, resultado = null, facturaId = null) => pool.query(
+  `INSERT INTO intento_emision (id_intento, clave, numero, estado, resultado, factura_id) VALUES (?, ?, ?, ?, ?, ?)
+   ON DUPLICATE KEY UPDATE clave = VALUES(clave), numero = VALUES(numero), estado = VALUES(estado), resultado = VALUES(resultado),
+     factura_id = COALESCE(VALUES(factura_id), factura_id)`,
+  [idIntento, clave, numero, estado, resultado && JSON.stringify(resultado), facturaId]
 );
 
 // Emite un comprobante para una cuenta ya cerrada. No toca la tabla `facturas`: el controller es
@@ -108,7 +110,7 @@ const guardarIntento = (idIntento, clave, numero, estado, resultado = null) => p
 // Es la única vía de numeración y emisión (RN49): el número lo asigna el secuenciador, con una sola
 // solicitud en vuelo por punto de venta + tipo + modalidad. `idIntento` (la ID_Solicitud) hace al
 // intento idempotente: repetir uno ya autorizado devuelve el comprobante sin volver a ARCA (RN52).
-const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaReceptorId, importeTotal, idIntento }) => {
+const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaReceptorId, importeTotal, idIntento, facturaId }) => {
   validarTipoComprobante(tipoComprobante);
   await validarReceptor({ tipoComprobante, docTipo, condicionIvaReceptorId, importeTotal });
   const { impNeto, impIva, impTotal } = calcularImportes(tipoComprobante, importeTotal);
@@ -123,7 +125,7 @@ const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaRec
     const ultimoAutorizado = await wsfeClient.compUltimoAutorizado(config.puntoVenta, tipoComprobante);
     const numero = ultimoAutorizado + 1;
     const claveTexto = Secuenciador.claveDe(clave);
-    if (idIntento) await guardarIntento(idIntento, claveTexto, numero, 'solicitado');
+    if (idIntento) await guardarIntento(idIntento, claveTexto, numero, 'solicitado', null, facturaId);
 
     const item = {
       Concepto: 1, // Productos (consumo en el momento, no un servicio facturado por período)
@@ -151,7 +153,7 @@ const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaRec
       respuesta = await wsfeClient.solicitarCAE({ PtoVta: config.puntoVenta, CbteTipo: tipoComprobante, item });
     } catch (err) {
       // Se cortó después de enviar: no se sabe si ARCA lo autorizó. Queda indeterminado (B7 lo resuelve).
-      if (idIntento) await guardarIntento(idIntento, claveTexto, numero, 'indeterminado');
+      if (idIntento) await Resolucion.abrir({ idIntento, clave: claveTexto, numero, facturaId });
       throw err;
     }
     const resultado = _normalizarResultado(respuesta, { numero, impNeto, impIva, impTotal });

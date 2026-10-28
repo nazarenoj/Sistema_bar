@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const {
-  getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte,
+  getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion,
 } = require('../controllers/facturaController');
 
 const { requierePermiso } = require('../middleware/requierePermiso');
@@ -9,6 +9,10 @@ const router = Router();
 router.get('/config', requierePermiso('facturacion.ver'), getConfig);
 router.get('/estado-afip', requierePermiso('facturacion.ver'), getEstadoAfip);
 router.get('/reporte', requierePermiso('ventas.historial.exportar'), getReporte);
+// Claves del secuenciador: las "Resolviendo", su liberación (con autorización de supervisor) y la validación contra ARCA.
+router.get('/claves', requierePermiso('facturacion.claves.ver'), getClaves);
+router.post('/claves/liberar', requierePermiso('facturacion.claves.resolver'), liberarClave);
+router.post('/claves/validar', requierePermiso('facturacion.claves.resolver'), validarNumeracion);
 router.get('/', requierePermiso('facturacion.ver'), getHistorial);
 router.get('/:id', requierePermiso('facturacion.ver'), getOne);
 router.get('/:id/pdf', requierePermiso('facturacion.ver'), getPdf);

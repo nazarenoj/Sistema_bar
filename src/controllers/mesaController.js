@@ -173,6 +173,7 @@ const cerrarCuenta = async (req, res) => {
         condicionIvaReceptorId: condicion_iva_receptor_id,
         importeTotal: totalAcumulado,
         idIntento: req.get('X-ID-Solicitud'),
+        facturaId: factura.id,
       });
       await Factura.updateResultado(factura.id, resultado);
     } catch (err) {

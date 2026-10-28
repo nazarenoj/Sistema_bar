@@ -13,6 +13,8 @@ const PERMISOS = [
   { id: 'ventas.historial.ver', modulo: 'ventas', descripcion: 'Ver el historial y los gráficos de ventas', admiteAlcance: true },
   { id: 'ventas.historial.exportar', modulo: 'ventas', descripcion: 'Exportar reportes de ventas' },
   { id: 'facturacion.ver', modulo: 'ventas', descripcion: 'Ver comprobantes electrónicos' },
+  { id: 'facturacion.claves.ver', modulo: 'ventas', descripcion: 'Ver las claves del secuenciador de comprobantes y sus intentos pendientes' },
+  { id: 'facturacion.claves.resolver', modulo: 'ventas', descripcion: 'Liberar una clave bloqueada o validar la numeración contra ARCA' },
   { id: 'facturacion.reintentar', modulo: 'ventas', descripcion: 'Reintentar la emisión de un comprobante' },
   { id: 'stock.insumos.ver', modulo: 'stock', descripcion: 'Ver insumos' },
   { id: 'stock.insumos.editar', modulo: 'stock', descripcion: 'Crear y modificar insumos' },
