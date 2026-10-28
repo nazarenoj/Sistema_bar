@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 const config = require('../config/afipConfig');
 const wsfeClient = require('../afip/wsfeClient');
+const Secuenciador = require('./secuenciadorService');
+const Parametro = require('../models/parametroModel');
 
 const TIPOS_VALIDOS_POR_CONDICION = {
   monotributista: [11], // Factura C únicamente, nunca discrimina IVA
@@ -83,61 +85,82 @@ const _normalizarResultado = (resultado, { numero, impNeto, impIva, impTotal }) 
   };
 };
 
+// Reglas del receptor (Ventas RN14): la Factura A exige un receptor Responsable Inscripto identificado
+// con CUIT, y el consumidor final sin identificar no puede pasar el tope vigente (parámetro
+// tope_consumidor_final, 0 = sin control). Lanza con .status = 400 sin tocar ARCA.
+const validarReceptor = async ({ tipoComprobante, docTipo, condicionIvaReceptorId, importeTotal }) => {
+  const rechazar = (m) => Object.assign(new Error(m), { status: 400 });
+  if (tipoComprobante === 1 && (condicionIvaReceptorId !== 1 || docTipo !== 80))
+    throw rechazar('La Factura A exige un receptor Responsable Inscripto identificado con CUIT.');
+  const { tope_consumidor_final: tope = 0 } = await Parametro.todos();
+  if (docTipo === 99 && tope > 0 && importeTotal > tope)
+    throw rechazar(`El importe supera el tope de consumidor final ($${tope}): identificá al receptor.`);
+};
+
+const guardarIntento = (idIntento, clave, numero, estado, resultado = null) => pool.query(
+  `INSERT INTO intento_emision (id_intento, clave, numero, estado, resultado) VALUES (?, ?, ?, ?, ?)
+   ON DUPLICATE KEY UPDATE clave = VALUES(clave), numero = VALUES(numero), estado = VALUES(estado), resultado = VALUES(resultado)`,
+  [idIntento, clave, numero, estado, resultado && JSON.stringify(resultado)]
+);
+
 // Emite un comprobante para una cuenta ya cerrada. No toca la tabla `facturas`: el controller es
 // quien persiste el resultado devuelto acá (este módulo solo sabe hablar con ARCA).
-const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaReceptorId, importeTotal }) => {
+// Es la única vía de numeración y emisión (RN49): el número lo asigna el secuenciador, con una sola
+// solicitud en vuelo por punto de venta + tipo + modalidad. `idIntento` (la ID_Solicitud) hace al
+// intento idempotente: repetir uno ya autorizado devuelve el comprobante sin volver a ARCA (RN52).
+const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaReceptorId, importeTotal, idIntento }) => {
   validarTipoComprobante(tipoComprobante);
+  await validarReceptor({ tipoComprobante, docTipo, condicionIvaReceptorId, importeTotal });
   const { impNeto, impIva, impTotal } = calcularImportes(tipoComprobante, importeTotal);
 
-  // Lock por punto de venta: evita que dos cierres casi simultáneos consulten el mismo "último
-  // autorizado" y terminen pidiendo el mismo número de comprobante.
-  const lockName = `afip_ptovta_${config.puntoVenta}`;
-  const conn = await pool.getConnection();
-  try {
-    const [[{ lock_ok }]] = await conn.query('SELECT GET_LOCK(?, 10) AS lock_ok', [lockName]);
-    if (!lock_ok)
-      throw new Error('No se pudo obtener el lock de facturación (otro cierre en curso). Reintentá en unos segundos.');
-
-    try {
-      const ultimoAutorizado = await wsfeClient.compUltimoAutorizado(config.puntoVenta, tipoComprobante);
-      const numero = ultimoAutorizado + 1;
-
-      const item = {
-        Concepto: 1, // Productos (consumo en el momento, no un servicio facturado por período)
-        DocTipo: docTipo,
-        DocNro: Number(docNro),
-        CbteDesde: numero,
-        CbteHasta: numero,
-        CbteFch: formatFechaAfip(),
-        ImpTotal: impTotal,
-        ImpTotConc: 0,
-        ImpNeto: impNeto,
-        ImpOpEx: 0,
-        ImpIVA: impIva,
-        ImpTrib: 0,
-        MonId: 'PES',
-        MonCotiz: 1,
-        CondicionIVAReceptorId: condicionIvaReceptorId,
-        ...(tipoComprobante !== 11 && {
-          Iva: { AlicIva: [{ Id: config.ivaAlicuotaId, BaseImp: impNeto, Importe: impIva }] },
-        }),
-      };
-
-      const resultado = await wsfeClient.solicitarCAE({
-        PtoVta: config.puntoVenta,
-        CbteTipo: tipoComprobante,
-        item,
-      });
-
-      return _normalizarResultado(resultado, { numero, impNeto, impIva, impTotal });
-    } finally {
-      await conn.query('SELECT RELEASE_LOCK(?)', [lockName]);
-    }
-  } finally {
-    conn.release();
+  if (idIntento) {
+    const [[previo]] = await pool.query("SELECT resultado FROM intento_emision WHERE id_intento = ? AND estado = 'autorizado'", [idIntento]);
+    if (previo) return JSON.parse(previo.resultado);
   }
+
+  const clave = { puntoVenta: config.puntoVenta, tipo: tipoComprobante };
+  return Secuenciador.conClave(clave, async () => {
+    const ultimoAutorizado = await wsfeClient.compUltimoAutorizado(config.puntoVenta, tipoComprobante);
+    const numero = ultimoAutorizado + 1;
+    const claveTexto = Secuenciador.claveDe(clave);
+    if (idIntento) await guardarIntento(idIntento, claveTexto, numero, 'solicitado');
+
+    const item = {
+      Concepto: 1, // Productos (consumo en el momento, no un servicio facturado por período)
+      DocTipo: docTipo,
+      DocNro: Number(docNro),
+      CbteDesde: numero,
+      CbteHasta: numero,
+      CbteFch: formatFechaAfip(),
+      ImpTotal: impTotal,
+      ImpTotConc: 0,
+      ImpNeto: impNeto,
+      ImpOpEx: 0,
+      ImpIVA: impIva,
+      ImpTrib: 0,
+      MonId: 'PES',
+      MonCotiz: 1,
+      CondicionIVAReceptorId: condicionIvaReceptorId,
+      ...(tipoComprobante !== 11 && {
+        Iva: { AlicIva: [{ Id: config.ivaAlicuotaId, BaseImp: impNeto, Importe: impIva }] },
+      }),
+    };
+
+    let respuesta;
+    try {
+      respuesta = await wsfeClient.solicitarCAE({ PtoVta: config.puntoVenta, CbteTipo: tipoComprobante, item });
+    } catch (err) {
+      // Se cortó después de enviar: no se sabe si ARCA lo autorizó. Queda indeterminado (B7 lo resuelve).
+      if (idIntento) await guardarIntento(idIntento, claveTexto, numero, 'indeterminado');
+      throw err;
+    }
+    const resultado = _normalizarResultado(respuesta, { numero, impNeto, impIva, impTotal });
+    // Un rechazo no consume el número: el próximo sale otra vez de "último autorizado + 1" (EX03).
+    if (idIntento) await guardarIntento(idIntento, claveTexto, numero, resultado.estado === 'aprobada' ? 'autorizado' : 'rechazado', resultado);
+    return resultado;
+  });
 };
 
 const estadoServicio = () => wsfeClient.dummy();
 
-module.exports = { emitirFactura, estadoServicio, TIPOS_VALIDOS_POR_CONDICION, TIPOS_COMPROBANTE };
+module.exports = { emitirFactura, validarReceptor, estadoServicio, TIPOS_VALIDOS_POR_CONDICION, TIPOS_COMPROBANTE };

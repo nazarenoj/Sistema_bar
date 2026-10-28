@@ -108,6 +108,8 @@ const cerrarCuenta = async (req, res) => {
 
     pedidoIds = pedidosActivos.map(p => p.id);
     totalAcumulado = await Pedido.getTotalAcumulado(pedidoIds, conn);
+    // Las reglas del receptor (tipo A, tope de consumidor final) se miran antes de cerrar la cuenta, no después.
+    if (facturar) await afipService.validarReceptor({ tipoComprobante: tipo_comprobante, docTipo: doc_tipo, condicionIvaReceptorId: condicion_iva_receptor_id, importeTotal: totalAcumulado });
 
     const items = await Pedido.getItemsByPedidoIds(pedidoIds, conn);
     await Producto.decrementarStock(items, conn);
@@ -152,6 +154,7 @@ const cerrarCuenta = async (req, res) => {
   } catch (err) {
     await conn.rollback();
     if (err instanceof Venta.PagoInvalido) return res.status(400).json({ error: err.message, codigo: 'PAGO_INVALIDO' });
+    if (err.status === 400) return res.status(400).json({ error: err.message, codigo: 'RECEPTOR_INVALIDO' });
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
     return res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
   } finally {
@@ -169,6 +172,7 @@ const cerrarCuenta = async (req, res) => {
         docNro: String(doc_nro),
         condicionIvaReceptorId: condicion_iva_receptor_id,
         importeTotal: totalAcumulado,
+        idIntento: req.get('X-ID-Solicitud'),
       });
       await Factura.updateResultado(factura.id, resultado);
     } catch (err) {

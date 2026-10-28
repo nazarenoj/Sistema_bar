@@ -100,6 +100,7 @@ const reintentar = async (req, res) => {
         docNro: factura.doc_nro,
         condicionIvaReceptorId: factura.condicion_iva_receptor_id,
         importeTotal: Number(factura.importe_total),
+        idIntento: req.get('X-ID-Solicitud'),
       });
       await Factura.updateResultado(id, resultado);
       return res.json({ message: 'Factura reintentada.', factura: await Factura.getById(id) });
