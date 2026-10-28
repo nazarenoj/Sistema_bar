@@ -3,10 +3,12 @@ const config = require('../config/afipConfig');
 const taCache = require('./taCache');
 
 // El cliente SOAP se arma una sola vez (contra el WSDL publicado) y se reutiliza entre llamadas.
-let clientPromise = null;
+// Es por WSDL (homologación o producción), no por instancia: el cliente no guarda credenciales.
+const clientes = new Map();
 const getClient = () => {
-  if (!clientPromise) clientPromise = soap.createClientAsync(config.wsfeWsdl);
-  return clientPromise;
+  const url = config.wsfeWsdl;
+  if (!clientes.has(url)) clientes.set(url, soap.createClientAsync(url));
+  return clientes.get(url);
 };
 
 const _listarErrores = (errors) => {

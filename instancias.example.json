@@ -1,0 +1,13 @@
+[
+  {
+    "codigo": "CHP01",
+    "db": "chepola_chp01",
+    "hosts": ["chp01.ejemplo.com"],
+    "afip": { "cuit": "20123456789", "entorno": "produccion", "condicionIvaEmisor": "responsable_inscripto", "puntoVenta": 3, "certPath": "./certs/CHP01/cert.pem", "keyPath": "./certs/CHP01/private_key.key", "razonSocial": "Cafetería Chepola SRL" }
+  },
+  {
+    "codigo": "CHP02",
+    "db": "chepola_chp02",
+    "hosts": ["chp02.ejemplo.com"]
+  }
+]

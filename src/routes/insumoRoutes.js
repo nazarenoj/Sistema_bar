@@ -7,12 +7,13 @@ const {
   remove,
 } = require('../controllers/insumoController');
 
+const { requierePermiso } = require('../middleware/requierePermiso');
 const router = Router();
 
-router.get('/', getAll);
-router.get('/:identifier', getOne);   // resuelve ID (numérico) o nombre (texto)
-router.post('/', create);
-router.put('/:id', update);
-router.delete('/:id', remove);
+router.get('/', requierePermiso('stock.insumos.ver'), getAll);
+router.get('/:identifier', requierePermiso('stock.insumos.ver'), getOne);   // resuelve ID (numérico) o nombre (texto)
+router.post('/', requierePermiso('stock.insumos.editar'), create);
+router.put('/:id', requierePermiso('stock.insumos.editar'), update);
+router.delete('/:id', requierePermiso('stock.insumos.editar'), remove);
 
 module.exports = router;

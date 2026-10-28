@@ -1,4 +1,6 @@
 const pool = require('../config/db');
+const { idGlobal } = require('../utils/idGlobal');
+const Funciones = require('../funciones/servicio');
 
 // Cierre de la mesa (fin de la cuenta, no del pedido/silla individual): el momento en que se
 // cerró el último pedido de la misma sesión (mismo mesa_id + sesion_apertura). Si todavía queda
@@ -18,7 +20,7 @@ const FACTURA_COLUMNAS = `
   f.id AS factura_id, f.tipo_comprobante, f.punto_venta AS factura_punto_venta,
   f.numero AS factura_numero, f.cae, f.cae_vencimiento, f.estado AS factura_estado,
   f.importe_neto, f.importe_iva, f.importe_total AS factura_importe_total,
-  f.metodo_pago, f.observaciones AS factura_observaciones`;
+  f.observaciones AS factura_observaciones`;
 
 const getById = async (id, conn = pool) => {
   const [rows] = await conn.query(
@@ -35,13 +37,14 @@ const getById = async (id, conn = pool) => {
 // La sesión (sesion_apertura) identifica la cuenta completa de la mesa: si ya hay un pedido
 // activo en esa mesa, el nuevo pedido se suma a la misma sesión; si no, empieza una nueva ahora.
 const create = async (mesa_id) => {
+  const snap = await Funciones.instantanea('pedido'); // las reglas del pedido quedan fijas hasta cerrarlo (RN75)
   const [result] = await pool.query(
-    `INSERT INTO pedidos (mesa_id, sesion_apertura)
+    `INSERT INTO pedidos (mesa_id, sesion_apertura, id_global, config_version, config_instantanea)
      SELECT ?, COALESCE(
        (SELECT sesion_apertura FROM pedidos WHERE mesa_id = ? AND estado = 'activo' ORDER BY id ASC LIMIT 1),
        NOW()
-     )`,
-    [mesa_id, mesa_id]
+     ), ?, ?, ?`,
+    [mesa_id, mesa_id, await idGlobal(), snap.version, JSON.stringify(snap.funciones)]
   );
   const [rows] = await pool.query('SELECT * FROM pedidos WHERE id = ?', [result.insertId]);
   return rows[0];
@@ -125,7 +128,7 @@ const construirConsultaHistorial = (filtros = {}) => {
   if (desde) { condiciones.push('p.fecha_cierre >= ?'); params.push(`${desde} 00:00:00`); }
   if (hasta) { condiciones.push('p.fecha_cierre <= ?'); params.push(`${hasta} 23:59:59`); }
   if (numero_mesa) { condiciones.push('m.numero_mesa = ?'); params.push(numero_mesa); }
-  if (metodo_pago) { condiciones.push('f.metodo_pago = ?'); params.push(metodo_pago); }
+  if (metodo_pago) { condiciones.push('p.metodo_pago = ?'); params.push(metodo_pago); }
   if (estado_factura) { condiciones.push('f.estado = ?'); params.push(estado_factura); }
   if (con_factura === 'si') condiciones.push('f.id IS NOT NULL');
   if (con_factura === 'no') condiciones.push('f.id IS NULL');
@@ -144,7 +147,7 @@ const getHistorial = async (page, limit, filtros = {}) => {
   const { whereSql, params, ordenSql } = construirConsultaHistorial(filtros);
 
   const [rows] = await pool.query(
-    `SELECT p.id, p.mesa_id, m.numero_mesa, p.estado, p.total,
+    `SELECT p.id, p.mesa_id, m.numero_mesa, p.estado, p.total, p.metodo_pago,
             p.sesion_apertura, p.fecha_creacion, p.fecha_cierre,
             ${HORA_CIERRE_MESA_SUBQUERY}, ${FACTURA_COLUMNAS}
      FROM pedidos p
@@ -175,7 +178,7 @@ const getHistorialCompleto = async (filtros = {}, maxFilas = 5000) => {
   const { whereSql, params, ordenSql } = construirConsultaHistorial(filtros);
 
   const [rows] = await pool.query(
-    `SELECT p.id, p.mesa_id, m.numero_mesa, p.estado, p.total,
+    `SELECT p.id, p.mesa_id, m.numero_mesa, p.estado, p.total, p.metodo_pago,
             p.sesion_apertura, p.fecha_creacion, p.fecha_cierre,
             ${HORA_CIERRE_MESA_SUBQUERY}, ${FACTURA_COLUMNAS}
      FROM pedidos p
@@ -296,6 +299,16 @@ const remove = async (pedido_id, conn) => {
   await conn.query('DELETE FROM pedidos WHERE id = ?', [pedido_id]);
 };
 
+// Guarda el método de pago en todos los pedidos de la cuenta (misma mesa y sesión), incluidos los
+// que se cerraron antes por silla. Vive en `pedidos` y no en `facturas` para no perderlo cuando la
+// cuenta se cierra sin facturar.
+const setMetodoPago = async (mesa_id, sesion_apertura, metodo_pago, conn) => {
+  await conn.query(
+    'UPDATE pedidos SET metodo_pago = ? WHERE mesa_id = ? AND sesion_apertura = ?',
+    [metodo_pago, mesa_id, sesion_apertura]
+  );
+};
+
 // Cierra un único pedido (a diferencia de cerrarPedidosMesa, que cierra todos los de la mesa a la vez)
 const cerrarPedidoIndividual = async (pedido_id, conn) => {
   await conn.query(
@@ -340,6 +353,7 @@ module.exports = {
   getTotalAcumulado,
   addProductos,
   cerrarPedidosMesa,
+  setMetodoPago,
   cerrarPedidoIndividual,
   getHistorial,
   getHistorialCompleto,

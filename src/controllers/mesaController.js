@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const Mesa = require('../models/mesaModel');
 const Pedido = require('../models/pedidoModel');
 const Producto = require('../models/productoModel');
-const Insumo = require('../models/insumoModel');
+const puertos = require('../modulos/puertos');
 const Factura = require('../models/facturaModel');
 const afipService = require('../services/afipService');
 const afipConfig = require('../config/afipConfig');
@@ -110,9 +110,10 @@ const cerrarCuenta = async (req, res) => {
 
     const items = await Pedido.getItemsByPedidoIds(pedidoIds, conn);
     await Producto.decrementarStock(items, conn);
-    await Insumo.decrementarStockPorVenta(items, conn);
+    await (await puertos.obtener('stock')).descontarPorVenta(items, conn);
 
     await Pedido.cerrarPedidosMesa(id, conn);
+    await Pedido.setMetodoPago(id, pedidosActivos[0].sesion_apertura, metodo_pago, conn);
     // La mesa sigue "ocupada": recién se libera cuando se confirma que se imprimió/descargó el
     // comprobante (ver confirmarTicket), para no dejar la mesa disponible sin haberlo entregado.
     await Mesa.setTicketPendiente(id, true, conn);

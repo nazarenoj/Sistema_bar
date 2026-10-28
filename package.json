@@ -1,12 +1,15 @@
 {
   "name": "sistema-chepola",
-  "version": "3.4.0",
+  "version": "7.0.0",
   "description": "Sistema Chepola - API REST con Express",
   "main": "src/server.js",
   "scripts": {
     "build": "npm install --include=dev --prefix frontend && npm run build --prefix frontend",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "migrar": "node scripts/migrar.js",
+    "alta": "node scripts/alta-instancia.js",
+    "test": "node --test \"test/**/*.test.js\"",
     "dev:all": "concurrently -n API,WEB -c cyan,magenta \"npm run dev\" \"npm run dev --prefix frontend\""
   },
   "engines": {

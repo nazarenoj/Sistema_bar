@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
   mesa_id         INT           NOT NULL,
   estado          ENUM('activo', 'finalizado') NOT NULL DEFAULT 'activo',
   total           DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  metodo_pago     ENUM('efectivo', 'tarjeta_debito', 'tarjeta_credito', 'transferencia', 'otro') NULL,
   fecha_creacion  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
   fecha_cierre    TIMESTAMP     NULL DEFAULT NULL,
   sesion_apertura TIMESTAMP     NOT NULL,

@@ -1,64 +1,109 @@
-# Proyecto: Sistema de Gestión para Cafetería Local
+# Proyecto: Sistema de Gestión para Cafetería
 
 ## Contexto del negocio
-Cafetería local con 2 usuarios: el dueño y un empleado, sin diferenciación de roles ni permisos.
-Necesita reemplazar la operación manual por un sistema simple que permita operar el día a día sin dificultad.
+Producto para **vender a múltiples clientes** del rubro cafetería y producción de alimentos, de
+distintos tamaños (incluye empresas más grandes, con varias sucursales y varios usuarios con
+permisos distintos). Ya no es un sistema a medida para una sola cafetería: el código se diseña para
+que dar de alta un cliente nuevo sea fácil y no requiera tocar código.
 
-## Objetivo del sistema
-Permitir operar el negocio de forma simple, cubriendo:
-- Gestión de mesas y sus cuentas (abrir, sumar pedidos, cerrar cuenta)
-- Carta de productos con precios editables por el dueño
-- Registro del método de pago utilizado por cuenta (efectivo, tarjeta, etc.)
-- Emisión de factura electrónica homologada (AFIP, con CAE) - A/B/C
+Origen: el sistema nació para una cafetería local (2 usuarios, una sucursal). Esa operación sigue
+siendo el primer cliente y el piloto.
 
-## Alcance del MVP (lo imprescindible)
-1. **Mesas y cuentas**: alta/cierre de mesas, agregar productos a una cuenta abierta, ver total acumulado.
-2. **Carta de productos**: CRUD de productos con precio, editable en cualquier momento por el dueño/empleado. Control de stock simplificado a "disponible / no disponible" (sin manejo de insumos ni recetas por ahora).
-3. **Carga de pedidos**: se realiza desde una PC/notebook en el mostrador (NO se carga desde la mesa). El mozo anota en papel y luego transcribe. No es mobile-first, pero conviene mantener diseño responsive por si en el futuro se quiere cargar desde tablet.
-4. **Pagos**: registrar el método de pago usado al cerrar cada cuenta, para fines de reporte.
-5. **Facturación electrónica (AFIP)**: emisión de comprobantes homologados con CAE (factura A/B/C según corresponda). Es el módulo más sensible técnicamente.
-6. **Insumos y recetas**: CRUD de insumos (nombre, unidad de medida, costo unitario opcional,
-   stock, disponible sí/no) y relación producto→insumos ("café con leche" consume "café molido" y
-   "leche" en ciertas cantidades). Igual que con productos, el stock de un insumo solo se fija al
-   crearlo y no se puede editar a mano desde la pestaña de Insumos: al cerrar una cuenta/pedido se
-   descuenta automáticamente según la receta del producto vendido.
+## Estado actual (qué existe hoy)
+Mesas/salones/sillas, pedidos y cierre de cuenta con método de pago, carta de productos, insumos y
+recetas (descuento de stock al cerrar), facturación electrónica ARCA/AFIP con CAE (A/B/C, PDF y QR),
+tickets, historial paginado con gráficos y reportes (CSV/Excel/PDF/JSON), usuarios con sesiones, terminales, roles y
+permisos reales, auditoría, funciones activables y varias instancias en la misma app (plataforma de la
+Fase A completa, v6.0.0).
 
-## Fuera de alcance (por ahora)
-- Diferenciación de PERMISOS entre roles: existe login y un campo `rol` en la base (ver
-  "Decisiones de escalabilidad aplicadas"), pero hoy ambos roles pueden hacer las mismas acciones
-- Carga de pedidos desde celular/tablet en la mesa
-- Integración con pasarelas de pago (Mercado Pago, etc.) más allá de registrar el método
-- Costeo automático de productos a partir del costo de sus insumos (el costo unitario del insumo
-  se guarda, pero todavía no se usa para calcular el costo/margen de un producto)
+## Dirección del producto
+- **Plan de referencia**: `plan-tecnico-desarrollo.md` (basado en los SPECS 00 a 08 y Anexos). Es la
+  visión a largo plazo; no todo se implementa de golpe. Se avanza por fases y lo que ya existe se
+  evoluciona, no se tira.
+- **Cada cliente es una instancia independiente** (su propia base de datos, usuarios, configuración
+  y credenciales ARCA). Nada de datos de varios clientes mezclados en las mismas tablas.
+- **Funciones activables por cliente**: lo que no todos usan (facturación, insumos/recetas, etc.) se
+  prende o apaga por configuración, no con ramas de código por cliente.
+- **Sin código específico de un cliente**: diferencias de precios, rubros, puntos de venta, textos o
+  logos van en configuración/datos, nunca hardcodeadas.
+- **Permisos reales por rol** pasan a ser necesarios (clientes grandes). El campo `rol` ya existe.
+- **Multi-sucursal** pasa a estar en alcance (antes estaba descartado).
+- Agregar un cliente debería ser un proceso repetible (script/comando de alta), no manual.
 
-## Decisiones de escalabilidad aplicadas
-Con 2 usuarios y una sola sucursal, no tiene sentido sobre-diseñar el sistema. Estas son las
-únicas decisiones que se tomaron hoy para no tener que reescribir cosas más adelante:
-- **Login con usuario/contraseña (JWT)**: toda la API (salvo `/api/auth/login` y `/health`) exige
-  un token. Hay una tabla `users` con un campo `rol` ('admin' | 'empleado'), pero por ahora es solo
-  informativo: ningún endpoint todavía chequea el rol para permitir o negar una acción. Sirve para
-  no tener que migrar el esquema el día que se quiera diferenciar permisos.
-- **Historial paginado**: `GET /api/pedidos/historial` devuelve páginas (`page`/`limit`, default
-  20), no la tabla completa. Se agregaron índices en `pedidos(estado, fecha_cierre)` y
-  `pedidos(mesa_id, sesion_apertura)` para que esa consulta no se degrade con más volumen.
-- **Explícitamente NO se hizo**: nada de multi-sucursal/multi-tenant (no es una prioridad del
-  cliente) ni un sistema de permisos real (no hay todavía ninguna acción que deba estar
-  restringida a un solo rol).
+## Decisiones técnicas tomadas
+- **Hosting**: Hostinger.
+- **Aislamiento**: una base de datos por **instancia**. El SPEC de Usuarios (RN22, RN79) define que
+  cada sucursal es una instancia independiente (usuarios, roles, auditoría, cajas y copias propios):
+  un cliente de una sola sucursal tiene una base; uno con varias sucursales, una por sucursal.
+- **Motor**: se queda en **MySQL** (Hostinger no ofrece PostgreSQL fuera de un VPS). Mantener el SQL
+  simple y concentrado en `src/models` para poder migrar a PostgreSQL más adelante. Dinero siempre
+  `DECIMAL`, nunca flotantes. Los scripts de migración deben ser idempotentes (`IF NOT EXISTS`),
+  porque el DDL de MySQL no es transaccional.
+- **Evolutivo, no reescritura**: se evoluciona el código actual en lugar de rehacerlo según el plan
+  (TypeScript/NestJS). TypeScript, si se usa, se suma de a poco. Se reconsidera solo si un módulo
+  se vuelve inmanejable.
+- **Una sola app para todos los clientes**: la app resuelve a qué base conectarse según el cliente
+  de cada request (pool de conexiones por cliente), en vez de desplegar una app por cliente.
 
-## Stack tecnológico
+- **ID_Global** de todo documento: `<CODIGO_INSTANCIA>-<ULID>`, con la hora del servidor, columna
+  `id_global` única. Ninguna integración, mensaje ni clave de idempotencia usa el id interno
+  autoincremental ni el número visible (que puede repetirse tras restaurar una copia).
+- **Periféricos desde el navegador** (sin instalar nada en el local): lector de códigos como
+  teclado USB; impresoras de tickets y comandas por una cola de impresión que consume la terminal
+  a la que pertenecen (Web Serial/WebUSB con ESC/POS, o impresión silenciosa del navegador de
+  respaldo); cajón por el pulso de la impresora; balanza por Web Serial con lectura estable, y
+  peso manual con permiso como respaldo. Detalle en `plan-checkpoints.md`.
+- **Llamadas entre módulos que fallan**: la lista cerrada y la política de falla de cada una
+  (cerrar, abrir con autorización o degradar) están en el Anexo B.5 del índice de SPECS y en
+  `plan-checkpoints.md`; una llamada que no figura ahí no puede existir.
+- **Migraciones**: el esquema vive en `database/migraciones/NNN_*.sql` y lo aplica
+  `src/db/migrador.js` (al arrancar la app, con `npm run migrar` o con `npm run alta` para una
+  instancia nueva). Una migración ya aplicada no se edita: los cambios van en una migración nueva,
+  y como el DDL de MySQL no es transaccional, cada archivo tiene que poder re-ejecutarse (ver el
+  patrón de la 002). `database/legacy/` es solo historia.
+- **Pruebas**: `npm test` (node:test) corre contra un MySQL/MariaDB local descartable, con las
+  variables `DB_HOST`, `DB_USER`, `DB_PASSWORD` y `DB_PORT`; crea y borra su propia base y se niega a
+  correr contra un servidor remoto salvo `TEST_PERMITIR_REMOTO=1`.
+- **Instancias**: cada cliente o sucursal es una instancia (su propia base). `instancias.json` (no se
+  versiona; ejemplo en `instancias.example.json`) las lista con su código, base, direcciones web y datos de
+  ARCA; sin archivo hay una sola instancia `DEFAULT` con el `.env`. La app resuelve la instancia de cada
+  request (cabecera `X-Instancia` o dirección web) y los modelos usan `pool` sin saber de instancias
+  (`src/instancias/registro.js`). Alta: `npm run alta -- ... --registrar`.
+- **Plataforma (Fase A)**: permisos por rol con `requierePermiso(accion)` (catálogo en
+  `src/permisos/catalogo.js`; las acciones nuevas de cada módulo se suman ahí y en una migración con
+  los niveles de cada rol), auditoría encadenada con `auditar(req, ...)`, funciones activables
+  (`src/funciones/catalogo.js`, estado en la base), módulos y llamadas entre módulos
+  (`src/modulos/`: solo por `llamar(n, ...)` o por un puerto), mensajería entre módulos
+  (`src/mensajeria/`: `publicar` dentro de la transacción del documento y un receptor idempotente),
+  reservas con vencimiento (`src/reservas/`), idempotencia por `X-ID-Solicitud` y notificaciones. La
+  prueba `test/arquitectura.test.js` rechaza cruces de capas que no estén en el registro.
+- **Arranque limpio de datos**: esquema nuevo desde cero (migración `001`), sin migrar pedidos ni
+  facturas del cliente actual. Los scripts viejos de `database/` pasan a `database/legacy/`.
+- **Mensajería entre módulos**: bandeja de salida en la misma base, con un trabajador dentro de la
+  misma app, sin broker externo.
+
+## Alcance y prioridad
+Se desarrollan **en su totalidad**, según `SPECS/`, estos módulos y en este orden de importancia:
+**Ventas, Usuarios y Auditoría, Stock, Clientes y CC**. Financiero, Compras, Contable y Ventas
+Online no se construyen por ahora: se tratan como puertos con implementación nula (la venta
+funciona igual sin ellos). El plan de trabajo, con checkpoints y criterios de aceptación, está en
+`plan-checkpoints.md`; es la referencia para saber qué sigue. Los SPECS están en `SPECS/`
+(`00-indice-y-decisiones.md` trae el catálogo de funciones, los perfiles de rubro, las capas, los
+puertos, los eventos y la lista cerrada de llamadas entre módulos). Los números RF/RN/EX nunca se
+renumeran: se citan siempre por módulo y número (ej. `Ventas RN12`).
+
+## Decisiones técnicas pendientes (no asumir, consultar antes)
+- Límites del plan de Hostinger: cantidad de bases de datos y de apps Node permitidas, y versión
+  exacta de MySQL/MariaDB. Confirmar antes de comprometer un número de clientes.
+- Prueba de campo de los periféricos con el equipo real del cliente piloto (checkpoint B0): si la
+  balanza no habla por puerto serie, se reabre la decisión de periféricos.
+
+## Stack tecnológico (actual)
 - **Backend**: Node.js
 - **Frontend**: React
 - **Base de datos**: MySQL
 - **Hosting**: Hostinger
 - Desarrollo asistido por Claude Code (sin equipo adicional)
-
-## Riesgos / bloqueantes a resolver ANTES o EN PARALELO al desarrollo
-- ⚠️ **Estado AFIP desconocido**: no se sabe si la cafetería ya está inscripta y habilitada para facturación electrónica (certificado digital / clave fiscal nivel 3). Esto es un trámite administrativo del cliente, NO de código, y bloquea poder probar el módulo de facturación en un entorno real. Debe verificarse cuanto antes y tratarse como tarea de "Fase 0", en paralelo al desarrollo del resto del sistema, para no frenar el proyecto completo.
-- El módulo de facturación electrónica AFIP suele requerir homologación primero en entorno de testing (WSFEv1 / homologación) antes de pasar a producción.
-
-## Prioridades del cliente
-- "Cuanto antes mejor" (sin fecha límite estricta, pero urgencia alta)
-- Lo más importante en este momento: control de precios de la carta
 
 ## Versionado del sistema
 El sistema usa un único número de versión `MAJOR.MINOR.PATCH`, arrancando en **1.0.0**. No es
@@ -83,186 +128,3 @@ Reglas:
   `package.json`, no hardcodeado).
 - Cada vez que se haga un cambio que corresponda a una de estas categorías, hay que actualizar
   `package.json` (raíz) como parte del mismo commit.
-
-
-# AFIP / ARCA — Integración de Facturación Electrónica
-> Investigado sobre documentación oficial de ARCA (arca.gov.ar / afip.gob.ar) — Julio 2026
-
----
-
-## 1. Contexto: qué servicio usar
-
-El web service correcto para este proyecto es **WSFEv1** (Web Service de Factura Electrónica V1, RG N° 4.291).
-Cubre comprobantes A, B y C **sin detalle de ítem** (que es nuestro caso: una cafetería no necesita detallar cada ítem con código de producto).
-La autenticación previa a cualquier llamada la maneja un servicio separado: **WSAA** (Web Service de Autenticación y Autorización).
-
-Flujo de cada llamada:
-WSAA (token de acceso) → WSFEv1 (autorización de comprobante) → respuesta con CAE
-
----
-
-## 2. Qué tipo de comprobante emite la cafetería
-
-Esto depende de la condición fiscal del dueño. Hay que verificarlo antes de arrancar el módulo:
-
-| Condición fiscal | Comprobante que emite | Cómo registrar el PdV en ARCA |
-|---|---|---|
-| **Monotributista** | Solo **C** | Registro Único Tributario → "Factura electrónica – Monotributo – Web Services" |
-| **Responsable Inscripto** | **A** (a RI), **B** (a consumidor final / monotributo) | Servicio REAR/RECE/RFI → "RECE para aplicativo y web services" |
-
-**Acción inmediata para el cliente:** verificar en ARCA con su clave fiscal qué condición tiene y si ya tiene puntos de venta dados de alta para Web Services.
-
----
-
-## 3. Pasos administrativos (cliente, no código) — FASE 0
-
-Estos son los pasos que el dueño de la cafetería debe completar. Son trámites de clave fiscal, no de desarrollo.
-
-### 3.1 Requisitos previos
-- CUIT con estado administrativo **activo sin limitaciones**
-- Clave Fiscal nivel **3 como mínimo**
-- Al menos una actividad económica declarada en el Sistema Registral (CLAE)
-
-### 3.2 Dar de alta el Punto de Venta para Web Services
-Desde ARCA con clave fiscal:
-- Ingresar al servicio **"Administración de Puntos de Venta y Domicilios"** (o "Registro Único Tributario" si es monotributista)
-- Agregar un nuevo punto de venta (ej: 0002)
-- Seleccionar sistema de facturación:
-  - Si es **Monotributista**: "Factura electrónica – Monotributo – Web Services"
-  - Si es **Responsable Inscripto**: "RECE para aplicativo y web services"
-- Asociar un domicilio
-- **Tomar nota del número de punto de venta** — lo vamos a necesitar en el código
-
-### 3.3 Obtener el Certificado Digital (entorno de homologación — para desarrollo)
-Para poder desarrollar y probar sin esperar el alta completa en producción:
-
-**Paso 1:** Ingresar a ARCA con clave fiscal de **persona física** (no la CUIT de la empresa/persona jurídica)
-
-**Paso 2:** En el Administrador de Relaciones de Clave Fiscal → Adherir Servicio → seleccionar **WSASS** (Autogestión de Certificados para Web Services de Homologación)
-
-**Paso 3:** Cerrar sesión y volver a entrar. WSASS ahora aparece en los servicios habilitados.
-
-**Paso 4:** Generar la clave privada y el CSR (Certificate Signing Request) con OpenSSL:
-```bash
-# Generar clave privada
-openssl genrsa -out private_key.key 2048
-
-# Generar CSR (reemplazar TU_CUIT con los 11 dígitos sin guiones)
-openssl req -new -key private_key.key \
-  -subj "/C=AR/O=NOMBRE_EMPRESA/CN=NOMBRE_SISTEMA/serialNumber=CUIT TU_CUIT" \
-  -out pedido.csr
-```
-> ⚠️ El formato `serialNumber=CUIT TU_CUIT` (con la palabra "CUIT" y un espacio antes de los dígitos) es obligatorio exactamente así.
-
-**Paso 5:** En WSASS → "Nuevo Certificado" → subir el contenido del `pedido.csr` → el sistema devuelve un certificado X.509 en formato PEM. Guardarlo como `cert.pem`.
-
-**Paso 6:** En WSASS → "Crear Autorización a Servicio" → asociar el certificado al servicio **wsfe** (Facturación Electrónica).
-
-**Paso 7:** Guardar los archivos resultantes de forma segura:
-- `private_key.key` — clave privada (nunca commitear al repositorio)
-- `cert.pem` — certificado (nunca commitear al repositorio)
-
-> Para el entorno de **producción** el proceso es similar pero se hace desde el servicio "Administración de Certificados Digitales" en ARCA (no WSASS), y el certificado tiene vigencia determinada (hay que renovarlo antes de que venza).
-
----
-
-## 4. Integración técnica — Stack Node.js / TypeScript
-
-### 4.1 Librería recomendada: `@afipsdk/afip.js`
-La más usada del ecosistema Node.js para ARCA. +193 stars en GitHub, +100k descargas, actualizada en 2026, soporta TypeScript.
-
-```bash
-npm install @afipsdk/afip.js
-```
-
-Repositorio oficial: https://github.com/AfipSDK/afip.js
-Documentación: https://docs.afipsdk.com
-
-**Alternativa moderna (TypeScript-native):** `@arcasdk/core`
-Más nueva, tipado completo, sin dependencias pesadas. Vale evaluar si se quiere una librería más limpia.
-Sitio: https://www.afipts.com
-
-### 4.2 Inicialización básica (homologación)
-
-```typescript
-import Afip from '@afipsdk/afip.js';
-
-const afip = new Afip({
-  CUIT: TU_CUIT,           // número sin guiones
-  cert: 'cert.pem',        // path al archivo .pem
-  key: 'private_key.key',  // path a la clave privada
-  production: false,       // false = homologación, true = producción
-});
-```
-
-> 💡 Durante desarrollo puro, afip.js permite usar el CUIT de prueba `20409378472` sin certificado propio para pruebas rápidas.
-
-### 4.3 Emitir una factura (ejemplo simplificado)
-
-```typescript
-// Obtener el último número de comprobante emitido
-const lastVoucher = await afip.ElectronicBilling.getLastVoucher(
-  PUNTO_DE_VENTA,   // número de punto de venta dado de alta en ARCA
-  TIPO_COMPROBANTE  // 6 = Factura B, 11 = Factura C, 1 = Factura A
-);
-
-const voucherNumber = lastVoucher + 1;
-
-// Crear el comprobante
-const result = await afip.ElectronicBilling.createVoucher({
-  CantReg: 1,                          // cantidad de comprobantes
-  PtoVta: PUNTO_DE_VENTA,
-  CbteTipo: TIPO_COMPROBANTE,          // ver tabla de tipos abajo
-  Concepto: 1,                         // 1=Productos, 2=Servicios, 3=Productos y Servicios
-  DocTipo: 99,                         // 99=Consumidor final (sin CUIT)
-  DocNro: 0,                           // 0 si es consumidor final
-  CbteDesde: voucherNumber,
-  CbteHasta: voucherNumber,
-  CbteFch: new Date().toISOString().slice(0,10).replace(/-/g,''), // yyyyMMdd
-  ImpTotal: TOTAL,                     // total del comprobante
-  ImpTotConc: 0,
-  ImpNeto: TOTAL_NETO,
-  ImpOpEx: 0,
-  ImpIVA: TOTAL_IVA,
-  ImpTrib: 0,
-  MonId: 'PES',                        // Pesos argentinos
-  MonCotiz: 1,
-  Iva: [
-    {
-      Id: 5,                           // 5 = 21%, 4 = 10.5%, 3 = 0%
-      BaseImp: TOTAL_NETO,
-      Importe: TOTAL_IVA,
-    }
-  ],
-});
-
-// result.CAE → código de autorización electrónico
-// result.CAEFchVto → fecha de vencimiento del CAE (guardar en BD)
-```
-
-### 4.4 Tipos de comprobante más comunes
-
-| Código | Tipo |
-|---|---|
-| 1 | Factura A |
-| 6 | Factura B |
-| 11 | Factura C (Monotributo / Exentos) |
-| 3 | Nota de Débito A |
-| 8 | Nota de Débito B |
-| 13 | Nota de Débito C |
-| 2 | Nota de Crédito A |
-| 7 | Nota de Crédito B |
-| 12 | Nota de Crédito C |
-
-### 4.5 URLs de los servicios
-
-| Entorno | WSAA (autenticación) | WSFEv1 (facturación) |
-|---|---|---|
-| **Homologación** | https://wsaahomo.afip.gov.ar/ws/services/LoginCms | https://wswhomo.afip.gov.ar/wsfev1/service.asmx |
-| **Producción** | https://wsaa.afip.gov.ar/ws/services/LoginCms | https://servicios1.afip.gov.ar/wsfev1/service.asmx |
-
----
-
-## 5. Datos a guardar en la BD por cada comprobante
-
-Al emitir correctamente, ARCA devuelve estos datos que hay que persistir:

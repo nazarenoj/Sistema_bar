@@ -16,4 +16,4 @@ frontend/dist.zip
 .claude/
 *.key
 cert_prod.crt
-.env.*
+.env.*instancias.json

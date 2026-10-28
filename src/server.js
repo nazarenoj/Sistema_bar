@@ -5,6 +5,7 @@ const { version: VERSION } = require('../package.json');
 const pool             = require('./config/db');
 const authRoutes       = require('./routes/authRoutes');
 const productoRoutes   = require('./routes/productoRoutes');
+const catalogoRoutes   = require('./routes/catalogoRoutes');
 const insumoRoutes     = require('./routes/insumoRoutes');
 const mesaRoutes       = require('./routes/mesaRoutes');
 const pedidoRoutes     = require('./routes/pedidoRoutes');
@@ -12,7 +13,23 @@ const salonRoutes      = require('./routes/salonRoutes');
 const estructuraRoutes = require('./routes/estructuraRoutes');
 const sillaRoutes      = require('./routes/sillaRoutes');
 const facturaRoutes    = require('./routes/facturaRoutes');
+const usuarioRoutes    = require('./routes/usuarioRoutes');
+const terminalRoutes   = require('./routes/terminalRoutes');
+const sesionRoutes     = require('./routes/sesionRoutes');
+const auditoriaRoutes  = require('./routes/auditoriaRoutes');
+const rolRoutes        = require('./routes/rolRoutes');
+const moduloRoutes     = require('./routes/moduloRoutes');
+const funcionRoutes    = require('./routes/funcionRoutes');
+const integracionRoutes = require('./routes/integracionRoutes');
+const notificacionRoutes = require('./routes/notificacionRoutes');
+const trabajador       = require('./mensajeria/trabajador');
+const Funciones        = require('./funciones/servicio');
+const { ping }         = require('./controllers/terminalController');
 const requireAuth      = require('./middleware/authMiddleware');
+const instancia        = require('./middleware/instancia');
+const idempotencia     = require('./middleware/idempotencia');
+const horaCliente      = require('./middleware/horaCliente');
+require('./models/insumoPuerto'); // Stock registra lo que implementa de los puertos de Ventas
 const requestLogger    = require('./middleware/requestLogger');
 const errorHandler     = require('./middleware/errorHandler');
 const logger           = require('./utils/logger');
@@ -33,6 +50,12 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(requestLogger);
+
+// /health no depende de ningún cliente; todo lo demás corre dentro de la instancia de la request.
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', version: VERSION, timestamp: new Date().toISOString() });
+});
+app.use('/api', instancia);
 
 app.get('/api', (req, res) => {
   res.json({
@@ -81,14 +104,25 @@ app.get('/api', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: VERSION, timestamp: new Date().toISOString() });
+app.use('/api/auth', authRoutes);
+// El latido de la pantalla va antes del requireAuth general porque no debe contar como actividad
+// del usuario (si no, una terminal abandonada nunca vencería por inactividad).
+app.post('/api/terminales/ping', requireAuth.pasivo, ping);
+app.use('/api', requireAuth);
+// Las terminales se enteran de un cambio de funciones por la versión que viaja en cada respuesta (RN46).
+app.use('/api', async (req, res, next) => {
+  try { res.set('X-Config-Version', String(await Funciones.version())); } catch { /* sin alta todavía */ }
+  next();
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api', requireAuth);
+// Idempotencia de solicitudes (A9): una operación con efecto no se repite si llega dos veces.
+app.get('/api/solicitudes/:id', idempotencia.estado);
+app.use('/api', horaCliente);
+app.use('/api', idempotencia);
 
 app.use('/api/productos',   productoRoutes);
+app.use('/api/categorias',  catalogoRoutes.categorias);
+app.use('/api/sectores',    catalogoRoutes.sectores);
 app.use('/api/insumos',     insumoRoutes);
 app.use('/api/mesas',       mesaRoutes);
 app.use('/api/pedidos',     pedidoRoutes);
@@ -96,6 +130,15 @@ app.use('/api/salones',     salonRoutes);
 app.use('/api/estructuras', estructuraRoutes);
 app.use('/api/sillas',      sillaRoutes);
 app.use('/api/facturas',    facturaRoutes);
+app.use('/api/usuarios',    usuarioRoutes);
+app.use('/api/terminales',  terminalRoutes);
+app.use('/api/sesiones',    sesionRoutes);
+app.use('/api/auditoria',   auditoriaRoutes);
+app.use('/api/roles',       rolRoutes);
+app.use('/api/modulos',     moduloRoutes);
+app.use('/api/funciones',   funcionRoutes);
+app.use('/api/integracion', integracionRoutes);
+app.use('/api/notificaciones', notificacionRoutes);
 
 // Sirve el build del frontend (mismo origen que la API, sin CORS). Se genera con
 // `npm run build` dentro de frontend/ y no se versiona (frontend/dist está en .gitignore).
@@ -112,15 +155,20 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-pool.ensureDatabase()
-  .then(() => {
-    app.listen(PORT, () => {
-      logger.info(`Servidor corriendo en http://localhost:${PORT}`);
+// En las pruebas (NODE_ENV=test) el servidor no arranca solo: la prueba prepara su propia base y
+// escucha en un puerto libre.
+if (process.env.NODE_ENV !== 'test') {
+  pool.ensureDatabase()
+    .then(() => {
+      app.listen(PORT, () => {
+        logger.info(`Servidor corriendo en http://localhost:${PORT}`);
+        trabajador.iniciar(); // entrega de mensajes entre módulos y mantenimiento (A10)
+      });
+    })
+    .catch(async (err) => {
+      await logger.logFatal(`No se pudo verificar/crear la base de datos: [${err.code}] ${err.message}`, { stack: err.stack });
+      process.exit(1);
     });
-  })
-  .catch(async (err) => {
-    await logger.logFatal(`No se pudo verificar/crear la base de datos: [${err.code}] ${err.message}`, { stack: err.stack });
-    process.exit(1);
-  });
+}
 
 module.exports = app;

@@ -250,12 +250,14 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
     }
   }
 
+  // Clave de la operación "cerrar cuenta": una por formulario abierto, así el doble clic cobra una sola vez.
+  const [solicitudCierre, setSolicitudCierre] = useState(api.nuevaSolicitud)
   const handleCerrarCuenta = () => setShowCierreCuenta(true)
 
   const handleConfirmarCierreCuenta = async (body) => {
     setSubmitting(true)
     try {
-      const result = await api.cerrarCuenta(mesa.id, body)
+      const result = await api.cerrarCuenta(mesa.id, body, solicitudCierre)
       setShowCierreCuenta(false)
       setFacturaInfo(result.factura)
       addToast(`Cuenta cerrada · Total: $${Number(result.total_acumulado).toFixed(2)}`)
@@ -263,6 +265,8 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
       onMesaUpdate()
       setTicketPrompt(ticketCuentaMesa())
     } catch (err) {
+      // Con una respuesta definitiva la próxima vez es otra operación (clave nueva); con la respuesta perdida se reintenta con la misma.
+      if (err.status) setSolicitudCierre(api.nuevaSolicitud())
       addToast(err.message, 'error')
     } finally {
       setSubmitting(false)

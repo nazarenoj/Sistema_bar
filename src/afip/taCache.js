@@ -1,11 +1,12 @@
 const pool = require('../config/db');
 const config = require('../config/afipConfig');
+const registro = require('../instancias/registro');
 const wsaaClient = require('./wsaaClient');
 
 // Evita que dos requests casi simultáneos disparen dos logins a la vez: WSAA rechaza pedir un TA
 // nuevo mientras el anterior siga vigente (fault "ya posee un TA valido"). A este volumen (2
 // usuarios, sillas cerrándose de a una) alcanza con una promesa en curso a nivel de módulo.
-let loginEnCurso = null;
+const loginsEnCurso = new Map(); // codigo de instancia -> promesa
 
 const MARGEN_MINUTOS = 10;
 
@@ -36,8 +37,9 @@ const getTA = async (servicio = 'wsfe') => {
     return { token: cacheado.token, sign: cacheado.sign };
   }
 
-  if (!loginEnCurso) {
-    loginEnCurso = wsaaClient
+  const { codigo } = registro.actual();
+  if (!loginsEnCurso.has(codigo)) {
+    loginsEnCurso.set(codigo, wsaaClient
       .login(servicio)
       .then(async (resultado) => {
         await guardarCache(servicio, {
@@ -48,11 +50,11 @@ const getTA = async (servicio = 'wsfe') => {
         return resultado;
       })
       .finally(() => {
-        loginEnCurso = null;
-      });
+        loginsEnCurso.delete(codigo);
+      }));
   }
 
-  const { token, sign } = await loginEnCurso;
+  const { token, sign } = await loginsEnCurso.get(codigo);
   return { token, sign };
 };
 

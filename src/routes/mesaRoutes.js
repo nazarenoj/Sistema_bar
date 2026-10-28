@@ -6,21 +6,22 @@ const {
 const { create: crearSilla } = require('../controllers/sillaController');
 const { ticketCuentaMesa, comandaMesa } = require('../controllers/ticketController');
 
+const { requierePermiso } = require('../middleware/requierePermiso');
 const router = Router();
 
-router.get('/', getAll);
-router.post('/', create);
-router.post('/combinar', combinar);
-router.post('/grupos/:grupoId/separar', separar);
-router.get('/:id/pedidos-activos', getPedidosActivos);
-router.get('/:id/ticket', ticketCuentaMesa);
-router.get('/:id/comanda', comandaMesa);
-router.patch('/:id/posicion', updatePosicion);
-router.patch('/:id/color', updateColor);
-router.patch('/:id/tamano', updateTamano);
-router.post('/:id/cerrar', cerrarCuenta);
-router.post('/:id/confirmar-ticket', confirmarTicket);
-router.post('/:id/sillas', crearSilla);
-router.delete('/:id', remove);
+router.get('/', requierePermiso('ventas.pedidos.operar'), getAll);
+router.post('/', requierePermiso('ventas.salon.configurar'), create);
+router.post('/combinar', requierePermiso('ventas.salon.configurar'), combinar);
+router.post('/grupos/:grupoId/separar', requierePermiso('ventas.salon.configurar'), separar);
+router.get('/:id/pedidos-activos', requierePermiso('ventas.pedidos.operar'), getPedidosActivos);
+router.get('/:id/ticket', requierePermiso('ventas.pedidos.operar'), ticketCuentaMesa);
+router.get('/:id/comanda', requierePermiso('ventas.pedidos.operar'), comandaMesa);
+router.patch('/:id/posicion', requierePermiso('ventas.salon.configurar'), updatePosicion);
+router.patch('/:id/color', requierePermiso('ventas.salon.configurar'), updateColor);
+router.patch('/:id/tamano', requierePermiso('ventas.salon.configurar'), updateTamano);
+router.post('/:id/cerrar', requierePermiso('ventas.cuenta.cobrar'), cerrarCuenta);
+router.post('/:id/confirmar-ticket', requierePermiso('ventas.cuenta.cobrar'), confirmarTicket);
+router.post('/:id/sillas', requierePermiso('ventas.salon.configurar'), crearSilla);
+router.delete('/:id', requierePermiso('ventas.salon.configurar'), remove);
 
 module.exports = router;

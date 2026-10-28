@@ -1,16 +1,17 @@
 const pool = require('../config/db');
+const { idGlobal } = require('../utils/idGlobal');
 
 const create = async (data, conn = pool) => {
   const [result] = await conn.query(
     `INSERT INTO facturas
        (mesa_id, sesion_apertura, metodo_pago, tipo_comprobante, punto_venta, doc_tipo, doc_nro,
-        condicion_iva_receptor_id, receptor_nombre, domicilio_receptor, importe_total, entorno, creado_por)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        condicion_iva_receptor_id, receptor_nombre, domicilio_receptor, importe_total, entorno, creado_por, id_global)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.mesa_id, data.sesion_apertura, data.metodo_pago, data.tipo_comprobante,
       data.punto_venta, data.doc_tipo, data.doc_nro, data.condicion_iva_receptor_id,
       data.receptor_nombre ?? null, data.domicilio_receptor ?? null, data.importe_total,
-      data.entorno, data.creado_por ?? null,
+      data.entorno, data.creado_por ?? null, await idGlobal(),
     ]
   );
   const [rows] = await conn.query('SELECT * FROM facturas WHERE id = ?', [result.insertId]);

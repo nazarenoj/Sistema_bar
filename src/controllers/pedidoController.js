@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const Mesa = require('../models/mesaModel');
 const Pedido = require('../models/pedidoModel');
 const Producto = require('../models/productoModel');
-const Insumo = require('../models/insumoModel');
+const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
 const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
 const { esFechaISO } = require('../utils/validaciones');
@@ -99,12 +99,16 @@ const addProductos = async (req, res) => {
     productosConDatos = [];
     for (const { producto_id, cantidad } of productos) {
       const [rows] = await conn.query(
-        'SELECT id, nombre, descripcion, precio FROM productos WHERE id = ?',
+        'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE id = ?',
         [producto_id]
       );
       if (!rows.length) {
         conn.release();
         return res.status(404).json({ error: `Producto con id ${producto_id} no encontrado.` });
+      }
+      if (rows[0].agotado) {
+        conn.release();
+        return res.status(409).json({ error: `El producto "${rows[0].nombre}" está agotado.`, codigo: 'PRODUCTO_AGOTADO' });
       }
       productosConDatos.push({
         producto_id,
@@ -149,12 +153,16 @@ const addProductosPorNombre = async (req, res) => {
     productosConDatos = [];
     for (const { nombre, cantidad } of productos) {
       const [rows] = await conn.query(
-        'SELECT id, nombre, descripcion, precio FROM productos WHERE nombre = ?',
+        'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE nombre = ?',
         [nombre.trim()]
       );
       if (!rows.length) {
         conn.release();
         return res.status(404).json({ error: `Producto con nombre "${nombre}" no encontrado.` });
+      }
+      if (rows[0].agotado) {
+        conn.release();
+        return res.status(409).json({ error: `El producto "${rows[0].nombre}" está agotado.`, codigo: 'PRODUCTO_AGOTADO' });
       }
       productosConDatos.push({
         producto_id: rows[0].id,
@@ -201,7 +209,7 @@ const cerrarPedido = async (req, res) => {
     }
 
     await Producto.decrementarStock(items, conn);
-    await Insumo.decrementarStockPorVenta(items, conn);
+    await (await puertos.obtener('stock')).descontarPorVenta(items, conn);
     await Pedido.cerrarPedidoIndividual(id, conn);
 
     // Si era la última silla activa de la mesa, la cuenta quedó completa: la mesa sigue "ocupada"
