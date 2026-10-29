@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const {
-  create, addProductos, addProductosPorNombre, cerrarPedido, removePedido, removeItem,
+  create, moverMesa, dividir, addProductos, addProductosPorNombre, cerrarPedido, removePedido, removeItem,
   marcarItemEntregado, marcarPedidoEntregado, getHistorial, getReporte, getEstadisticas, getOne,
 } = require('../controllers/pedidoController');
 const { ticketPedido } = require('../controllers/ticketController');
@@ -17,6 +17,8 @@ router.get('/:id/ticket', requierePermiso('ventas.pedidos.operar'), ticketPedido
 router.post('/:id/productos', requierePermiso('ventas.pedidos.operar'), addProductos);
 router.post('/:id/productos/nombre', requierePermiso('ventas.pedidos.operar'), addProductosPorNombre);
 router.post('/:id/cerrar', requierePermiso('ventas.cuenta.cobrar'), cerrarPedido);
+router.patch('/:id/mesa', requierePermiso('ventas.pedidos.operar'), moverMesa);
+router.post('/:id/dividir', requierePermiso('ventas.pedidos.operar'), dividir);
 router.patch('/:id/entregado', requierePermiso('ventas.pedidos.operar'), marcarPedidoEntregado);
 router.patch('/:id/productos/:itemId/entregado', requierePermiso('ventas.pedidos.operar'), marcarItemEntregado);
 router.delete('/:id/productos/:itemId', requierePermiso('ventas.pedidos.anular'), removeItem);

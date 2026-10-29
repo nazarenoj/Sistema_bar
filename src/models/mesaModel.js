@@ -6,7 +6,7 @@ const getAll = async (salon_id) => {
     `SELECT m.*, g.numero_mesa AS numero_mesa_grupo, g.mesa_master_id
      FROM mesas m
      LEFT JOIN mesa_grupos g ON m.grupo_id = g.id
-     WHERE m.salon_id = ? AND m.activa = 1
+     WHERE m.salon_id = ? AND m.activa = 1 AND m.es_virtual = 0
      ORDER BY m.numero_mesa ASC`,
     [salon_id]
   );
@@ -53,6 +53,14 @@ const create = async (numero_mesa, salon_id) => {
   await pool.query('UPDATE mesas SET pos_x = ?, pos_y = ? WHERE id = ?', [pos_x, pos_y, id]);
   const [rows] = await pool.query('SELECT * FROM mesas WHERE id = ?', [id]);
   return rows[0];
+};
+
+// Mesa propia de un pedido que no es de salón (mostrador, para llevar, delivery, retiro): oculta en el salón y
+// cerrada al terminar la cuenta (ver confirmarTicket). Así usa el mismo cierre, venta y factura que una mesa.
+const createVirtual = async () => {
+  const [[salon]] = await pool.query('SELECT id FROM salones ORDER BY id LIMIT 1');
+  const [r] = await pool.query("INSERT INTO mesas (numero_mesa, salon_id, estado, es_virtual) VALUES (0, ?, 'ocupado', 1)", [salon.id]);
+  return getById(r.insertId);
 };
 
 const updateEstado = async (id, estado, conn = pool) => {
@@ -188,7 +196,7 @@ const separar = async (grupoId) => {
   }
 };
 
-module.exports = {
+module.exports = { createVirtual,
   getAll,
   getById,
   create,

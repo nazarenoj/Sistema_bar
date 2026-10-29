@@ -36,15 +36,15 @@ const getById = async (id, conn = pool) => {
 
 // La sesión (sesion_apertura) identifica la cuenta completa de la mesa: si ya hay un pedido
 // activo en esa mesa, el nuevo pedido se suma a la misma sesión; si no, empieza una nueva ahora.
-const create = async (mesa_id) => {
+const create = async (mesa_id, { modalidad = 'salon', origen = 'local', mozo_id = null, silla_id = null, referencia = null } = {}) => {
   const snap = await Funciones.instantanea('pedido'); // las reglas del pedido quedan fijas hasta cerrarlo (RN75)
   const [result] = await pool.query(
-    `INSERT INTO pedidos (mesa_id, sesion_apertura, id_global, config_version, config_instantanea)
+    `INSERT INTO pedidos (mesa_id, sesion_apertura, id_global, config_version, config_instantanea, modalidad, origen, mozo_id, silla_id, referencia)
      SELECT ?, COALESCE(
        (SELECT sesion_apertura FROM pedidos WHERE mesa_id = ? AND estado = 'activo' ORDER BY id ASC LIMIT 1),
        NOW()
-     ), ?, ?, ?`,
-    [mesa_id, mesa_id, await idGlobal(), snap.version, JSON.stringify(snap.funciones)]
+     ), ?, ?, ?, ?, ?, ?, ?, ?`,
+    [mesa_id, mesa_id, await idGlobal(), snap.version, JSON.stringify(snap.funciones), modalidad, origen, mozo_id, silla_id, referencia]
   );
   const [rows] = await pool.query('SELECT * FROM pedidos WHERE id = ?', [result.insertId]);
   return rows[0];
@@ -95,10 +95,10 @@ const getTotalAcumulado = async (pedidoIds, conn) => {
 };
 
 const addProductos = async (pedido_id, productos, conn) => {
-  for (const { producto_id, cantidad, nombre, descripcion, precio_unitario } of productos) {
+  for (const { producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones } of productos) {
     await conn.query(
-      'INSERT INTO pedido_productos (pedido_id, producto_id, cantidad, nombre, descripcion, precio_unitario) VALUES (?, ?, ?, ?, ?, ?)',
-      [pedido_id, producto_id, cantidad, nombre, descripcion ?? null, precio_unitario]
+      'INSERT INTO pedido_productos (pedido_id, producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [pedido_id, producto_id, cantidad, nombre, descripcion ?? null, precio_unitario, observaciones ?? null]
     );
   }
 };

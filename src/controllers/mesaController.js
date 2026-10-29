@@ -134,6 +134,7 @@ const cerrarCuenta = async (req, res) => {
     venta = await Venta.registrar(conn, {
       mesa_id: id, sesion_apertura: pedidosActivos[0].sesion_apertura, items, total: totalAcumulado, pagos,
       idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, tipoNoFiscal,
+      modalidad: pedidosActivos[0].modalidad, mozoId: pedidosActivos[0].mozo_id,
     });
     // La mesa sigue "ocupada": recién se libera cuando se confirma que se imprimió/descargó el
     // comprobante (ver confirmarTicket), para no dejar la mesa disponible sin haberlo entregado.
@@ -233,6 +234,7 @@ const confirmarTicket = async (req, res) => {
 
     await Mesa.setTicketPendiente(id, false);
     await Mesa.updateEstado(id, 'libre');
+    if (mesa.es_virtual) await pool.query('UPDATE mesas SET activa = 0 WHERE id = ?', [id]); // mesa de un pedido sin salón: no vuelve a usarse
 
     res.json({ message: `Mesa ${mesa.numero_mesa} liberada.`, mesa_id: id });
   } catch (err) {

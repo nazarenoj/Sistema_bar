@@ -39,6 +39,7 @@ const construir = (q = {}) => {
       no_fiscal: "v.condicion_fiscal = 'no_fiscal'", sin_comprobante: "v.condicion_fiscal = 'fiscal' AND f.id IS NULL",
     }[q.modalidad]);
   }
+  if (q.canal) { donde.push('v.modalidad = ?'); params.push(q.canal); } // salón, mostrador, para llevar, delivery o retiro
   if (q.estado_arca) { donde.push('f.estado = ?'); params.push(q.estado_arca); }
   if (q.mesa) { donde.push('m.numero_mesa = ?'); params.push(q.mesa); }
   if (q.usuario) { donde.push('u.username = ?'); params.push(q.usuario); }
@@ -53,7 +54,7 @@ const construir = (q = {}) => {
   return { where: donde.length ? `WHERE ${donde.join(' AND ')}` : '', params, orden };
 };
 
-const COLUMNAS = `v.id_global, v.mesa_id, m.numero_mesa, v.total, v.created_at, v.condicion_fiscal, v.tipo_no_fiscal, v.numero_no_fiscal,
+const COLUMNAS = `v.modalidad AS canal, v.id_global, v.mesa_id, m.numero_mesa, v.total, v.created_at, v.condicion_fiscal, v.tipo_no_fiscal, v.numero_no_fiscal,
   u.username AS usuario, COALESCE(dv.devuelto, 0) AS devuelto, ${ESTADO_SQL} AS estado,
   f.id AS factura_id, f.tipo_comprobante, f.punto_venta, f.numero, f.estado AS estado_arca, f.modalidad, f.cae,
   (SELECT GROUP_CONCAT(pv.metodo_pago ORDER BY pv.id) FROM pago_venta pv WHERE pv.venta_id = v.id) AS formas,

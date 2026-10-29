@@ -4,34 +4,145 @@ const Pedido = require('../models/pedidoModel');
 const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
+const Funciones = require('../funciones/servicio');
 const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
 const { esFechaISO } = require('../utils/validaciones');
 const {
   TIPO_COMPROBANTE_LABEL, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL, etiqueta,
 } = require('../utils/etiquetas');
 
-const create = async (req, res) => {
-  const { mesa_id } = req.body;
+const MODALIDADES = ['salon', 'mostrador', 'para_llevar', 'delivery', 'retiro'];
+const ORIGENES = ['local']; // ventas_online y plataforma llegan con el módulo Ventas Online
 
-  if (mesa_id === undefined || mesa_id === null)
-    return res.status(400).json({ error: 'El campo "mesa_id" es obligatorio.' });
-  if (!Number.isInteger(mesa_id) || mesa_id <= 0)
-    return res.status(400).json({ error: '"mesa_id" debe ser un entero positivo.' });
+// Abre un pedido (Ventas RF05). De salón: en una mesa (y, si se indica, una silla; una silla tiene un solo pedido abierto, RN10).
+// Mostrador/barra, para llevar, delivery y retiro: sin mesa. Siempre con mozo o vendedor (por defecto, quien lo abre).
+const create = async (req, res) => {
+  const { mesa_id, modalidad = 'salon', origen = 'local', silla_id, referencia } = req.body;
+  let { mozo_id } = req.body;
+
+  if (!MODALIDADES.includes(modalidad))
+    return res.status(400).json({ error: `"modalidad" debe ser una de: ${MODALIDADES.join(', ')}.` });
+  if (!ORIGENES.includes(origen))
+    return res.status(400).json({ error: `"origen" debe ser: ${ORIGENES.join(', ')} (los demás orígenes necesitan Ventas Online).` });
+  if (referencia !== undefined && (typeof referencia !== 'string' || referencia.length > 255))
+    return res.status(400).json({ error: '"referencia" debe ser un texto de hasta 255 caracteres.' });
 
   try {
-    const mesa = await Mesa.getById(mesa_id);
-    if (!mesa || !mesa.activa)
-      return res.status(404).json({ error: `Mesa con id ${mesa_id} no encontrada.` });
-    if (mesa.ticket_pendiente)
-      return res.status(400).json({ error: 'Esta mesa tiene un ticket pendiente de imprimir o descargar. Resolvé eso antes de abrir un nuevo pedido.' });
+    if (mozo_id === undefined || mozo_id === null) mozo_id = req.usuario?.sub ?? null;
+    else {
+      const [[mozo]] = await pool.query('SELECT id FROM users WHERE id = ? AND activo = 1', [mozo_id]);
+      if (!mozo) return res.status(400).json({ error: 'El mozo o vendedor indicado no existe o está dado de baja.' });
+    }
 
-    const pedido = await Pedido.create(mesa_id);
+    let mesa;
+    if (modalidad === 'salon') {
+      if (!(await Funciones.estaActiva('VEN-SALON')))
+        return res.status(409).json({ error: 'El Modo Salón está desactivado: abrí el pedido como mostrador, para llevar, delivery o retiro.', codigo: 'FUNCION_DESACTIVADA', funcion: 'VEN-SALON' });
+      if (mesa_id === undefined || mesa_id === null)
+        return res.status(400).json({ error: 'El campo "mesa_id" es obligatorio.' });
+      if (!Number.isInteger(mesa_id) || mesa_id <= 0)
+        return res.status(400).json({ error: '"mesa_id" debe ser un entero positivo.' });
+      mesa = await Mesa.getById(mesa_id);
+      if (!mesa || !mesa.activa || mesa.es_virtual)
+        return res.status(404).json({ error: `Mesa con id ${mesa_id} no encontrada.` });
+      if (mesa.ticket_pendiente)
+        return res.status(400).json({ error: 'Esta mesa tiene un ticket pendiente de imprimir o descargar. Resolvé eso antes de abrir un nuevo pedido.' });
+      if (silla_id !== undefined && silla_id !== null) {
+        const [[silla]] = await pool.query('SELECT id FROM mesa_sillas WHERE id = ? AND mesa_id = ?', [silla_id, mesa_id]);
+        if (!silla) return res.status(400).json({ error: 'La silla indicada no pertenece a esa mesa.' });
+        const [[abierto]] = await pool.query("SELECT id FROM pedidos WHERE silla_id = ? AND estado = 'activo' LIMIT 1", [silla_id]);
+        if (abierto) return res.status(409).json({ error: 'Esa silla ya tiene un pedido abierto.', codigo: 'SILLA_OCUPADA', pedido_id: abierto.id });
+      }
+    } else {
+      mesa = await Mesa.createVirtual();
+    }
+
+    const pedido = await Pedido.create(mesa.id, { modalidad, origen, mozo_id, silla_id: modalidad === 'salon' ? silla_id ?? null : null, referencia: referencia?.trim() || null });
 
     if (mesa.estado === 'libre')
-      await Mesa.updateEstado(mesa_id, 'ocupado');
+      await Mesa.updateEstado(mesa.id, 'ocupado');
 
     res.status(201).json(pedido);
   } catch (err) {
+    logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
+    res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
+  }
+};
+
+// Mueve un pedido de salón a otra mesa (RF06). Toma la cuenta de la mesa destino si ya está ocupada.
+const moverMesa = async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { mesa_id } = req.body;
+  if (isNaN(id) || !Number.isInteger(mesa_id) || mesa_id <= 0)
+    return res.status(400).json({ error: 'Indicá el pedido y la "mesa_id" de destino (enteros positivos).' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const pedido = await Pedido.getById(id, conn);
+    if (!pedido) { await conn.rollback(); return res.status(404).json({ error: `Pedido con id ${id} no encontrado.` }); }
+    if (pedido.estado !== 'activo' || pedido.modalidad !== 'salon') { await conn.rollback(); return res.status(400).json({ error: 'Solo se mueve un pedido de salón que siga abierto.' }); }
+    if (pedido.mesa_id === mesa_id) { await conn.rollback(); return res.status(400).json({ error: 'El pedido ya está en esa mesa.' }); }
+    const destino = await Mesa.getById(mesa_id, conn);
+    if (!destino || !destino.activa || destino.es_virtual) { await conn.rollback(); return res.status(404).json({ error: `Mesa con id ${mesa_id} no encontrada.` }); }
+    if (destino.ticket_pendiente) { await conn.rollback(); return res.status(400).json({ error: 'La mesa destino tiene un ticket pendiente.' }); }
+
+    const [[sesion]] = await conn.query("SELECT sesion_apertura FROM pedidos WHERE mesa_id = ? AND estado = 'activo' ORDER BY id LIMIT 1", [mesa_id]);
+    await conn.query('UPDATE pedidos SET mesa_id = ?, sesion_apertura = COALESCE(?, NOW()), silla_id = NULL WHERE id = ?', [mesa_id, sesion?.sesion_apertura ?? null, id]);
+    await Mesa.updateEstado(mesa_id, 'ocupado', conn);
+    const [[quedan]] = await conn.query("SELECT COUNT(*) n FROM pedidos WHERE mesa_id = ? AND estado = 'activo'", [pedido.mesa_id]);
+    if (!quedan.n) await Mesa.updateEstado(pedido.mesa_id, 'libre', conn);
+    await conn.commit();
+    res.json(await Pedido.getById(id));
+  } catch (err) {
+    await conn.rollback();
+    logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
+    res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
+  } finally {
+    conn.release();
+  }
+};
+
+// Divide la cuenta por ítem (RF06): pasa ítems (o parte de su cantidad) a otro pedido de la misma mesa, o a uno nuevo.
+// Cuerpo: items [{ item_id, cantidad }], destino_pedido_id (opcional).
+const dividir = async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { items, destino_pedido_id } = req.body;
+  if (isNaN(id) || !Array.isArray(items) || !items.length || items.some((i) => !Number.isInteger(i.item_id) || !Number.isInteger(i.cantidad) || i.cantidad <= 0))
+    return res.status(400).json({ error: 'Indicá "items": [{ item_id, cantidad }] con enteros positivos.' });
+
+  try {
+    const origen = await Pedido.getById(id);
+    if (!origen) return res.status(404).json({ error: `Pedido con id ${id} no encontrado.` });
+    if (origen.estado !== 'activo') return res.status(400).json({ error: 'Solo se divide un pedido abierto.' });
+    let destinoId = destino_pedido_id;
+    if (destinoId === undefined || destinoId === null) {
+      destinoId = (await Pedido.create(origen.mesa_id, { modalidad: origen.modalidad, origen: origen.origen, mozo_id: origen.mozo_id })).id;
+    }
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const destino = await Pedido.getById(destinoId, conn);
+      if (!destino || destino.estado !== 'activo' || destino.id === origen.id || destino.mesa_id !== origen.mesa_id)
+        throw Object.assign(new Error('El pedido destino debe ser otro pedido abierto de la misma mesa.'), { status: 400 });
+      for (const { item_id, cantidad } of items) {
+        const item = await Pedido.getItem(item_id, conn);
+        if (!item || item.pedido_id !== id) throw Object.assign(new Error(`El ítem ${item_id} no está en este pedido.`), { status: 404 });
+        if (cantidad > item.cantidad) throw Object.assign(new Error(`No se pueden pasar ${cantidad} de "${item.nombre}": hay ${item.cantidad}.`), { status: 400 });
+        if (cantidad === item.cantidad) {
+          await conn.query('UPDATE pedido_productos SET pedido_id = ? WHERE id = ?', [destinoId, item_id]);
+        } else {
+          await conn.query('UPDATE pedido_productos SET cantidad = cantidad - ? WHERE id = ?', [cantidad, item_id]);
+          await conn.query(
+            'INSERT INTO pedido_productos (pedido_id, producto_id, cantidad, nombre, descripcion, precio_unitario, entregado, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [destinoId, item.producto_id, cantidad, item.nombre, item.descripcion, item.precio_unitario, item.entregado, item.observaciones ?? null]);
+        }
+      }
+      await conn.commit();
+    } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+    res.json({ origen_id: id, destino_id: destinoId, items: await Pedido.getItems(destinoId) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
     res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
   }
@@ -85,7 +196,9 @@ const addProductos = async (req, res) => {
     return res.status(400).json({ error: 'El campo "productos" debe ser un array no vacío.' });
 
   for (let i = 0; i < productos.length; i++) {
-    const { producto_id, cantidad } = productos[i];
+    const { producto_id, cantidad, observaciones } = productos[i];
+    if (observaciones !== undefined && (typeof observaciones !== 'string' || observaciones.length > 255))
+      return res.status(400).json({ error: `productos[${i}]: "observaciones" debe ser un texto de hasta 255 caracteres.` });
     if (!producto_id || !Number.isInteger(producto_id) || producto_id <= 0)
       return res.status(400).json({ error: `productos[${i}]: "producto_id" debe ser un entero positivo.` });
     if (!cantidad || !Number.isInteger(cantidad) || cantidad <= 0)
@@ -97,7 +210,7 @@ const addProductos = async (req, res) => {
   let productosConDatos;
   try {
     productosConDatos = [];
-    for (const { producto_id, cantidad } of productos) {
+    for (const { producto_id, cantidad, observaciones } of productos) {
       const [rows] = await conn.query(
         'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE id = ?',
         [producto_id]
@@ -116,6 +229,7 @@ const addProductos = async (req, res) => {
         nombre: rows[0].nombre,
         descripcion: rows[0].descripcion,
         precio_unitario: Number(rows[0].precio),
+        observaciones: observaciones?.trim() || null,
       });
     }
   } catch (err) {
@@ -139,7 +253,9 @@ const addProductosPorNombre = async (req, res) => {
     return res.status(400).json({ error: 'El campo "productos" debe ser un array no vacío.' });
 
   for (let i = 0; i < productos.length; i++) {
-    const { nombre, cantidad } = productos[i];
+    const { nombre, cantidad, observaciones } = productos[i];
+    if (observaciones !== undefined && (typeof observaciones !== 'string' || observaciones.length > 255))
+      return res.status(400).json({ error: `productos[${i}]: "observaciones" debe ser un texto de hasta 255 caracteres.` });
     if (!nombre || typeof nombre !== 'string' || nombre.trim() === '')
       return res.status(400).json({ error: `productos[${i}]: "nombre" debe ser un texto no vacío.` });
     if (!cantidad || !Number.isInteger(cantidad) || cantidad <= 0)
@@ -151,7 +267,7 @@ const addProductosPorNombre = async (req, res) => {
   let productosConDatos;
   try {
     productosConDatos = [];
-    for (const { nombre, cantidad } of productos) {
+    for (const { nombre, cantidad, observaciones } of productos) {
       const [rows] = await conn.query(
         'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE nombre = ?',
         [nombre.trim()]
@@ -170,6 +286,7 @@ const addProductosPorNombre = async (req, res) => {
         nombre: rows[0].nombre,
         descripcion: rows[0].descripcion,
         precio_unitario: Number(rows[0].precio),
+        observaciones: observaciones?.trim() || null,
       });
     }
   } catch (err) {
@@ -307,6 +424,9 @@ const removeItem = async (req, res) => {
       return res.status(404).json({ error: `Producto con id ${item_id} no encontrado en este pedido.` });
     }
 
+    await conn.query(
+      'INSERT INTO item_anulaciones (pedido_id, producto_id, nombre, cantidad, precio_unitario, motivo, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [pedido_id, item.producto_id, item.nombre, item.cantidad, item.precio_unitario, typeof req.body?.motivo === 'string' ? req.body.motivo.trim().slice(0, 255) || null : null, req.usuario?.sub ?? null]);
     await Pedido.removeItem(item_id, conn);
     await conn.commit();
 
@@ -644,6 +764,8 @@ const getOne = async (req, res) => {
 
 module.exports = {
   create,
+  moverMesa,
+  dividir,
   addProductos,
   addProductosPorNombre,
   cerrarPedido,
