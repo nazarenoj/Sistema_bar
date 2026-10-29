@@ -14,7 +14,7 @@ const PUERTOS = {
   // Ventas define; Stock implementa. La venta nunca se bloquea por falta de existencias.
   stock: {
     define: 'ventas', implementa: 'stock',
-    nula: { disponibilidad: async () => ({ bloqueado: false }), descontarPorVenta: async () => {}, reingresarPorDevolucion: async () => {} },
+    nula: { disponibilidad: async () => ({ bloqueado: false }), descontarPorVenta: async () => {}, reingresarPorDevolucion: async () => {}, saldoInicial: async () => {} },
   },
   // Ventas define; Financiero implementa. Ventas discrimina por forma de pago sin afectar cajas.
   cobros: { define: 'ventas', implementa: 'financiero', nula: { registrarCobro: async () => null } },

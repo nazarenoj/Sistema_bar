@@ -123,8 +123,7 @@ const cerrarCuenta = async (req, res) => {
     if (facturar) await afipService.validarReceptor({ tipoComprobante: tipo_comprobante, docTipo: doc_tipo, condicionIvaReceptorId: condicion_iva_receptor_id, importeTotal: totalAcumulado });
 
     const items = await Pedido.getItemsByPedidoIds(pedidoIds, conn);
-    await Producto.decrementarStock(items, conn);
-    await (await puertos.obtener('stock')).descontarPorVenta(items, conn);
+    await (await puertos.obtener('stock')).descontarPorVenta(items, conn, { documento_tipo: 'venta', documento: `mesa-${id}`, user_id: req.usuario?.sub ?? null });
 
     await Pedido.cerrarPedidosMesa(id, conn);
     const pagos = await Venta.validarPagos(conn, Array.isArray(req.body.pagos) ? req.body.pagos : [{ forma: metodo_pago, importe: totalAcumulado }], totalAcumulado);

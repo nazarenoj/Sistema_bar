@@ -325,8 +325,7 @@ const cerrarPedido = async (req, res) => {
       return res.status(400).json({ error: 'No se puede cerrar un pedido sin productos. Eliminalo en su lugar.' });
     }
 
-    await Producto.decrementarStock(items, conn);
-    await (await puertos.obtener('stock')).descontarPorVenta(items, conn);
+    await (await puertos.obtener('stock')).descontarPorVenta(items, conn, { documento_tipo: 'venta', documento: `pedido-${id}`, user_id: req.usuario?.sub ?? null });
     await Pedido.cerrarPedidoIndividual(id, conn);
 
     // Si era la última silla activa de la mesa, la cuenta quedó completa: la mesa sigue "ocupada"

@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const puertos = require('../modulos/puertos');
 
 const getAll = async () => {
   const [rows] = await pool.query('SELECT * FROM productos ORDER BY id ASC');
@@ -27,13 +28,14 @@ const create = async ({ nombre, precio, descripcion, stock, ...resto }) => {
   const cols = extras(resto);
   const [result] = await pool.query(
     `INSERT INTO productos (nombre, precio, descripcion, stock${cols.map((c) => `, ${c}`).join('')}) VALUES (?, ?, ?, ?${cols.map(() => ', ?').join('')})`,
-    [nombre, precio, descripcion ?? null, stock ?? 0, ...cols.map((c) => resto[c])]
+    [nombre, precio, descripcion ?? null, 0, ...cols.map((c) => resto[c])]
   );
+  await (await puertos.obtener('stock')).saldoInicial({ tipo: 'producto', id: result.insertId }, stock ?? 0);
   const [newRow] = await pool.query('SELECT * FROM productos WHERE id = ?', [result.insertId]);
   return newRow[0];
 };
 
-// El stock no se edita a mano: solo cambia al crear el producto o al cerrar pedidos (ver decrementarStock)
+// El stock no se edita a mano: cada cambio es un movimiento del libro de Stock (saldo inicial al crear, venta, devolución, ajustes).
 const update = async (id, { nombre, precio, descripcion, ...resto }) => {
   const cols = extras(resto);
   const [result] = await pool.query(
@@ -86,27 +88,6 @@ const setComponentes = async (combo_id, componentes) => {
   }
 };
 
-// Descuenta stock según lo consumido en una lista de items { producto_id, cantidad } (se suman por producto).
-// Nunca baja de 0 (GREATEST) para no dejar valores negativos si hay descuadres.
-const decrementarStock = async (items, conn) => {
-  const cantidadPorProducto = new Map();
-  for (const { producto_id, cantidad } of items) {
-    cantidadPorProducto.set(producto_id, (cantidadPorProducto.get(producto_id) || 0) + cantidad);
-  }
-  for (const [producto_id, cantidad] of cantidadPorProducto) {
-    await conn.query(
-      'UPDATE productos SET stock = GREATEST(stock - ?, 0) WHERE id = ?',
-      [cantidad, producto_id]
-    );
-  }
-};
-
-// Reingresa al stock lo devuelto (items { producto_id, cantidad }), el inverso de decrementarStock.
-const incrementarStock = async (items, conn) => {
-  for (const { producto_id, cantidad } of items)
-    await conn.query('UPDATE productos SET stock = stock + ? WHERE id = ?', [cantidad, producto_id]);
-};
-
 const remove = async (id) => {
   try {
     const [result] = await pool.query('DELETE FROM productos WHERE id = ?', [id]);
@@ -121,4 +102,4 @@ const remove = async (id) => {
   }
 };
 
-module.exports = { getAll, getById, getByNombre, create, update, getComponentes, setComponentes, decrementarStock, incrementarStock, remove };
+module.exports = { getAll, getById, getByNombre, create, update, getComponentes, setComponentes, remove };

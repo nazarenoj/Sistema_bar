@@ -19,6 +19,8 @@ const PERMISOS = [
   { id: 'facturacion.claves.ver', modulo: 'ventas', descripcion: 'Ver las claves del secuenciador de comprobantes y sus intentos pendientes' },
   { id: 'facturacion.claves.resolver', modulo: 'ventas', descripcion: 'Liberar una clave bloqueada o validar la numeración contra ARCA' },
   { id: 'facturacion.reintentar', modulo: 'ventas', descripcion: 'Reintentar la emisión de un comprobante' },
+  { id: 'stock.movimientos.ver', modulo: 'stock', descripcion: 'Ver existencias, kardex y mermas' },
+  { id: 'stock.movimientos.registrar', modulo: 'stock', descripcion: 'Registrar ingresos, egresos, transferencias y correcciones de stock' },
   { id: 'stock.insumos.ver', modulo: 'stock', descripcion: 'Ver insumos' },
   { id: 'stock.insumos.editar', modulo: 'stock', descripcion: 'Crear y modificar insumos' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

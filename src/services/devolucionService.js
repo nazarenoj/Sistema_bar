@@ -2,7 +2,6 @@ const pool = require('../config/db');
 const afipConfig = require('../config/afipConfig');
 const Mensajeria = require('../mensajeria/servicio');
 const Parametro = require('../models/parametroModel');
-const Producto = require('../models/productoModel');
 const Factura = require('../models/facturaModel');
 const puertos = require('../modulos/puertos');
 const afipService = require('./afipService');
@@ -98,8 +97,7 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
 
     // Reingreso al stock (la merma no reingresa). Hasta C3 el stock se mueve directo, como en el cierre.
     if (reingreso === 'reingreso') {
-      await Producto.incrementarStock(itemsDev, conn);
-      await (await puertos.obtener('stock')).reingresarPorDevolucion(itemsDev, conn);
+      await (await puertos.obtener('stock')).reingresarPorDevolucion(itemsDev, conn, { documento_tipo: 'devolucion', documento: id_global, user_id: userId ?? null });
     }
 
     // Nota de crédito: solo si la venta tenía una factura aprobada que corregir.

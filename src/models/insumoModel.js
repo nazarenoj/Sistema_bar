@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const Mov = require('../stock/movimientoService');
 
 const getAll = async () => {
   const [rows] = await pool.query('SELECT * FROM insumos ORDER BY id ASC');
@@ -21,14 +22,14 @@ const getByNombre = async (nombre) => {
 const create = async ({ nombre, unidad, costo_unitario, stock, disponible }) => {
   const [result] = await pool.query(
     'INSERT INTO insumos (nombre, unidad, costo_unitario, stock, disponible) VALUES (?, ?, ?, ?, ?)',
-    [nombre, unidad, costo_unitario ?? null, stock ?? 0, disponible === false ? 0 : 1]
+    [nombre, unidad, costo_unitario ?? null, 0, disponible === false ? 0 : 1]
   );
+  await Mov.saldoInicial({ tipo: 'insumo', id: result.insertId }, stock ?? 0);
   const [newRow] = await pool.query('SELECT * FROM insumos WHERE id = ?', [result.insertId]);
   return newRow[0];
 };
 
-// El stock no se edita a mano: solo se fija al crear el insumo y luego solo se descuenta
-// automáticamente al vender productos que lo usan (igual que productos, ver decrementarStockPorVenta).
+// El stock no se edita a mano: cada cambio es un movimiento del libro de Stock (ver src/stock/movimientoService.js).
 const update = async (id, { nombre, unidad, costo_unitario, disponible }) => {
   const [result] = await pool.query(
     'UPDATE insumos SET nombre = ?, unidad = ?, costo_unitario = ?, disponible = ? WHERE id = ?',
@@ -49,46 +50,6 @@ const remove = async (id) => {
     }
     throw err;
   }
-};
-
-// Descuenta stock de insumos según la receta (producto_insumos) de los productos vendidos.
-// items: [{ producto_id, cantidad, ... }] — las mismas filas que ya usa Producto.decrementarStock.
-// Nunca baja de 0 (GREATEST) para no dejar valores negativos si hay descuadres.
-const decrementarStockPorVenta = async (items, conn) => {
-  const cantidadPorProducto = new Map();
-  for (const { producto_id, cantidad } of items) {
-    cantidadPorProducto.set(producto_id, (cantidadPorProducto.get(producto_id) || 0) + cantidad);
-  }
-  const productoIds = [...cantidadPorProducto.keys()];
-  if (!productoIds.length) return;
-
-  const placeholders = productoIds.map(() => '?').join(',');
-  const [recetas] = await conn.query(
-    `SELECT producto_id, insumo_id, cantidad_consumida * COALESCE(factor_aplicado, 1) AS cantidad_consumida FROM producto_insumos WHERE producto_id IN (${placeholders})`,
-    productoIds
-  );
-
-  const consumoPorInsumo = new Map();
-  for (const { producto_id, insumo_id, cantidad_consumida } of recetas) {
-    const vendidos = cantidadPorProducto.get(producto_id) || 0;
-    const consumo = vendidos * Number(cantidad_consumida);
-    consumoPorInsumo.set(insumo_id, (consumoPorInsumo.get(insumo_id) || 0) + consumo);
-  }
-
-  for (const [insumo_id, consumo] of consumoPorInsumo) {
-    await conn.query('UPDATE insumos SET stock = GREATEST(stock - ?, 0) WHERE id = ?', [consumo, insumo_id]);
-  }
-};
-
-// Reingresa los insumos de la receta de lo devuelto (el inverso de decrementarStockPorVenta).
-const incrementarStockPorDevolucion = async (items, conn) => {
-  const porProducto = new Map();
-  for (const { producto_id, cantidad } of items) porProducto.set(producto_id, (porProducto.get(producto_id) || 0) + cantidad);
-  if (!porProducto.size) return;
-  const ids = [...porProducto.keys()];
-  const [recetas] = await conn.query(`SELECT producto_id, insumo_id, cantidad_consumida * COALESCE(factor_aplicado, 1) AS cantidad_consumida FROM producto_insumos WHERE producto_id IN (${ids.map(() => '?').join(',')})`, ids);
-  for (const { producto_id, insumo_id, cantidad_consumida } of recetas)
-    await conn.query('UPDATE insumos SET stock = stock + ? WHERE id = ?', [porProducto.get(producto_id) * Number(cantidad_consumida), insumo_id]);
 };
 
 // --- Relación producto ↔ insumos (receta) ---
@@ -137,6 +98,6 @@ const removeFromProducto = async (id, conn = pool) => {
 };
 
 module.exports = {
-  getAll, getById, getByNombre, create, update, remove, decrementarStockPorVenta, incrementarStockPorDevolucion,
+  getAll, getById, getByNombre, create, update, remove,
   getByProducto, getLinea, addToProducto, updateCantidad, removeFromProducto,
 };
