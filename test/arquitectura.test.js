@@ -21,6 +21,7 @@ const DEUDA = {
   // La receta de un producto (insumos que consume) la gestiona hoy el controlador de productos.
   // Se resuelve en la Fase C (Stock): la receta pasa a Stock y Ventas la recibe por el puerto.
   'controllers/productoController.js -> models/insumoModel.js': 'recetas, Fase C',
+  'controllers/productoController.js -> models/presentacionModel.js': 'recetas con presentación, se salda en C3',
 };
 
 const cruces = () => {

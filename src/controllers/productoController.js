@@ -1,5 +1,6 @@
 const Producto = require('../models/productoModel');
 const Insumo = require('../models/insumoModel');
+const Presentacion = require('../models/presentacionModel');
 const logger = require('../utils/logger');
 
 const TIPOS = ['estandar', 'variante', 'pesable', 'fraccionable', 'combo', 'elaborado', 'servicio'];
@@ -242,7 +243,7 @@ const addInsumoAProducto = async (req, res) => {
   const producto_id = parseInt(req.params.id, 10);
   if (isNaN(producto_id)) return res.status(400).json({ error: 'El parámetro "id" debe ser un número entero válido.' });
 
-  const { insumo_id, cantidad_consumida } = req.body;
+  const { insumo_id, cantidad_consumida, presentacion_id } = req.body;
   if (!Number.isInteger(insumo_id) || insumo_id <= 0)
     return res.status(400).json({ error: 'El campo "insumo_id" debe ser un entero positivo.' });
   if (typeof cantidad_consumida !== 'number' || isNaN(cantidad_consumida) || cantidad_consumida <= 0)
@@ -255,7 +256,16 @@ const addInsumoAProducto = async (req, res) => {
     const insumo = await Insumo.getById(insumo_id);
     if (!insumo) return res.status(404).json({ error: `Insumo con id ${insumo_id} no encontrado.` });
 
-    const linea = await Insumo.addToProducto(producto_id, insumo_id, cantidad_consumida);
+    // La cantidad puede estar en una presentación de uso "receta" del insumo (gramos de un ítem que se controla en kg):
+    // se guarda su ID y el factor de esa versión (RF02).
+    let presentacion = null;
+    if (presentacion_id !== undefined && presentacion_id !== null) {
+      presentacion = await Presentacion.getById(presentacion_id);
+      const vigente = presentacion && (!presentacion.vigente_hasta || new Date(presentacion.vigente_hasta) > new Date());
+      if (!presentacion || presentacion.insumo_id !== insumo_id || !String(presentacion.usos).split(',').includes('receta') || !vigente)
+        return res.status(400).json({ error: 'La presentación debe ser una presentación vigente de uso "receta" de ese insumo.' });
+    }
+    const linea = await Insumo.addToProducto(producto_id, insumo_id, cantidad_consumida, undefined, presentacion ? { presentacion_id: presentacion.id, factor_aplicado: presentacion.factor } : {});
     res.status(201).json(linea);
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY')

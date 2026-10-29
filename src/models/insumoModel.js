@@ -64,7 +64,7 @@ const decrementarStockPorVenta = async (items, conn) => {
 
   const placeholders = productoIds.map(() => '?').join(',');
   const [recetas] = await conn.query(
-    `SELECT producto_id, insumo_id, cantidad_consumida FROM producto_insumos WHERE producto_id IN (${placeholders})`,
+    `SELECT producto_id, insumo_id, cantidad_consumida * COALESCE(factor_aplicado, 1) AS cantidad_consumida FROM producto_insumos WHERE producto_id IN (${placeholders})`,
     productoIds
   );
 
@@ -86,7 +86,7 @@ const incrementarStockPorDevolucion = async (items, conn) => {
   for (const { producto_id, cantidad } of items) porProducto.set(producto_id, (porProducto.get(producto_id) || 0) + cantidad);
   if (!porProducto.size) return;
   const ids = [...porProducto.keys()];
-  const [recetas] = await conn.query(`SELECT producto_id, insumo_id, cantidad_consumida FROM producto_insumos WHERE producto_id IN (${ids.map(() => '?').join(',')})`, ids);
+  const [recetas] = await conn.query(`SELECT producto_id, insumo_id, cantidad_consumida * COALESCE(factor_aplicado, 1) AS cantidad_consumida FROM producto_insumos WHERE producto_id IN (${ids.map(() => '?').join(',')})`, ids);
   for (const { producto_id, insumo_id, cantidad_consumida } of recetas)
     await conn.query('UPDATE insumos SET stock = stock + ? WHERE id = ?', [porProducto.get(producto_id) * Number(cantidad_consumida), insumo_id]);
 };
@@ -95,7 +95,7 @@ const incrementarStockPorDevolucion = async (items, conn) => {
 
 const getByProducto = async (producto_id, conn = pool) => {
   const [rows] = await conn.query(
-    `SELECT pi.id, pi.insumo_id, pi.cantidad_consumida, i.nombre, i.unidad
+    `SELECT pi.id, pi.insumo_id, pi.cantidad_consumida, pi.presentacion_id, pi.factor_aplicado, i.nombre, i.unidad
      FROM producto_insumos pi
      JOIN insumos i ON i.id = pi.insumo_id
      WHERE pi.producto_id = ?
@@ -110,13 +110,13 @@ const getLinea = async (id, conn = pool) => {
   return rows[0] || null;
 };
 
-const addToProducto = async (producto_id, insumo_id, cantidad_consumida, conn = pool) => {
+const addToProducto = async (producto_id, insumo_id, cantidad_consumida, conn = pool, { presentacion_id = null, factor_aplicado = null } = {}) => {
   const [result] = await conn.query(
-    'INSERT INTO producto_insumos (producto_id, insumo_id, cantidad_consumida) VALUES (?, ?, ?)',
-    [producto_id, insumo_id, cantidad_consumida]
+    'INSERT INTO producto_insumos (producto_id, insumo_id, cantidad_consumida, presentacion_id, factor_aplicado) VALUES (?, ?, ?, ?, ?)',
+    [producto_id, insumo_id, cantidad_consumida, presentacion_id, factor_aplicado]
   );
   const [rows] = await conn.query(
-    `SELECT pi.id, pi.insumo_id, pi.cantidad_consumida, i.nombre, i.unidad
+    `SELECT pi.id, pi.insumo_id, pi.cantidad_consumida, pi.presentacion_id, pi.factor_aplicado, i.nombre, i.unidad
      FROM producto_insumos pi JOIN insumos i ON i.id = pi.insumo_id WHERE pi.id = ?`,
     [result.insertId]
   );
