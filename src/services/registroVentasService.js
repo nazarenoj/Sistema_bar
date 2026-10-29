@@ -40,6 +40,7 @@ const construir = (q = {}) => {
     }[q.modalidad]);
   }
   if (q.canal) { donde.push('v.modalidad = ?'); params.push(q.canal); } // salón, mostrador, para llevar, delivery o retiro
+  if (q.pendiente_costo === '1') donde.push("EXISTS (SELECT 1 FROM mensajes_integracion md WHERE md.doc_id_global = v.id_global AND md.tipo = 'descuento_stock') AND NOT EXISTS (SELECT 1 FROM lineas_costo lc WHERE lc.doc_id_global = v.id_global)"); // RF20: el costo de la venta todavía no llegó de Stock
   if (q.estado_arca) { donde.push('f.estado = ?'); params.push(q.estado_arca); }
   if (q.mesa) { donde.push('m.numero_mesa = ?'); params.push(q.mesa); }
   if (q.usuario) { donde.push('u.username = ?'); params.push(q.usuario); }

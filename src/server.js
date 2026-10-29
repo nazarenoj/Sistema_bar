@@ -41,6 +41,7 @@ const instancia        = require('./middleware/instancia');
 const idempotencia     = require('./middleware/idempotencia');
 const horaCliente      = require('./middleware/horaCliente');
 require('./models/insumoPuerto'); // Stock registra lo que implementa de los puertos de Ventas
+require('./services/costoVentaReceptor'); // Ventas guarda el costo que Stock informa al confirmar el descuento
 const requestLogger    = require('./middleware/requestLogger');
 const errorHandler     = require('./middleware/errorHandler');
 const logger           = require('./utils/logger');

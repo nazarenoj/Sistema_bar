@@ -1,6 +1,9 @@
 const { Router } = require('express');
 const pool = require('../config/db');
 const Mov = require('../stock/movimientoService');
+const Costos = require('../stock/costoService');
+const Parametro = require('../models/parametroModel');
+const soloAdministrador = require('../middleware/soloAdministrador');
 const { requierePermiso, validarAutorizacion } = require('../middleware/requierePermiso');
 const { auditar } = require('../utils/auditar');
 const { enviarReporte, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
@@ -38,6 +41,30 @@ router.get('/kardex', VER, manejar(async (req, res) => {
       { key: 'deposito', label: 'Depósito', tipo: 'texto', ancho: 18 }, { key: 'cantidad', label: 'Cantidad', tipo: 'numero', ancho: 11 }, { key: 'saldo', label: 'Saldo', tipo: 'numero', ancho: 11 },
     ], filas: filas.map((f) => ({ fecha: f.created_at, tipo: f.tipo, motivo: f.motivo, deposito: f.deposito, cantidad: f.cantidad, saldo: f.saldo })) }],
   }, req.query.formato, `kardex-${item.tipo}-${item.id}`);
+}));
+
+// Inventario valorizado a una fecha (RF18): cantidad y valor con el costo congelado de cada movimiento.
+router.get('/valorizado', VER, manejar(async (req, res) => res.json(await Costos.valorizado({ fecha: req.query.fecha, deposito_id: req.query.deposito_id }))));
+
+// Costo vigente de un ítem (insumo o producto) con su origen; para un artículo, CI o CP según cómo se descuenta (RN62).
+router.get('/costos/:tipo/:id', VER, manejar(async (req, res) => {
+  const { tipo } = req.params;
+  const id = Number(req.params.id);
+  if (!['insumo', 'producto'].includes(tipo) || !Number.isInteger(id)) return res.status(400).json({ error: 'Indicá tipo (insumo | producto) e id.' });
+  res.json(tipo === 'producto' ? await Costos.costoArticulo(id) : { ...(await Costos.costoActual({ tipo, id })), tipo: 'CI' });
+}));
+
+// Método de valuación de la instancia: 1 promedio ponderado, 2 PEPS, 3 último costo (RF17). Cambiarlo es del Administrador y
+// no modifica los costos ya congelados en los movimientos (RN63).
+router.get('/valuacion', VER, manejar(async (req, res) => res.json({ metodo: await Costos.metodo() })));
+router.put('/valuacion', soloAdministrador, manejar(async (req, res) => {
+  const codigo = Object.entries(Costos.METODOS).find(([, nombre]) => nombre === req.body.metodo)?.[0];
+  if (!codigo) return res.status(400).json({ error: `"metodo" debe ser uno de: ${Object.values(Costos.METODOS).join(', ')}.` });
+  const anterior = await Costos.metodo();
+  await pool.query("INSERT INTO parametros (clave, valor) VALUES ('metodo_valuacion', ?) ON DUPLICATE KEY UPDATE valor = VALUES(valor)", [codigo]);
+  Parametro.invalidar();
+  await auditar(req, { modulo: 'stock', accion: 'cambio_metodo_valuacion', entidad: 'parametro', entidad_id: 'metodo_valuacion', detalle: `${anterior} -> ${req.body.metodo}` });
+  res.json({ metodo: req.body.metodo, anterior });
 }));
 
 router.get('/mermas', VER, manejar(async (req, res) => res.json(await Mov.mermas(req.query))));

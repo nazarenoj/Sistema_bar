@@ -91,8 +91,14 @@ const obtener = async (id_global) => {
   // La venta no cambia (RN19): su estado sale de lo devuelto.
   const [[{ devuelto }]] = await pool.query('SELECT COALESCE(SUM(total), 0) AS devuelto FROM devoluciones WHERE venta_id = ?', [venta.id]);
   const estado = Number(devuelto) === 0 ? 'cerrada' : Math.round(Number(devuelto) * 100) >= Math.round(Number(venta.total) * 100) ? 'anulada' : 'devuelta_parcial';
+  // Costo de cada línea (copia local de lo que informó Stock). Sin costo todavía y con descuento en camino: "pendiente de costo".
+  const [costos] = await pool.query('SELECT linea, costo_unitario, origen_costo, provisorio FROM lineas_costo WHERE doc_id_global = ?', [id_global]);
+  const costoDe = new Map(costos.map((c) => [c.linea, { costo_unitario: c.costo_unitario === null ? null : Number(c.costo_unitario), origen_costo: c.origen_costo, provisorio: !!c.provisorio }]));
+  const [[{ conDescuento }]] = await pool.query("SELECT COUNT(*) AS conDescuento FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'descuento_stock'", [id_global]);
+  const detalleVenta = JSON.parse(venta.detalle).map((l, i) => ({ ...l, costo: costoDe.get(i) ?? null }));
+  const pendienteDeCosto = conDescuento > 0 && costos.length < detalleVenta.length;
   const [reimpresiones] = await pool.query('SELECT username, formato, motivo, created_at FROM reimpresiones WHERE venta_id = ? ORDER BY id', [venta.id]);
-  return { ...venta, detalle: JSON.parse(venta.detalle), pagos, devuelto: Number(devuelto), estado, reimpresiones, integracion: await Mensajeria.estadoIntegracion(id_global) };
+  return { ...venta, detalle: detalleVenta, pendiente_de_costo: pendienteDeCosto, pagos, devuelto: Number(devuelto), estado, reimpresiones, integracion: await Mensajeria.estadoIntegracion(id_global) };
 };
 
 // Total cobrado por forma de pago en un rango de fechas (cierre de caja y reportes, RF09).
@@ -144,4 +150,41 @@ const regularizar = async (idGlobal, receptor, { idIntento, userId } = {}) => {
   return factura;
 };
 
-module.exports = { regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+// Margen realizado por producto (Ventas RN62, RN75): ingresos menos el costo de la venta (CV) que informó Stock, con la
+// marca "parcial" cuando hay ventas sin costo, costo provisorio u orígenes mezclados. No corrige ningún dato.
+// shortcut: no descuenta las devoluciones del período; sumarlas cuando se necesite el margen neto.
+const margen = async ({ desde, hasta } = {}) => {
+  const donde = [];
+  const params = [];
+  if (desde) { donde.push('created_at >= ?'); params.push(`${desde} 00:00:00`); }
+  if (hasta) { donde.push('created_at <= ?'); params.push(`${hasta} 23:59:59`); }
+  const [ventas] = await pool.query(`SELECT id_global, detalle FROM ventas ${donde.length ? `WHERE ${donde.join(' AND ')}` : ''} ORDER BY id LIMIT 5000`, params);
+  const costos = new Map();
+  if (ventas.length) {
+    const [rows] = await pool.query(`SELECT doc_id_global, linea, costo_unitario, origen_costo, provisorio FROM lineas_costo WHERE doc_id_global IN (${ventas.map(() => '?').join(',')})`, ventas.map((v) => v.id_global));
+    for (const r of rows) costos.set(`${r.doc_id_global}|${r.linea}`, r);
+  }
+  const porProducto = new Map();
+  for (const v of ventas) {
+    JSON.parse(v.detalle).forEach((l, i) => {
+      const p = porProducto.get(l.producto_id) ?? { producto_id: l.producto_id, nombre: l.nombre, unidades: 0, ingresos: 0, costo: 0, lineas_sin_costo: 0, lineas_provisorias: 0, origenes: new Set() };
+      const c = costos.get(`${v.id_global}|${i}`);
+      p.unidades += l.cantidad;
+      p.ingresos += l.cantidad * l.precio_unitario;
+      if (!c || c.costo_unitario === null) p.lineas_sin_costo++;
+      else { p.costo += l.cantidad * Number(c.costo_unitario); p.origenes.add(c.origen_costo); if (c.provisorio) p.lineas_provisorias++; }
+      porProducto.set(l.producto_id, p);
+    });
+  }
+  return [...porProducto.values()].map((p) => {
+    const motivos = [];
+    if (p.lineas_sin_costo) motivos.push('hay ventas sin costo');
+    if (p.lineas_provisorias) motivos.push('hay costo provisorio');
+    if (p.origenes.size > 1) motivos.push('orígenes de costo mezclados');
+    const ingresos = Math.round(p.ingresos * 100) / 100;
+    const costo = Math.round(p.costo * 100) / 100;
+    return { producto_id: p.producto_id, nombre: p.nombre, unidades: p.unidades, ingresos, costo, margen: Math.round((ingresos - costo) * 100) / 100, parcial: motivos.length > 0, motivos };
+  }).sort((a, b) => b.margen - a.margen);
+};
+
+module.exports = { margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };

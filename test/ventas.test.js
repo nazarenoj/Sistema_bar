@@ -69,7 +69,7 @@ test('Ventas.RN58/EX43: si falla un efecto la venta no se revierte y queda Parci
     const { mesa } = await cuentaAbierta();
     assert.equal((await cobrar(mesa, 'cierre-parcial')).status, 200);
     const [v] = await ventas(mesa.id);
-    await new Promise((res) => setTimeout(res, 300)); // la entrega inmediata corre en segundo plano
+    for (let i = 0; i < 5; i++) { await M.procesarPendientes(); await new Promise((res) => setTimeout(res, 60)); } // la entrega corre en segundo plano y el costo de Stock llega en una vuelta más
     const parcial = (await api('GET', `/api/ventas/${v.id_global}`, { token })).json;
     assert.equal(parcial.integracion.estado, 'parcial');
     assert.deepEqual(parcial.integracion.efectos.filter((e) => e.estado !== 'confirmado').map((e) => e.modulo), ['financiero']); // el de Stock sí se aplicó

@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const Deposito = require('../models/depositoModel');
 const Presentacion = require('../models/presentacionModel');
+const Costos = require('./costoService');
 const { idGlobal } = require('../utils/idGlobal');
 
 // Movimientos y kardex (Stock RF04, RF12, RF13, RF18, RN02). Todo cambio de existencias es un movimiento de solo
@@ -27,22 +28,31 @@ const itemValido = async (conn, item, bloquear = false) => {
 const registrar = async (conn, m) => {
   const cantidad = Number(m.cantidad);
   if (!Number.isFinite(cantidad) || cantidad === 0) throw invalido('La cantidad del movimiento no puede ser cero.');
-  await itemValido(conn, m.item, true);
+  const fila = await itemValido(conn, m.item, true);
   const deposito = m.deposito_id ?? (await Deposito.getPredeterminado(conn)).id;
   const id_global = await idGlobal();
+  // El costo queda congelado en el movimiento (RN63). Un egreso se valoriza según el método de la instancia y consume las
+  // capas de PEPS (una transferencia no cambia lo que hay: no las consume); un ingreso trae su costo.
+  let costo = m.costo_unitario ?? null;
+  let provisorio = m.costo_provisorio ? 1 : 0;
+  if (cantidad < 0) {
+    const e = await Costos.alEgresar(conn, m.item, -cantidad, { consumir: m.tipo !== 'transferencia' });
+    if (costo === null) { costo = e.costo_unitario; provisorio = e.provisorio ? 1 : 0; }
+  }
   const [r] = await conn.query(
     `INSERT INTO stock_movimientos (id_global, ${COL[m.item.tipo]}, deposito_id, tipo, motivo, cantidad, costo_unitario, presentacion_id, factor_aplicado,
-       cantidad_presentacion, documento_tipo, documento, movimiento_original_id, user_id, observacion, operacion_clave, venta_no_fiscal)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id_global, m.item.id, deposito, m.tipo, m.motivo, cantidad, m.costo_unitario ?? null, m.presentacion_id ?? null, m.factor_aplicado ?? null,
-      m.cantidad_presentacion ?? null, m.documento_tipo ?? null, m.documento ?? null, m.movimiento_original_id ?? null, m.user_id ?? null, m.observacion ?? null, m.operacion_clave ?? null, m.venta_no_fiscal ? 1 : 0]);
+       cantidad_presentacion, documento_tipo, documento, movimiento_original_id, user_id, observacion, operacion_clave, venta_no_fiscal, costo_provisorio)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id_global, m.item.id, deposito, m.tipo, m.motivo, cantidad, costo, m.presentacion_id ?? null, m.factor_aplicado ?? null,
+      m.cantidad_presentacion ?? null, m.documento_tipo ?? null, m.documento ?? null, m.movimiento_original_id ?? null, m.user_id ?? null, m.observacion ?? null, m.operacion_clave ?? null, m.venta_no_fiscal ? 1 : 0, provisorio]);
+  if (cantidad > 0 && costo !== null && m.tipo !== 'transferencia') await Costos.alIngresar(conn, m.item, cantidad, Number(costo), r.insertId, fila.stock);
   await conn.query('SET @chepola_mov = 1');
   try {
     await conn.query(`UPDATE ${TABLA[m.item.tipo]} SET stock = stock + ? WHERE id = ?`, [cantidad, m.item.id]);
   } finally {
     await conn.query('SET @chepola_mov = 0');
   }
-  return { id: r.insertId, id_global };
+  return { id: r.insertId, id_global, costo_unitario: costo === null ? null : Number(costo), costo_provisorio: provisorio };
 };
 
 const conTransaccion = async (fn) => {
@@ -160,8 +170,10 @@ const transferir = async ({ origen_id, destino_id, lineas, observacion }, { user
       await itemValido(conn, l.item);
       const base = await lineaABase(conn, l, 'fraccionamiento').catch(() => lineaABase(conn, l, 'receta'));
       const comun = { item: l.item, tipo: 'transferencia', motivo: 'transferencia', documento_tipo: 'transferencia', documento, user_id: userId, observacion, costo_unitario: l.costo_unitario };
-      movs.push(await registrar(conn, { ...comun, deposito_id: origen_id, cantidad: -base.cantidad }));
-      movs.push(await registrar(conn, { ...comun, deposito_id: destino_id, cantidad: base.cantidad }));
+      const salida = await registrar(conn, { ...comun, deposito_id: origen_id, cantidad: -base.cantidad });
+      movs.push(salida);
+      // Lo que entra al destino conserva el costo con que salió del origen (RF13).
+      movs.push(await registrar(conn, { ...comun, deposito_id: destino_id, cantidad: base.cantidad, costo_unitario: salida.costo_unitario, costo_provisorio: salida.costo_provisorio }));
     }
     return { documento, origen_id, destino_id, movimientos: movs };
   });
@@ -179,7 +191,7 @@ const corregir = async (movimientoId, observacion, { userId } = {}) => {
     if (ya) throw invalido('Ese movimiento ya fue corregido.', 409);
     const item = o.insumo_id ? { tipo: 'insumo', id: o.insumo_id } : { tipo: 'producto', id: o.producto_id };
     return registrar(conn, { item, deposito_id: o.deposito_id, tipo: 'correccion', motivo: 'correccion', cantidad: -Number(o.cantidad), costo_unitario: o.costo_unitario,
-      presentacion_id: o.presentacion_id, factor_aplicado: o.factor_aplicado, cantidad_presentacion: o.cantidad_presentacion ? -Number(o.cantidad_presentacion) : null,
+      presentacion_id: o.presentacion_id, factor_aplicado: o.factor_aplicado, cantidad_presentacion: o.cantidad_presentacion ? -Number(o.cantidad_presentacion) : null, costo_provisorio: o.costo_provisorio,
       documento_tipo: o.documento_tipo, documento: o.documento, movimiento_original_id: o.id, user_id: userId, observacion });
   });
 };

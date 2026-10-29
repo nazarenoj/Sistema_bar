@@ -76,6 +76,11 @@ router.post('/:idGlobal/reimpresiones', requierePermiso('ventas.reimprimir'), as
   } catch (err) { next(err); }
 });
 
+// Margen realizado por producto (?desde&hasta), con la marca "parcial" y su motivo.
+router.get('/margen', requierePermiso('ventas.historial.ver'), async (req, res, next) => {
+  try { res.json(await Venta.margen(req.query)); } catch (err) { next(err); }
+});
+
 // Total cobrado por forma de pago (?desde=YYYY-MM-DD&hasta=YYYY-MM-DD); va antes de /:idGlobal.
 router.get('/por-forma-pago', requierePermiso('ventas.historial.ver'), async (req, res, next) => {
   try {
