@@ -83,7 +83,8 @@ const obtener = async (id_global) => {
   // La venta no cambia (RN19): su estado sale de lo devuelto.
   const [[{ devuelto }]] = await pool.query('SELECT COALESCE(SUM(total), 0) AS devuelto FROM devoluciones WHERE venta_id = ?', [venta.id]);
   const estado = Number(devuelto) === 0 ? 'cerrada' : Math.round(Number(devuelto) * 100) >= Math.round(Number(venta.total) * 100) ? 'anulada' : 'devuelta_parcial';
-  return { ...venta, detalle: JSON.parse(venta.detalle), pagos, devuelto: Number(devuelto), estado, integracion: await Mensajeria.estadoIntegracion(id_global) };
+  const [reimpresiones] = await pool.query('SELECT username, formato, motivo, created_at FROM reimpresiones WHERE venta_id = ? ORDER BY id', [venta.id]);
+  return { ...venta, detalle: JSON.parse(venta.detalle), pagos, devuelto: Number(devuelto), estado, reimpresiones, integracion: await Mensajeria.estadoIntegracion(id_global) };
 };
 
 // Total cobrado por forma de pago en un rango de fechas (cierre de caja y reportes, RF09).
