@@ -10,6 +10,7 @@ const PERMISOS = [
   { id: 'ventas.salon.configurar', modulo: 'ventas', descripcion: 'Salones, mesas, sillas y estructuras' },
   { id: 'ventas.catalogo.ver', modulo: 'ventas', descripcion: 'Ver la carta de productos' },
   { id: 'ventas.catalogo.editar', modulo: 'ventas', descripcion: 'Crear y modificar productos, precios y recetas' },
+  { id: 'ventas.devoluciones.crear', modulo: 'ventas', descripcion: 'Anular o devolver una venta (con nota de crédito)' },
   { id: 'ventas.historial.ver', modulo: 'ventas', descripcion: 'Ver el historial y los gráficos de ventas', admiteAlcance: true },
   { id: 'ventas.historial.exportar', modulo: 'ventas', descripcion: 'Exportar reportes de ventas' },
   { id: 'facturacion.ver', modulo: 'ventas', descripcion: 'Ver comprobantes electrónicos' },

@@ -144,7 +144,10 @@ const reintentar = async (req, res) => {
       return res.status(409).json({ error: 'Esta factura tiene un intento pendiente de resolver con ARCA. Esperá a que se resuelva o liberá la clave.', codigo: 'INTENTO_INDETERMINADO' });
 
     try {
+      // Una nota de crédito reintentada vuelve a referenciar la factura que corrige.
+      const origen = factura.comprobante_origen_id ? await Factura.getById(factura.comprobante_origen_id) : null;
       const resultado = await afipService.emitirFactura({
+        comprobanteAsociado: origen && { Tipo: origen.tipo_comprobante, PtoVta: origen.punto_venta, Nro: origen.numero },
         tipoComprobante: factura.tipo_comprobante,
         docTipo: factura.doc_tipo,
         docNro: factura.doc_nro,

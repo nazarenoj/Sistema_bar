@@ -80,6 +80,17 @@ const decrementarStockPorVenta = async (items, conn) => {
   }
 };
 
+// Reingresa los insumos de la receta de lo devuelto (el inverso de decrementarStockPorVenta).
+const incrementarStockPorDevolucion = async (items, conn) => {
+  const porProducto = new Map();
+  for (const { producto_id, cantidad } of items) porProducto.set(producto_id, (porProducto.get(producto_id) || 0) + cantidad);
+  if (!porProducto.size) return;
+  const ids = [...porProducto.keys()];
+  const [recetas] = await conn.query(`SELECT producto_id, insumo_id, cantidad_consumida FROM producto_insumos WHERE producto_id IN (${ids.map(() => '?').join(',')})`, ids);
+  for (const { producto_id, insumo_id, cantidad_consumida } of recetas)
+    await conn.query('UPDATE insumos SET stock = stock + ? WHERE id = ?', [porProducto.get(producto_id) * Number(cantidad_consumida), insumo_id]);
+};
+
 // --- Relación producto ↔ insumos (receta) ---
 
 const getByProducto = async (producto_id, conn = pool) => {
@@ -126,6 +137,6 @@ const removeFromProducto = async (id, conn = pool) => {
 };
 
 module.exports = {
-  getAll, getById, getByNombre, create, update, remove, decrementarStockPorVenta,
+  getAll, getById, getByNombre, create, update, remove, decrementarStockPorVenta, incrementarStockPorDevolucion,
   getByProducto, getLinea, addToProducto, updateCantidad, removeFromProducto,
 };

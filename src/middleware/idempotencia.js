@@ -17,6 +17,7 @@ const Notificacion = require('../models/notificacionModel');
 const OBLIGATORIAS = [
   /^POST \/api\/mesas\/:n\/cerrar$/,
   /^POST \/api\/pedidos\/:n\/cerrar$/,
+  /^POST \/api\/devoluciones$/,
   /^POST \/api\/facturas\/:n\/reintentar$/,
 ];
 

@@ -15,7 +15,7 @@ const HORA_CIERRE_MESA_SUBQUERY = `(
 // comprobante fiscal (aprobado, pendiente o rechazado), viaja pegado al pedido para mostrarlo en
 // el detalle del historial sin una consulta aparte.
 const FACTURA_JOIN = `
-  LEFT JOIN facturas f ON f.mesa_id = p.mesa_id AND f.sesion_apertura = p.sesion_apertura`;
+  LEFT JOIN facturas f ON f.mesa_id = p.mesa_id AND f.sesion_apertura = p.sesion_apertura AND f.devolucion_id IS NULL`;
 const FACTURA_COLUMNAS = `
   f.id AS factura_id, f.tipo_comprobante, f.punto_venta AS factura_punto_venta,
   f.numero AS factura_numero, f.cae, f.cae_vencimiento, f.estado AS factura_estado,

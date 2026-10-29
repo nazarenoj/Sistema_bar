@@ -9,7 +9,7 @@ const ANCHO = Math.round(80 * MM_TO_PT); // mismo ancho térmico 80mm que ticket
 const MARGEN = 14;
 const ANCHO_UTIL = ANCHO - MARGEN * 2;
 
-const TIPOS_COMPROBANTE = { 1: 'FACTURA A', 6: 'FACTURA B', 11: 'FACTURA C' };
+const TIPOS_COMPROBANTE = { 1: 'FACTURA A', 6: 'FACTURA B', 11: 'FACTURA C', 3: 'NOTA DE CRÉDITO A', 8: 'NOTA DE CRÉDITO B', 13: 'NOTA DE CRÉDITO C' };
 const CONDICION_IVA_EMISOR_LABEL = {
   monotributista: 'Monotributista',
   responsable_inscripto: 'IVA Responsable Inscripto',
@@ -122,7 +122,7 @@ const generarFacturaPDF = async (res, factura, { items = [], copia = 'ORIGINAL' 
   // porque el monotributista no discrimina IVA y este sistema no carga Otros Tributos (ImpTrib
   // queda en 0, ver afipService.calcularImportes), pero el renglón igual tiene que figurar.
   doc.text(`Total sin impuestos nacionales: ${formatMoneda(factura.importe_neto)}`, { align: 'right' });
-  if (factura.tipo_comprobante !== 11) {
+  if (![11, 13].includes(factura.tipo_comprobante)) {
     doc.text(`IVA: ${formatMoneda(factura.importe_iva)}`, { align: 'right' });
   }
   doc.font('Helvetica-Bold').fontSize(11).text(`TOTAL: ${formatMoneda(factura.importe_total)}`, { align: 'right' });

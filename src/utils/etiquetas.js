@@ -2,10 +2,10 @@
 // los servicios de reportes para que no se dupliquen (antes estaban repetidas en
 // facturaController.js y en el frontend).
 
-const TIPO_COMPROBANTE_LABEL = { 1: 'Factura A', 6: 'Factura B', 11: 'Factura C' };
+const TIPO_COMPROBANTE_LABEL = { 1: 'Factura A', 6: 'Factura B', 11: 'Factura C', 3: 'Nota de Crédito A', 8: 'Nota de Crédito B', 13: 'Nota de Crédito C' };
 
 // Versión corta, para columnas angostas (la tabla del historial muestra solo la letra).
-const TIPO_COMPROBANTE_LETRA = { 1: 'A', 6: 'B', 11: 'C' };
+const TIPO_COMPROBANTE_LETRA = { 1: 'A', 6: 'B', 11: 'C', 3: 'NC A', 8: 'NC B', 13: 'NC C' };
 
 const METODO_PAGO_LABEL = {
   efectivo: 'Efectivo',

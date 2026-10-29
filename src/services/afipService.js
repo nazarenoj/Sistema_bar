@@ -11,7 +11,11 @@ const TIPOS_VALIDOS_POR_CONDICION = {
   responsable_inscripto: [1, 6], // Factura A (a otros RI) y Factura B (consumidor final)
 };
 
-const TIPOS_COMPROBANTE = { 1: 'Factura A', 6: 'Factura B', 11: 'Factura C' };
+const TIPOS_COMPROBANTE = { 1: 'Factura A', 6: 'Factura B', 11: 'Factura C', 3: 'Nota de Crédito A', 8: 'Nota de Crédito B', 13: 'Nota de Crédito C' };
+
+// Una nota de crédito se rige por las mismas reglas que la factura que corrige (A=3, B=8, C=13).
+const NC_BASE = { 3: 1, 8: 6, 13: 11 };
+const base = (tipo) => NC_BASE[tipo] ?? tipo;
 
 const formatFechaAfip = (fecha = new Date()) => {
   const y = fecha.getFullYear();
@@ -36,7 +40,7 @@ const _listarObservaciones = (campo) =>
 // controller lo devuelva como tal, sin llegar a tocar ARCA.
 const validarTipoComprobante = (tipoComprobante) => {
   const validos = TIPOS_VALIDOS_POR_CONDICION[config.condicionIvaEmisor];
-  if (!validos.includes(tipoComprobante)) {
+  if (!validos.includes(base(tipoComprobante))) {
     const err = new Error(
       `Con la condición IVA configurada (${config.condicionIvaEmisor}) no se puede emitir ` +
         `${TIPOS_COMPROBANTE[tipoComprobante] || `tipo ${tipoComprobante}`}.`
@@ -50,7 +54,7 @@ const validarTipoComprobante = (tipoComprobante) => {
 // inscripto) discrimina la alícuota general configurada a partir del total (los precios de la
 // carta ya se cargan con IVA incluido).
 const calcularImportes = (tipoComprobante, importeTotal) => {
-  if (tipoComprobante === 11) {
+  if (base(tipoComprobante) === 11) {
     return { impNeto: importeTotal, impIva: 0, impTotal: importeTotal };
   }
   const alicuota = config.ivaAlicuotaPorcentaje / 100;
@@ -92,7 +96,7 @@ const _normalizarResultado = (resultado, { numero, impNeto, impIva, impTotal }) 
 // tope_consumidor_final, 0 = sin control). Lanza con .status = 400 sin tocar ARCA.
 const validarReceptor = async ({ tipoComprobante, docTipo, condicionIvaReceptorId, importeTotal }) => {
   const rechazar = (m) => Object.assign(new Error(m), { status: 400 });
-  if (tipoComprobante === 1 && (condicionIvaReceptorId !== 1 || docTipo !== 80))
+  if (base(tipoComprobante) === 1 && (condicionIvaReceptorId !== 1 || docTipo !== 80))
     throw rechazar('La Factura A exige un receptor Responsable Inscripto identificado con CUIT.');
   const { tope_consumidor_final: tope = 0 } = await Parametro.todos();
   if (docTipo === 99 && tope > 0 && importeTotal > tope)
@@ -111,7 +115,7 @@ const guardarIntento = (idIntento, clave, numero, estado, resultado = null, fact
 // Es la única vía de numeración y emisión (RN49): el número lo asigna el secuenciador, con una sola
 // solicitud en vuelo por punto de venta + tipo + modalidad. `idIntento` (la ID_Solicitud) hace al
 // intento idempotente: repetir uno ya autorizado devuelve el comprobante sin volver a ARCA (RN52).
-const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaReceptorId, importeTotal, idIntento, facturaId }) => {
+const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaReceptorId, importeTotal, idIntento, facturaId, comprobanteAsociado }) => {
   validarTipoComprobante(tipoComprobante);
   await validarReceptor({ tipoComprobante, docTipo, condicionIvaReceptorId, importeTotal });
   const { impNeto, impIva, impTotal } = calcularImportes(tipoComprobante, importeTotal);
@@ -144,9 +148,11 @@ const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaRec
       MonId: 'PES',
       MonCotiz: 1,
       CondicionIVAReceptorId: condicionIvaReceptorId,
-      ...(tipoComprobante !== 11 && {
+      ...(base(tipoComprobante) !== 11 && {
         Iva: { AlicIva: [{ Id: config.ivaAlicuotaId, BaseImp: impNeto, Importe: impIva }] },
       }),
+      // La nota de crédito referencia el comprobante que corrige.
+      ...(comprobanteAsociado && { CbtesAsoc: { CbteAsoc: [{ Tipo: comprobanteAsociado.Tipo, PtoVta: comprobanteAsociado.PtoVta, Nro: comprobanteAsociado.Nro }] } }),
     };
 
     let respuesta;

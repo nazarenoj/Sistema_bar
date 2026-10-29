@@ -101,6 +101,12 @@ const decrementarStock = async (items, conn) => {
   }
 };
 
+// Reingresa al stock lo devuelto (items { producto_id, cantidad }), el inverso de decrementarStock.
+const incrementarStock = async (items, conn) => {
+  for (const { producto_id, cantidad } of items)
+    await conn.query('UPDATE productos SET stock = stock + ? WHERE id = ?', [cantidad, producto_id]);
+};
+
 const remove = async (id) => {
   try {
     const [result] = await pool.query('DELETE FROM productos WHERE id = ?', [id]);
@@ -115,4 +121,4 @@ const remove = async (id) => {
   }
 };
 
-module.exports = { getAll, getById, getByNombre, create, update, getComponentes, setComponentes, decrementarStock, remove };
+module.exports = { getAll, getById, getByNombre, create, update, getComponentes, setComponentes, decrementarStock, incrementarStock, remove };

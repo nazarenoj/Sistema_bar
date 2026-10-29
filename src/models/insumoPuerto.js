@@ -6,4 +6,5 @@ const puertos = require('../modulos/puertos');
 puertos.registrar('stock', {
   disponibilidad: async () => ({ bloqueado: false }), // el bloqueo por existencias llega con Stock C3
   descontarPorVenta: (items, conn) => Insumo.decrementarStockPorVenta(items, conn),
+  reingresarPorDevolucion: (items, conn) => Insumo.incrementarStockPorDevolucion(items, conn),
 });

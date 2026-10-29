@@ -5,13 +5,15 @@ const create = async (data, conn = pool) => {
   const [result] = await conn.query(
     `INSERT INTO facturas
        (mesa_id, sesion_apertura, metodo_pago, tipo_comprobante, punto_venta, doc_tipo, doc_nro,
-        condicion_iva_receptor_id, receptor_nombre, domicilio_receptor, importe_total, entorno, creado_por, id_global, modalidad)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        condicion_iva_receptor_id, receptor_nombre, domicilio_receptor, importe_total, entorno, creado_por, id_global, modalidad,
+        devolucion_id, comprobante_origen_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.mesa_id, data.sesion_apertura, data.metodo_pago, data.tipo_comprobante,
       data.punto_venta, data.doc_tipo, data.doc_nro, data.condicion_iva_receptor_id,
       data.receptor_nombre ?? null, data.domicilio_receptor ?? null, data.importe_total,
       data.entorno, data.creado_por ?? null, await idGlobal(), data.modalidad ?? 'CAE',
+      data.devolucion_id ?? null, data.comprobante_origen_id ?? null,
     ]
   );
   const [rows] = await conn.query('SELECT * FROM facturas WHERE id = ?', [result.insertId]);
@@ -34,7 +36,7 @@ const updateResultado = async (id, { estado, numero, cae, caeVencimiento, import
 
 const getBySesion = async (mesa_id, sesion_apertura, conn = pool) => {
   const [rows] = await conn.query(
-    'SELECT * FROM facturas WHERE mesa_id = ? AND sesion_apertura = ?',
+    'SELECT * FROM facturas WHERE mesa_id = ? AND sesion_apertura = ? AND devolucion_id IS NULL',
     [mesa_id, sesion_apertura]
   );
   return rows[0] || null;
@@ -63,7 +65,7 @@ const getHistorial = async (page, limit) => {
 // Ventas ya facturadas (con CAE aprobado) para el reporte contable. `desde`/`hasta` son fechas
 // 'YYYY-MM-DD' opcionales; sin ellas trae todo el historial aprobado.
 const getVentasFacturadas = async (desde, hasta) => {
-  const condiciones = ["f.estado = 'aprobada'"];
+  const condiciones = ["f.estado = 'aprobada'", 'f.devolucion_id IS NULL']; // las notas de crédito no suman como ventas
   const params = [];
   if (desde) {
     condiciones.push('f.fecha_emision >= ?');
