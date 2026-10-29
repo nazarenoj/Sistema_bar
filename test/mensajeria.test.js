@@ -12,11 +12,13 @@ const doc = () => `TST01-DOC${String(++n).padStart(5, '0')}`; // ID_Global de un
 // Receptor de prueba del módulo Stock.
 const aplicados = [];
 let tecnico = null; // si es un Error, el receptor falla con él
+let retardo = 0; // ms que tarda el receptor en aplicar: hace lenta la entrega en segundo plano (despertar)
 before(async () => {
   ({ api, pool, cerrar } = await iniciarApp());
   M = require('../src/mensajeria/servicio');
   Modulos = require('../src/modulos/registro');
   M.registrarReceptor('stock', 'descuento', async (conn, c, ctx) => {
+    if (retardo) await new Promise((res) => setTimeout(res, retardo));
     if (tecnico) throw tecnico;
     if (c.rechazar) throw new M.RechazoNegocio(c.rechazar);
     aplicados.push(ctx.idOperacion);
@@ -46,6 +48,15 @@ const emitir = async (docId, { tipo = 'descuento', secuencia = 1, contenido = {}
 };
 const msg = async (docId, tipo = 'descuento') => (await pool.query('SELECT * FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = ?', [docId, tipo]))[0][0];
 const entregar = async () => M.procesarPendientes();
+// `despertar` (que llaman reintentar y reenviar) entrega en segundo plano y reserva el mensaje: un `entregar()` en paralelo
+// lo salta a propósito. Se espera el estado final, insistiendo mientras no llegue, en vez de contar milisegundos.
+const hasta = async (docId, tipo = 'descuento', estado = 'confirmado') => {
+  for (let i = 0; i < 150; i++) {
+    if ((await msg(docId, tipo)).estado === estado) return;
+    await entregar();
+    await new Promise((res) => setTimeout(res, 20));
+  }
+};
 // La entrega inmediata (despertar) corre en segundo plano: se espera a que termine.
 const esperar = async (docId, tipo = 'descuento') => {
   for (let i = 0; i < 50; i++) {
@@ -154,17 +165,18 @@ test('Usuarios.RN52/EX31/EX33: los errores técnicos se reintentan con espera cr
 
   // Reintento manual (RN53): conserva la ID_Operacion, reinicia la secuencia; al confirmarse la alerta se resuelve sola.
   tecnico = null;
+  retardo = 150;
   const [[b]] = await pool.query("SELECT id FROM bandeja_pendientes WHERE mensaje_id = ? AND estado = 'abierto'", [m.id]);
   const r = await api('POST', `/api/integracion/pendientes/${b.id}/reintentar`, { token: tokens.gerente });
   assert.equal(r.status, 200);
   assert.equal((await api('POST', `/api/integracion/pendientes/${b.id}/reintentar`, { token: tokens.cajero })).status, 403);
-  await new Promise((res) => setTimeout(res, 50));
-  await entregar();
+  await hasta(d);
   m = await msg(d);
   assert.equal(m.estado, 'confirmado');
   assert.equal(m.intentos, 0);
   const [[despues]] = await pool.query('SELECT estado FROM notificaciones WHERE clave = ?', [`mensaje-fallido:${m.id_operacion}`]);
   assert.equal(despues.estado, 'resuelta');
+  retardo = 0;
 });
 
 test('Usuarios.RN54/EX35: una reversa nunca se aplica antes que su original: queda "Retenida por orden" hasta que la original se confirme', async () => {
@@ -182,13 +194,14 @@ test('Usuarios.RN54/EX35: una reversa nunca se aplica antes que su original: que
   // Se corrige la original y se reintenta: al confirmarse se libera la reversa y se aplica después.
   await pool.query("UPDATE mensajes_integracion SET contenido = '{}' WHERE id = ?", [original.id]);
   const [[b]] = await pool.query("SELECT id FROM bandeja_pendientes WHERE mensaje_id = ? AND estado = 'abierto'", [original.id]);
+  retardo = 150;
   await M.reintentar(b.id, { id: 1, username: 'admin1' });
-  await new Promise((res) => setTimeout(res, 20));
-  await entregar();
+  await hasta(d);
   assert.equal((await msg(d, 'descuento')).estado, 'confirmado');
-  await entregar();
+  await hasta(d, 'reversa_descuento');
   assert.equal((await msg(d, 'reversa_descuento')).estado, 'confirmado');
   assert.ok(aplicados.indexOf(original.id_operacion) < aplicados.indexOf(reversa.id_operacion));
+  retardo = 0;
 });
 
 test('Usuarios.RN53/EX40: el descarte exige motivo y la autorización de otro usuario; el mensaje conserva su estado', async () => {
@@ -271,8 +284,7 @@ test('Usuarios.RN58/EX39: el Administrador reenvía los Confirmados desde una fe
   const r = await api('POST', '/api/integracion/reenviar', { token: tokens.admin, body: { desde: new Date(Date.now() - 86400000).toISOString() } });
   assert.equal(r.status, 200);
   assert.ok(r.json.reenviados >= 1);
-  await new Promise((res) => setTimeout(res, 50));
-  await entregar();
+  await hasta(d);
   assert.equal((await esperar(d)).estado, 'confirmado');
   assert.equal(aplicados.filter((a) => a.includes(d)).length, antes);
 });
