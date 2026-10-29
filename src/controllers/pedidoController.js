@@ -424,9 +424,14 @@ const removeItem = async (req, res) => {
       return res.status(404).json({ error: `Producto con id ${item_id} no encontrado en este pedido.` });
     }
 
+    const motivo = typeof req.body?.motivo === 'string' ? req.body.motivo.trim().slice(0, 255) : '';
+    if (item.enviado_at && !motivo) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'El ítem ya se envió a producción: indicá el motivo para quitarlo.', codigo: 'MOTIVO_OBLIGATORIO' });
+    }
     await conn.query(
       'INSERT INTO item_anulaciones (pedido_id, producto_id, nombre, cantidad, precio_unitario, motivo, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [pedido_id, item.producto_id, item.nombre, item.cantidad, item.precio_unitario, typeof req.body?.motivo === 'string' ? req.body.motivo.trim().slice(0, 255) || null : null, req.usuario?.sub ?? null]);
+      [pedido_id, item.producto_id, item.nombre, item.cantidad, item.precio_unitario, motivo || null, req.usuario?.sub ?? null]);
     await Pedido.removeItem(item_id, conn);
     await conn.commit();
 

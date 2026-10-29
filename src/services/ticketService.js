@@ -172,4 +172,36 @@ const generarComandaMesa = (res, { mesa, pedidos, items }) => {
   doc.end();
 };
 
-module.exports = { generarTicketPedido, generarTicketCuenta, generarComandaMesa };
+// Comanda de un sector (Ventas RF07): lo que ese sector tiene que preparar de un envío, sin precios.
+const MODALIDAD_LABEL = { salon: 'Salón', mostrador: 'Mostrador', para_llevar: 'Para llevar', delivery: 'Delivery', retiro: 'Retiro' };
+const generarComandaSector = (res, comanda) => {
+  const alto = Math.max(260, 170 + comanda.items.length * 34);
+  const doc = new PDFDocument({ size: [ANCHO, alto], margin: MARGEN });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="comanda-${comanda.id}.pdf"`);
+  doc.pipe(res);
+
+  doc.font('Helvetica-Bold').fontSize(14).text(`COMANDA · ${(comanda.sector ?? 'SIN SECTOR').toUpperCase()}`, { align: 'center' });
+  if (comanda.reimpresiones > 0) doc.font('Helvetica-Bold').fontSize(9).text(`REIMPRESIÓN ${comanda.reimpresiones}`, { align: 'center' });
+  if (comanda.estado === 'anulada') doc.font('Helvetica-Bold').fontSize(10).text('*** ANULADA ***', { align: 'center' });
+  doc.font('Helvetica').fontSize(7.5).text(formatFecha(comanda.created_at), { align: 'center' });
+  doc.moveDown(0.6);
+  linea(doc);
+
+  doc.font('Helvetica-Bold').fontSize(11).text(MODALIDAD_LABEL[comanda.modalidad] ?? comanda.modalidad);
+  if (comanda.modalidad === 'salon') doc.text(`Mesa: ${comanda.numero_mesa}`);
+  if (comanda.referencia) doc.font('Helvetica').fontSize(9).text(comanda.referencia);
+  doc.moveDown(0.4);
+  linea(doc);
+
+  for (const item of comanda.items) {
+    doc.font('Helvetica-Bold').fontSize(10).text(`${Number(item.cantidad)} x ${item.nombre}`, MARGEN, doc.y, { width: ANCHO_UTIL });
+    if (item.observaciones) doc.font('Helvetica-Oblique').fontSize(8.5).text(item.observaciones, MARGEN, doc.y, { width: ANCHO_UTIL });
+    doc.moveDown(0.4);
+  }
+  linea(doc);
+  doc.end();
+};
+
+module.exports = { generarTicketPedido, generarTicketCuenta, generarComandaMesa, generarComandaSector };
