@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const Factura = require('../models/facturaModel');
 const Resolucion = require('../services/resolucionService');
 const Caea = require('../services/caeaService');
+const LibroIva = require('../services/libroIvaService');
 const { auditar, actorDe } = require('../utils/auditar');
 const Pedido = require('../models/pedidoModel');
 const afipService = require('../services/afipService');
@@ -115,6 +116,33 @@ const solicitarCaea = async (req, res, next) => {
 };
 const informarCaea = async (req, res, next) => {
   try { res.json({ informados: await Caea.informarPendientes(), sin_movimiento: await Caea.informarSinMovimiento() }); } catch (err) { next(err); }
+};
+
+// Libro IVA Digital, ventas (RF13): sin `archivo` devuelve el resumen; con `archivo=comprobantes` o `alicuotas`, el texto
+// de ancho fijo para importar en ARCA.
+const getLibroIva = async (req, res, next) => {
+  try {
+    const libro = await LibroIva.generar(req.query.periodo);
+    const archivo = req.query.archivo;
+    if (!archivo) return res.json({ periodo: libro.periodo, cantidad: libro.cantidad, total: libro.total });
+    if (!['comprobantes', 'alicuotas'].includes(archivo)) return res.status(400).json({ error: '"archivo" debe ser comprobantes o alicuotas.' });
+    res.setHeader('Content-Type', 'text/plain; charset=latin1');
+    res.setHeader('Content-Disposition', `attachment; filename="LIBRO_IVA_DIGITAL_VENTAS_${archivo.toUpperCase()}_${libro.periodo}.txt"`);
+    res.send(Buffer.from(libro[archivo], 'latin1'));
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+};
+
+// Control de lo emitido contra lo que ARCA tiene registrado (RF13).
+const controlArca = async (req, res, next) => {
+  try {
+    res.json(await LibroIva.controlar(req.query.periodo));
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
 };
 
 // Compara la numeración local con la de ARCA (RN51); si difieren la clave queda "Resolviendo".
@@ -265,4 +293,4 @@ const getEstadoAfip = async (req, res) => {
   }
 };
 
-module.exports = { getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion, getCaeaVigente, solicitarCaea, informarCaea };
+module.exports = { getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion, getCaeaVigente, solicitarCaea, informarCaea, getLibroIva, controlArca };

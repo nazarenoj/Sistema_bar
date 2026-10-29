@@ -10,6 +10,11 @@ const WSFE_URLS = {
   produccion: 'https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL',
 };
 
+const PADRON_URLS = {
+  homologacion: 'https://awshomo.afip.gov.ar/sr-padron/webservices/personaServiceA5?WSDL',
+  produccion: 'https://aws.afip.gov.ar/sr-padron/webservices/personaServiceA5?WSDL',
+};
+
 module.exports = (o = {}) => {
   const e = process.env;
   const entorno = (o.entorno || e.AFIP_ENTORNO) === 'produccion' ? 'produccion' : 'homologacion';
@@ -29,5 +34,6 @@ module.exports = (o = {}) => {
     ingresosBrutos: o.ingresosBrutos ?? e.AFIP_INGRESOS_BRUTOS ?? '',
     wsaaWsdl: WSAA_URLS[entorno],
     wsfeWsdl: WSFE_URLS[entorno],
+    padronWsdl: PADRON_URLS[entorno],
   };
 };

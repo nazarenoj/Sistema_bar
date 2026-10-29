@@ -56,8 +56,8 @@ const solicitarCAE = async (detalle) => {
   return result.FECAESolicitarResult;
 };
 
-// Consulta un comprobante por número (para resolver un intento indeterminado). Devuelve null si ARCA no lo
-// tiene (código 602, "no existen datos") o { resultado, cae, caeVencimiento } si existe.
+// Consulta un comprobante por número (para resolver un intento indeterminado y para el control contra ARCA).
+// Devuelve null si ARCA no lo tiene (código 602, "no existen datos") o { resultado, cae, importe, caeVencimiento }.
 const compConsultar = async (ptoVta, cbteTipo, cbteNro) => {
   const client = await getClient();
   const [result] = await client.FECompConsultarAsync({
@@ -72,7 +72,7 @@ const compConsultar = async (ptoVta, cbteTipo, cbteNro) => {
   }
   const g = res.ResultGet;
   const f = String(g.FchVto || '');
-  return { resultado: g.Resultado, cae: g.CodAutorizacion, caeVencimiento: f.length === 8 ? `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}` : null };
+  return { resultado: g.Resultado, cae: g.CodAutorizacion, importe: g.ImpTotal === undefined ? undefined : Number(g.ImpTotal), caeVencimiento: f.length === 8 ? `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}` : null };
 };
 
 // --- CAEA (RF11) ---
