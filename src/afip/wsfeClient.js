@@ -75,4 +75,52 @@ const compConsultar = async (ptoVta, cbteTipo, cbteNro) => {
   return { resultado: g.Resultado, cae: g.CodAutorizacion, caeVencimiento: f.length === 8 ? `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}` : null };
 };
 
-module.exports = { dummy, compUltimoAutorizado, solicitarCAE, compConsultar };
+// --- CAEA (RF11) ---
+const _fecha = (f) => { f = String(f || ''); return f.length === 8 ? `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}` : null; };
+const _caea = (g) => ({ caea: g.CAEA, desde: _fecha(g.FchVigDesde), hasta: _fecha(g.FchVigHasta), tope: _fecha(g.FchTopeInf) });
+const _codigos = (errors) => (Array.isArray(errors.Err) ? errors.Err : [errors.Err]).map((e) => Number(e.Code));
+
+const consultarCAEA = async (periodo, orden) => {
+  const client = await getClient();
+  const [result] = await client.FECAEAConsultarAsync({ Auth: await authHeader(), Periodo: periodo, Orden: orden });
+  const res = result.FECAEAConsultarResult;
+  if (res.Errors) throw new Error(_listarErrores(res.Errors));
+  return _caea(res.ResultGet);
+};
+
+// Pide el CAEA de una quincena. Si ARCA ya lo otorgó (15008) se lo consulta en vez de pedirlo de nuevo.
+const solicitarCAEA = async (periodo, orden) => {
+  const client = await getClient();
+  const [result] = await client.FECAEASolicitarAsync({ Auth: await authHeader(), Periodo: periodo, Orden: orden });
+  const res = result.FECAEASolicitarResult;
+  if (res.Errors) {
+    if (_codigos(res.Errors).includes(15008)) return consultarCAEA(periodo, orden);
+    throw new Error(_listarErrores(res.Errors));
+  }
+  return _caea(res.ResultGet);
+};
+
+// Informa un comprobante emitido con CAEA.
+const informarCAEA = async (detalle) => {
+  const client = await getClient();
+  const [result] = await client.FECAEARegInformativoAsync({
+    Auth: await authHeader(),
+    FeCAEARegInfReq: {
+      FeCabReq: { CantReg: 1, PtoVta: detalle.PtoVta, CbteTipo: detalle.CbteTipo },
+      FeDetReq: { FECAEADetRequest: [detalle.item] },
+    },
+  });
+  const res = result.FECAEARegInformativoResult;
+  if (res.Errors) throw new Error(_listarErrores(res.Errors));
+  const det = [].concat(res.FeDetResp?.FECAEADetResponse ?? [])[0];
+  if (!det || det.Resultado !== 'A') throw new Error(`ARCA no aceptó el informe: ${JSON.stringify(det?.Observaciones ?? null)}`);
+};
+
+const sinMovimientoCAEA = async (ptoVta, caea) => {
+  const client = await getClient();
+  const [result] = await client.FECAEASinMovimientoInformarAsync({ Auth: await authHeader(), PtoVta: ptoVta, CAEA: caea });
+  const res = result.FECAEASinMovimientoInformarResult;
+  if (res.Errors) throw new Error(_listarErrores(res.Errors));
+};
+
+module.exports = { dummy, compUltimoAutorizado, solicitarCAE, compConsultar, solicitarCAEA, consultarCAEA, informarCAEA, sinMovimientoCAEA };

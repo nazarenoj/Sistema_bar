@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const Factura = require('../models/facturaModel');
 const Resolucion = require('../services/resolucionService');
+const Caea = require('../services/caeaService');
 const { auditar, actorDe } = require('../utils/auditar');
 const Pedido = require('../models/pedidoModel');
 const afipService = require('../services/afipService');
@@ -98,6 +99,22 @@ const liberarClave = async (req, res, next) => {
     await auditar(req, { modulo: 'facturacion', accion: 'clave_liberada', entidad: 'clave', entidad_id: clave, detalle: motivo.trim() });
     res.json({ clave, intentos_liberados: liberados });
   } catch (err) { next(err); }
+};
+
+// CAEA (RF11): el vigente, pedir el del período a ARCA, e informar a ARCA lo emitido con CAEA.
+const getCaeaVigente = async (req, res, next) => {
+  try { res.json({ vigente: await Caea.vigente(afipConfig.puntoVenta) }); } catch (err) { next(err); }
+};
+const solicitarCaea = async (req, res, next) => {
+  const actual = Caea.periodoDe();
+  const periodo = req.body.periodo ?? actual.periodo;
+  const orden = req.body.orden ?? actual.orden;
+  if (!/^\d{6}$/.test(String(periodo)) || ![1, 2].includes(Number(orden)))
+    return res.status(400).json({ error: '"periodo" debe ser AAAAMM y "orden" 1 o 2.' });
+  try { res.status(201).json(await Caea.solicitar(afipConfig.puntoVenta, String(periodo), Number(orden))); } catch (err) { next(err); }
+};
+const informarCaea = async (req, res, next) => {
+  try { res.json({ informados: await Caea.informarPendientes(), sin_movimiento: await Caea.informarSinMovimiento() }); } catch (err) { next(err); }
 };
 
 // Compara la numeración local con la de ARCA (RN51); si difieren la clave queda "Resolviendo".
@@ -245,4 +262,4 @@ const getEstadoAfip = async (req, res) => {
   }
 };
 
-module.exports = { getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion };
+module.exports = { getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion, getCaeaVigente, solicitarCaea, informarCaea };

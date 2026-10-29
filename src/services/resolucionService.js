@@ -148,6 +148,7 @@ const vuelta = async () => {
     await registro.dentroDe(inst, async () => {
       try {
         await procesarIndeterminados();
+        await require('./caeaService').mantenimiento();
         const dia = new Date().toDateString();
         if (hoy.get(inst.codigo) !== dia) {
           hoy.set(inst.codigo, dia);

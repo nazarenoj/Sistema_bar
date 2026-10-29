@@ -4,6 +4,7 @@ const wsfeClient = require('../afip/wsfeClient');
 const Secuenciador = require('./secuenciadorService');
 const Parametro = require('../models/parametroModel');
 const Resolucion = require('./resolucionService');
+const Caea = require('./caeaService');
 
 const TIPOS_VALIDOS_POR_CONDICION = {
   monotributista: [11], // Factura C únicamente, nunca discrimina IVA
@@ -163,6 +164,21 @@ const emitirFactura = async ({ tipoComprobante, docTipo, docNro, condicionIvaRec
   });
 };
 
+// Emite con el CAEA vigente (RF11, RN15, RN55): el número sale de un contador atómico local, sin ARCA en línea,
+// por eso no hay respuesta tardía ni estado indeterminado. El comprobante se informa a ARCA después.
+const emitirConCaea = async ({ tipoComprobante, docTipo, docNro, condicionIvaReceptorId, importeTotal }) => {
+  validarTipoComprobante(tipoComprobante);
+  await validarReceptor({ tipoComprobante, docTipo, condicionIvaReceptorId, importeTotal });
+  const { impNeto, impIva, impTotal } = calcularImportes(tipoComprobante, importeTotal);
+  const caea = await Caea.vigente(config.puntoVenta);
+  if (!caea) throw Object.assign(new Error('No hay un CAEA vigente para este punto de venta.'), { status: 409, codigo: 'SIN_CAEA' });
+  const numero = await Caea.siguienteNumero(`${config.puntoVenta}:${tipoComprobante}:CAEA`);
+  return {
+    estado: 'aprobada', numero, cae: caea.caea, caeVencimiento: caea.vigencia_hasta, observaciones: 'Emitida con CAEA',
+    importeNeto: impNeto, importeIva: impIva, importeTotal: impTotal, modalidad: 'CAEA', caeaId: caea.id,
+  };
+};
+
 const estadoServicio = () => wsfeClient.dummy();
 
-module.exports = { emitirFactura, validarReceptor, estadoServicio, TIPOS_VALIDOS_POR_CONDICION, TIPOS_COMPROBANTE };
+module.exports = { emitirFactura, emitirConCaea, validarReceptor, estadoServicio, TIPOS_VALIDOS_POR_CONDICION, TIPOS_COMPROBANTE };

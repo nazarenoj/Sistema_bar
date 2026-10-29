@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const {
-  getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion,
+  getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion, getCaeaVigente, solicitarCaea, informarCaea,
 } = require('../controllers/facturaController');
 
 const { requierePermiso } = require('../middleware/requierePermiso');
@@ -13,6 +13,9 @@ router.get('/reporte', requierePermiso('ventas.historial.exportar'), getReporte)
 router.get('/claves', requierePermiso('facturacion.claves.ver'), getClaves);
 router.post('/claves/liberar', requierePermiso('facturacion.claves.resolver'), liberarClave);
 router.post('/claves/validar', requierePermiso('facturacion.claves.resolver'), validarNumeracion);
+router.get('/caea/vigente', requierePermiso('facturacion.ver'), getCaeaVigente);
+router.post('/caea/solicitar', requierePermiso('facturacion.reintentar'), solicitarCaea);
+router.post('/caea/informar', requierePermiso('facturacion.reintentar'), informarCaea);
 router.get('/', requierePermiso('facturacion.ver'), getHistorial);
 router.get('/:id', requierePermiso('facturacion.ver'), getOne);
 router.get('/:id/pdf', requierePermiso('facturacion.ver'), getPdf);

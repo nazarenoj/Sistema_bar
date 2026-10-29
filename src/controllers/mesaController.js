@@ -6,6 +6,7 @@ const puertos = require('../modulos/puertos');
 const Factura = require('../models/facturaModel');
 const Venta = require('../services/ventaService');
 const Mensajeria = require('../mensajeria/servicio');
+const Caea = require('../services/caeaService');
 const afipService = require('../services/afipService');
 const afipConfig = require('../config/afipConfig');
 const logger = require('../utils/logger');
@@ -55,10 +56,18 @@ const cerrarCuenta = async (req, res) => {
   if (!Array.isArray(req.body.pagos) && typeof metodo_pago !== 'string')
     return res.status(400).json({ error: 'Indicá "metodo_pago" o la lista "pagos".' });
 
+  // Modalidad del comprobante: CAE (por defecto), CAEA (sin ARCA en línea) o no fiscal (queda pendiente de facturación).
+  const modalidad = req.body.modalidad ?? 'cae';
+  if (!['cae', 'caea', 'no_fiscal'].includes(modalidad))
+    return res.status(400).json({ error: '"modalidad" debe ser cae, caea o no_fiscal.' });
+  const tipoNoFiscal = modalidad === 'no_fiscal' ? (req.body.tipo_no_fiscal ?? 'ticket') : null;
+  if (tipoNoFiscal && !Venta.TIPOS_NO_FISCAL.includes(tipoNoFiscal))
+    return res.status(400).json({ error: `"tipo_no_fiscal" debe ser uno de: ${Venta.TIPOS_NO_FISCAL.join(', ')}.` });
+
   // Facturar es opcional: si "tipo_comprobante" viene null/undefined, la cuenta se cierra sin
   // emitir comprobante fiscal (sin fila en `facturas` ni llamado a ARCA), para no bloquear el
   // cierre si el dueño/empleado decide no facturar esa cuenta o si ARCA está fuera de servicio.
-  const facturar = tipo_comprobante !== null && tipo_comprobante !== undefined;
+  const facturar = modalidad !== 'no_fiscal' && tipo_comprobante !== null && tipo_comprobante !== undefined;
 
   if (facturar) {
     const tiposValidos = afipService.TIPOS_VALIDOS_POR_CONDICION[afipConfig.condicionIvaEmisor];
@@ -109,6 +118,8 @@ const cerrarCuenta = async (req, res) => {
     pedidoIds = pedidosActivos.map(p => p.id);
     totalAcumulado = await Pedido.getTotalAcumulado(pedidoIds, conn);
     // Las reglas del receptor (tipo A, tope de consumidor final) se miran antes de cerrar la cuenta, no después.
+    if (facturar && modalidad === 'caea' && !(await Caea.vigente(afipConfig.puntoVenta)))
+      throw Object.assign(new Error('No hay un CAEA vigente: emití como no fiscal o esperá a recuperar la conexión.'), { status: 409, codigo: 'SIN_CAEA' });
     if (facturar) await afipService.validarReceptor({ tipoComprobante: tipo_comprobante, docTipo: doc_tipo, condicionIvaReceptorId: condicion_iva_receptor_id, importeTotal: totalAcumulado });
 
     const items = await Pedido.getItemsByPedidoIds(pedidoIds, conn);
@@ -122,7 +133,7 @@ const cerrarCuenta = async (req, res) => {
     // La venta y los mensajes de sus efectos se graban en esta misma transacción (Ventas RN58).
     venta = await Venta.registrar(conn, {
       mesa_id: id, sesion_apertura: pedidosActivos[0].sesion_apertura, items, total: totalAcumulado, pagos,
-      idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null,
+      idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, tipoNoFiscal,
     });
     // La mesa sigue "ocupada": recién se libera cuando se confirma que se imprimió/descargó el
     // comprobante (ver confirmarTicket), para no dejar la mesa disponible sin haberlo entregado.
@@ -146,6 +157,7 @@ const cerrarCuenta = async (req, res) => {
         importe_total: totalAcumulado,
         entorno: afipConfig.entorno,
         creado_por: req.usuario?.sub ?? null,
+        modalidad: modalidad === 'caea' ? 'CAEA' : 'CAE',
       }, conn);
     }
 
@@ -154,6 +166,7 @@ const cerrarCuenta = async (req, res) => {
   } catch (err) {
     await conn.rollback();
     if (err instanceof Venta.PagoInvalido) return res.status(400).json({ error: err.message, codigo: 'PAGO_INVALIDO' });
+    if (err.codigo === 'SIN_CAEA') return res.status(409).json({ error: err.message, codigo: 'SIN_CAEA' });
     if (err.status === 400) return res.status(400).json({ error: err.message, codigo: 'RECEPTOR_INVALIDO' });
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
     return res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
@@ -166,7 +179,8 @@ const cerrarCuenta = async (req, res) => {
   // reintentar después desde el historial, sin bloquear la operación del local.
   if (facturar) {
     try {
-      const resultado = await afipService.emitirFactura({
+      const emitir = modalidad === 'caea' ? afipService.emitirConCaea : afipService.emitirFactura;
+      const resultado = await emitir({
         tipoComprobante: tipo_comprobante,
         docTipo: doc_tipo,
         docNro: String(doc_nro),
@@ -198,6 +212,7 @@ const cerrarCuenta = async (req, res) => {
     total_acumulado: totalAcumulado,
     ticket_pendiente: true,
     venta_id_global: venta.id_global,
+    ...(tipoNoFiscal && { no_fiscal: { tipo: tipoNoFiscal, numero: venta.numero_no_fiscal } }),
     factura: factura ? await Factura.getById(factura.id) : null,
   });
 };

@@ -5,13 +5,13 @@ const create = async (data, conn = pool) => {
   const [result] = await conn.query(
     `INSERT INTO facturas
        (mesa_id, sesion_apertura, metodo_pago, tipo_comprobante, punto_venta, doc_tipo, doc_nro,
-        condicion_iva_receptor_id, receptor_nombre, domicilio_receptor, importe_total, entorno, creado_por, id_global)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        condicion_iva_receptor_id, receptor_nombre, domicilio_receptor, importe_total, entorno, creado_por, id_global, modalidad)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.mesa_id, data.sesion_apertura, data.metodo_pago, data.tipo_comprobante,
       data.punto_venta, data.doc_tipo, data.doc_nro, data.condicion_iva_receptor_id,
       data.receptor_nombre ?? null, data.domicilio_receptor ?? null, data.importe_total,
-      data.entorno, data.creado_por ?? null, await idGlobal(),
+      data.entorno, data.creado_por ?? null, await idGlobal(), data.modalidad ?? 'CAE',
     ]
   );
   const [rows] = await conn.query('SELECT * FROM facturas WHERE id = ?', [result.insertId]);
@@ -19,15 +19,15 @@ const create = async (data, conn = pool) => {
 };
 
 // Vuelca el resultado de afipService.emitirFactura (o del reintento) sobre la fila ya creada.
-const updateResultado = async (id, { estado, numero, cae, caeVencimiento, importeNeto, importeIva, importeTotal, observaciones }, conn = pool) => {
+const updateResultado = async (id, { estado, numero, cae, caeVencimiento, importeNeto, importeIva, importeTotal, observaciones, caeaId }, conn = pool) => {
   await conn.query(
     `UPDATE facturas
      SET estado = ?, numero = ?, cae = ?, cae_vencimiento = ?, importe_neto = ?, importe_iva = ?,
-         importe_total = ?, observaciones = ?, fecha_cae = NOW()
+         importe_total = ?, observaciones = ?, fecha_cae = NOW(), caea_id = COALESCE(?, caea_id)
      WHERE id = ?`,
     [
       estado, numero ?? null, cae ?? null, caeVencimiento ?? null,
-      importeNeto ?? 0, importeIva ?? 0, importeTotal, observaciones ?? null, id,
+      importeNeto ?? 0, importeIva ?? 0, importeTotal, observaciones ?? null, caeaId ?? null, id,
     ]
   );
 };

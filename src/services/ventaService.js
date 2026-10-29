@@ -2,6 +2,11 @@ const pool = require('../config/db');
 const Mensajeria = require('../mensajeria/servicio');
 const Funciones = require('../funciones/servicio');
 const { idGlobal } = require('../utils/idGlobal');
+const Caea = require('./caeaService');
+const Factura = require('../models/facturaModel');
+const afipService = require('./afipService');
+const afipConfig = require('../config/afipConfig');
+const TIPOS_NO_FISCAL = ['ticket', 'presupuesto', 'remito'];
 
 // Efectos de una venta cerrada en otros módulos (Ventas RN58). Cada uno es un mensaje de la bandeja de
 // salida; si el módulo receptor no está instalado, no se genera (Mensajeria.publicar). El descuento de
@@ -46,25 +51,28 @@ const metodoResumen = (pagos) => (pagos.length > 1 ? 'mixto' : pagos[0].forma);
 
 // Registra la venta de una cuenta cerrada. Va con la `conn` de la transacción del cierre: si el cierre
 // se revierte, no queda ni la venta ni sus mensajes. Un efecto que falle después nunca revierte la venta.
-const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId }) => {
+const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null }) => {
   const id_global = await idGlobal();
+  // Un no fiscal tiene numeración propia, diferenciada de la fiscal, y queda "pendiente de facturación" (RF12, RN84).
+  const numeroNoFiscal = tipoNoFiscal ? await Caea.siguienteNumero(`NF:${tipoNoFiscal}`, conn) : null;
   const snap = await Funciones.instantanea('pedido');
   const detalle = items.map((i) => ({ producto_id: i.producto_id, nombre: i.nombre, cantidad: i.cantidad, precio_unitario: Number(i.precio_unitario) }));
   const [r] = await conn.query(
-    'INSERT INTO ventas (id_global, mesa_id, sesion_apertura, total, detalle, id_solicitud, config_version, creado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [id_global, mesa_id, sesion_apertura, total, JSON.stringify(detalle), idSolicitud ?? null, snap.version, userId ?? null]
+    'INSERT INTO ventas (id_global, mesa_id, sesion_apertura, total, detalle, id_solicitud, config_version, creado_por, condicion_fiscal, tipo_no_fiscal, numero_no_fiscal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [id_global, mesa_id, sesion_apertura, total, JSON.stringify(detalle), idSolicitud ?? null, snap.version, userId ?? null, tipoNoFiscal ? 'no_fiscal' : 'fiscal', tipoNoFiscal, numeroNoFiscal]
   );
   for (const p of pagos) {
     await conn.query('INSERT INTO pago_venta (venta_id, metodo_pago, importe, referencia, recibido, vuelto) VALUES (?, ?, ?, ?, ?, ?)',
       [r.insertId, p.forma, p.importe, p.referencia, p.recibido, p.vuelto]);
   }
   for (const e of EFECTOS) {
+    if (tipoNoFiscal && e.destino === 'contable') continue; // una venta no fiscal no se informa a Contable (RN84)
     await Mensajeria.publicar(conn, {
       origen: 'ventas', destino: e.destino, tipo: e.tipo, docTipo: 'venta', docIdGlobal: id_global, userId,
       solicitud: idSolicitud, contenido: { total, pagos, items: detalle },
     });
   }
-  return { id: r.insertId, id_global };
+  return { id: r.insertId, id_global, numero_no_fiscal: numeroNoFiscal };
 };
 
 // La venta con su estado de integración (Completa / Parcial, con la lista de efectos).
@@ -85,4 +93,43 @@ const porFormaPago = async ({ desde, hasta } = {}) => {
   return rows;
 };
 
-module.exports = { registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+// Emite la factura que regulariza una venta no fiscal (RN84). Con la factura aprobada la venta deja de estar
+// pendiente; no se repite descuento de stock ni cobro: solo se publica "Venta regularizada" (hacia Contable).
+// shortcut: si el primer intento falla y se reintenta con /facturas/:id/reintentar, el evento no se publica.
+const regularizar = async (idGlobal, receptor, { idIntento, userId } = {}) => {
+  const venta = await obtener(idGlobal);
+  if (!venta) throw Object.assign(new Error('Venta no encontrada.'), { status: 404 });
+  if (venta.condicion_fiscal !== 'no_fiscal') throw Object.assign(new Error('La venta no es un comprobante no fiscal.'), { status: 400 });
+  let factura = await Factura.getBySesion(venta.mesa_id, venta.sesion_apertura);
+  if (factura?.estado === 'aprobada') throw Object.assign(new Error('La venta ya está regularizada.'), { status: 409 });
+  factura ||= await Factura.create({
+    mesa_id: venta.mesa_id, sesion_apertura: venta.sesion_apertura, metodo_pago: venta.pagos.length > 1 ? 'mixto' : venta.pagos[0].metodo_pago,
+    tipo_comprobante: receptor.tipo_comprobante, punto_venta: afipConfig.puntoVenta, doc_tipo: receptor.doc_tipo, doc_nro: String(receptor.doc_nro),
+    condicion_iva_receptor_id: receptor.condicion_iva_receptor_id, receptor_nombre: receptor.receptor_nombre, domicilio_receptor: receptor.domicilio_receptor,
+    importe_total: venta.total, entorno: afipConfig.entorno, creado_por: userId,
+  });
+  try {
+    const resultado = await afipService.emitirFactura({
+      tipoComprobante: factura.tipo_comprobante, docTipo: factura.doc_tipo, docNro: factura.doc_nro,
+      condicionIvaReceptorId: factura.condicion_iva_receptor_id, importeTotal: Number(venta.total), idIntento, facturaId: factura.id,
+    });
+    await Factura.updateResultado(factura.id, resultado);
+  } catch (err) {
+    await Factura.updateResultado(factura.id, { estado: 'error', importeTotal: venta.total, observaciones: err.message });
+    throw Object.assign(err, { factura_id: factura.id });
+  }
+  factura = await Factura.getById(factura.id);
+  if (factura.estado === 'aprobada') {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_regularizada', docTipo: 'venta', docIdGlobal: idGlobal, userId,
+        contenido: { total: venta.total, pagos: venta.pagos, factura_id_global: factura.id_global } });
+      await conn.commit();
+    } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+    Mensajeria.despertar();
+  }
+  return factura;
+};
+
+module.exports = { regularizar, TIPOS_NO_FISCAL, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
