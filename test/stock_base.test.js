@@ -1,7 +1,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
-const { iniciarApp } = require('./ayudas');
+const { iniciarApp, esperarMensajes } = require('./ayudas');
 
 let api, pool, cerrar, token, n = 0, k = 0;
 
@@ -115,7 +115,7 @@ test('Stock.RF02: una receta en gramos de un ítem que se controla en kg descuen
   const gramo = (await presentacion({ insumo_id: harina.id, nombre: 'gramo', factor: 0.001, usos: ['receta'] })).json;
   const kilo = (await presentacion({ insumo_id: harina.id, nombre: 'bolsa 25 kg', factor: 25, usos: ['compra'] })).json;
   const otro = await insumo('Azúcar', 'kg');
-  const pan = (await api('POST', '/api/productos', { token, body: { nombre: 'Pan', precio: 100, stock: 100 } })).json;
+  const pan = (await api('POST', '/api/productos', { token, body: { nombre: 'Pan', tipo: 'elaborado', precio: 100 } })).json;
   const agregar = (body) => api('POST', `/api/productos/${pan.id}/insumos`, { token, body });
   assert.equal((await agregar({ insumo_id: harina.id, cantidad_consumida: 200, presentacion_id: kilo.id })).status, 400); // no es de uso "receta"
   assert.equal((await agregar({ insumo_id: otro.id, cantidad_consumida: 200, presentacion_id: gramo.id })).status, 400); // es de otro insumo
@@ -127,9 +127,11 @@ test('Stock.RF02: una receta en gramos de un ítem que se controla en kg descuen
   await api('POST', `/api/pedidos/${pedido.id}/productos`, { token, body: { productos: [{ producto_id: pan.id, cantidad: 2 }] } });
   const r = await api('POST', `/api/mesas/${mesa.id}/cerrar`, { token, headers: { 'X-ID-Solicitud': `cierre-stock-${++k}-abcdef` }, body: { metodo_pago: 'efectivo' } });
   assert.equal(r.status, 200);
+  await esperarMensajes(pool);
   assert.equal(await stockDe(harina.id), 9.6); // 2 panes x 200 g = 0,4 kg
   const dev = await api('POST', '/api/devoluciones', { token, headers: { 'X-ID-Solicitud': `devol-stock-${++k}-abcdef` }, body: { venta_id_global: r.json.venta_id_global, motivo: 'prueba', todo: true } });
   assert.equal(dev.status, 201);
+  await esperarMensajes(pool);
   assert.equal(await stockDe(harina.id), 10); // el reingreso usa el mismo factor
   assert.ok(Producto);
 });

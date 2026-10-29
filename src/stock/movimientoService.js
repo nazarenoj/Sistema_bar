@@ -12,9 +12,12 @@ const invalido = (m, status = 400) => Object.assign(new MovimientoInvalido(m), {
 const TABLA = { insumo: 'insumos', producto: 'productos' };
 const COL = { insumo: 'insumo_id', producto: 'producto_id' };
 
-const itemValido = async (conn, item) => {
+// `bloquear`: toma el lock exclusivo de la fila del ítem. Hace falta antes de insertar un movimiento: el INSERT toma un lock
+// compartido sobre el ítem (por la clave foránea) y el UPDATE posterior pediría el exclusivo; dos ventas a la vez sobre el
+// mismo ítem se bloquearían entre sí (deadlock). Con el exclusivo desde el principio, una espera a la otra.
+const itemValido = async (conn, item, bloquear = false) => {
   if (!item || !TABLA[item.tipo] || !Number.isInteger(item.id)) throw invalido('Ítem inválido: indicá { tipo: "insumo" | "producto", id }.');
-  const [[fila]] = await conn.query(`SELECT * FROM ${TABLA[item.tipo]} WHERE id = ?`, [item.id]);
+  const [[fila]] = await conn.query(`SELECT * FROM ${TABLA[item.tipo]} WHERE id = ?${bloquear ? ' FOR UPDATE' : ''}`, [item.id]);
   if (!fila) throw invalido(`El ${item.tipo} ${item.id} no existe.`, 404);
   return fila;
 };
@@ -24,15 +27,15 @@ const itemValido = async (conn, item) => {
 const registrar = async (conn, m) => {
   const cantidad = Number(m.cantidad);
   if (!Number.isFinite(cantidad) || cantidad === 0) throw invalido('La cantidad del movimiento no puede ser cero.');
-  await itemValido(conn, m.item);
+  await itemValido(conn, m.item, true);
   const deposito = m.deposito_id ?? (await Deposito.getPredeterminado(conn)).id;
   const id_global = await idGlobal();
   const [r] = await conn.query(
     `INSERT INTO stock_movimientos (id_global, ${COL[m.item.tipo]}, deposito_id, tipo, motivo, cantidad, costo_unitario, presentacion_id, factor_aplicado,
-       cantidad_presentacion, documento_tipo, documento, movimiento_original_id, user_id, observacion)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       cantidad_presentacion, documento_tipo, documento, movimiento_original_id, user_id, observacion, operacion_clave, venta_no_fiscal)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id_global, m.item.id, deposito, m.tipo, m.motivo, cantidad, m.costo_unitario ?? null, m.presentacion_id ?? null, m.factor_aplicado ?? null,
-      m.cantidad_presentacion ?? null, m.documento_tipo ?? null, m.documento ?? null, m.movimiento_original_id ?? null, m.user_id ?? null, m.observacion ?? null]);
+      m.cantidad_presentacion ?? null, m.documento_tipo ?? null, m.documento ?? null, m.movimiento_original_id ?? null, m.user_id ?? null, m.observacion ?? null, m.operacion_clave ?? null, m.venta_no_fiscal ? 1 : 0]);
   await conn.query('SET @chepola_mov = 1');
   try {
     await conn.query(`UPDATE ${TABLA[m.item.tipo]} SET stock = stock + ? WHERE id = ?`, [cantidad, m.item.id]);
@@ -60,32 +63,6 @@ const saldoInicial = async (item, cantidad, conn, userId = null) => {
     ? registrar(c, { item, tipo: 'ajuste', motivo: 'saldo_inicial', cantidad, documento_tipo: 'inicial', user_id: userId })
     : conTransaccion((cx) => registrar(cx, { item, tipo: 'ajuste', motivo: 'saldo_inicial', cantidad, documento_tipo: 'inicial', user_id: userId }));
 };
-
-// ---- Venta y devolución (el cierre de cuenta descuenta; la devolución reingresa) ----
-
-// Una línea [{ producto_id, cantidad }] a movimientos: el producto en sí y los insumos de su receta, en el depósito
-// del sector de comanda del producto (RF03). Cada línea de receta puede venir en otra presentación (factor_aplicado).
-const movimientosDeVenta = async (conn, items) => {
-  const salida = [];
-  for (const { producto_id, cantidad } of items) {
-    const [[p]] = await conn.query('SELECT sector_id FROM productos WHERE id = ?', [producto_id]);
-    const deposito = await Deposito.depositoDeSector(p?.sector_id ?? null, conn);
-    salida.push({ item: { tipo: 'producto', id: producto_id }, deposito_id: deposito.id, cantidad });
-    const [receta] = await conn.query('SELECT insumo_id, cantidad_consumida * COALESCE(factor_aplicado, 1) AS consumo FROM producto_insumos WHERE producto_id = ?', [producto_id]);
-    for (const l of receta) salida.push({ item: { tipo: 'insumo', id: l.insumo_id }, deposito_id: deposito.id, cantidad: cantidad * Number(l.consumo) });
-  }
-  return salida;
-};
-
-const aplicarVenta = async (items, conn, ctx = {}, signo) => {
-  for (const l of await movimientosDeVenta(conn, items))
-    await registrar(conn, {
-      item: l.item, deposito_id: l.deposito_id, tipo: signo < 0 ? 'venta' : 'devolucion', motivo: signo < 0 ? 'venta' : 'devolucion_venta',
-      cantidad: signo * l.cantidad, documento_tipo: ctx.documento_tipo ?? null, documento: ctx.documento ?? null, user_id: ctx.user_id ?? null,
-    });
-};
-const descontarPorVenta = (items, conn, ctx) => aplicarVenta(items, conn, ctx, -1);
-const reingresarPorDevolucion = (items, conn, ctx) => aplicarVenta(items, conn, ctx, 1);
 
 // ---- Ingreso manual (RF04) ----
 
@@ -263,4 +240,4 @@ const mermas = async ({ desde, hasta } = {}) => {
 // Una presentación con movimientos no se edita (RN61): se crea una versión nueva.
 Presentacion.registrarDetectorUso(async (id) => (await pool.query('SELECT 1 FROM stock_movimientos WHERE presentacion_id = ? LIMIT 1', [id]))[0].length > 0);
 
-module.exports = { MovimientoInvalido, registrar, saldoInicial, descontarPorVenta, reingresarPorDevolucion, ingresar, egresar, transferir, corregir, saldo, existencias, kardex, mermas, motivoDeEgreso, colItem };
+module.exports = { MovimientoInvalido, registrar, saldoInicial, ingresar, egresar, transferir, corregir, saldo, existencias, kardex, mermas, motivoDeEgreso, colItem };

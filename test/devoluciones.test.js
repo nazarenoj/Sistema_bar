@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 process.env.AFIP_CONDICION_IVA_EMISOR = 'monotributista';
 process.env.AFIP_PUNTO_VENTA = '1';
-const { iniciarApp } = require('./ayudas');
+const { iniciarApp, esperarMensajes } = require('./ayudas');
 const { hashCodigo } = require('../src/utils/credenciales');
 
 let api, pool, cerrar, token, wsfe, n = 0;
@@ -42,7 +42,7 @@ const vender = async (extra = {}) => {
 };
 let k = 0;
 const devolver = (id, body, headers = {}) => api('POST', '/api/devoluciones', { token, headers: { 'X-ID-Solicitud': `devol-${++k}-${Math.random().toString(36).slice(2, 8)}`, ...headers }, body: { venta_id_global: id, motivo: 'el cliente se arrepintió', ...body } });
-const stock = async (id) => Number((await pool.query('SELECT stock FROM productos WHERE id = ?', [id]))[0][0].stock);
+const stock = async (id) => { await esperarMensajes(pool); return Number((await pool.query('SELECT stock FROM productos WHERE id = ?', [id]))[0][0].stock); };
 const venta = async (id) => (await api('GET', `/api/ventas/${id}`, { token })).json;
 
 test('Ventas.RF15: una devolución parcial reintegra lo cobrado, reingresa al stock y deja la venta sin tocar', async () => {

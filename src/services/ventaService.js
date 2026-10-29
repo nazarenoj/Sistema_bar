@@ -10,7 +10,7 @@ const TIPOS_NO_FISCAL = ['ticket', 'presupuesto', 'remito'];
 
 // Efectos de una venta cerrada en otros módulos (Ventas RN58). Cada uno es un mensaje de la bandeja de
 // salida; si el módulo receptor no está instalado, no se genera (Mensajeria.publicar). El descuento de
-// stock sigue siendo directo hasta que exista el módulo Stock (C3).
+// stock también viaja como mensaje (ver publicarDescuento).
 const EFECTOS = [
   { destino: 'financiero', tipo: 'cobro_registrado' },
   { destino: 'contable', tipo: 'venta_confirmada' },
@@ -49,6 +49,13 @@ const validarPagos = async (conn, pagos, total) => {
 // Lo que se guarda en pedidos y facturas: el código de la forma, o 'mixto' si hay varias.
 const metodoResumen = (pagos) => (pagos.length > 1 ? 'mixto' : pagos[0].forma);
 
+// Mensaje de descuento de stock (Stock RF07): trae solo la línea vendida, nunca los componentes; Stock la expande según el
+// modo de descuento del artículo. `items`: filas con producto_id y cantidad, en el orden de la venta (la posición es la línea).
+const publicarDescuento = async (conn, { docTipo, docIdGlobal, items, userId, solicitud, noFiscal = false }) => Mensajeria.publicar(conn, {
+  origen: 'ventas', destino: 'stock', tipo: 'descuento_stock', docTipo, docIdGlobal, userId, solicitud,
+  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad })), no_fiscal: noFiscal, user_id: userId ?? null },
+});
+
 // Registra la venta de una cuenta cerrada. Va con la `conn` de la transacción del cierre: si el cierre
 // se revierte, no queda ni la venta ni sus mensajes. Un efecto que falle después nunca revierte la venta.
 const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null }) => {
@@ -72,6 +79,7 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
       solicitud: idSolicitud, contenido: { total, pagos, items: detalle },
     });
   }
+  await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal });
   return { id: r.insertId, id_global, numero_no_fiscal: numeroNoFiscal };
 };
 
@@ -136,4 +144,4 @@ const regularizar = async (idGlobal, receptor, { idIntento, userId } = {}) => {
   return factura;
 };
 
-module.exports = { regularizar, TIPOS_NO_FISCAL, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+module.exports = { regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };

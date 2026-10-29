@@ -64,6 +64,8 @@ const iniciarApp = async ({ alta = true } = {}) => {
   };
 
   const cerrar = async () => {
+    // Las entregas en segundo plano (despertar) pueden seguir corriendo: se deja drenar la bandeja antes de cerrar el pool y borrar la base.
+    await esperarMensajes(pool).catch(() => {});
     await new Promise((resolve) => server.close(resolve));
     await pool.end();
     await borrarBase();
@@ -72,3 +74,16 @@ const iniciarApp = async ({ alta = true } = {}) => {
 };
 
 module.exports = { DB_NAME, conexion, conectar, borrarBase, migrarBase, iniciarApp };
+
+// Las integraciones entre módulos viajan como mensajes de la bandeja de salida (el descuento de stock, por ejemplo):
+// esto procesa lo pendiente hasta que no quede nada, para poder afirmar sobre el resultado.
+const esperarMensajes = async (pool) => {
+  const M = require('../src/mensajeria/servicio');
+  for (let i = 0; i < 200; i++) {
+    await M.procesarPendientes();
+    const [[{ n }]] = await pool.query("SELECT COUNT(*) AS n FROM mensajes_integracion WHERE estado IN ('pendiente', 'enviado') AND retenido_por_orden = 0");
+    if (!n) return;
+    await new Promise((res) => setTimeout(res, 20));
+  }
+};
+module.exports.esperarMensajes = esperarMensajes;

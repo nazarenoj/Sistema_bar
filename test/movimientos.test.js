@@ -1,7 +1,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
-const { iniciarApp } = require('./ayudas');
+const { iniciarApp, esperarMensajes } = require('./ayudas');
 const { hashCodigo } = require('../src/utils/credenciales');
 
 let api, pool, cerrar, token, principal, n = 0, k = 0;
@@ -58,24 +58,25 @@ test('Stock.RF03: la venta descuenta del depósito del sector y la devolución l
   const barra = (await api('POST', '/api/sectores', { token, body: { nombre: 'Barra' } })).json;
   await api('PUT', `/api/depositos/sectores/${barra.id}`, { token, body: { deposito_id: vitrina.id } });
   const cafe = await insumo('Café en grano', 'kg', 10);
-  const espresso = (await api('POST', '/api/productos', { token, body: { nombre: 'Espresso', precio: 100, stock: 20, sector_id: barra.id } })).json;
+  const espresso = (await api('POST', '/api/productos', { token, body: { nombre: 'Espresso', tipo: 'elaborado', precio: 100, sector_id: barra.id } })).json;
   await api('POST', `/api/productos/${espresso.id}/insumos`, { token, body: { insumo_id: cafe.id, cantidad_consumida: 0.02 } });
   const mesa = (await api('POST', '/api/mesas', { token, body: { numero_mesa: ++n, salon_id: 1 } })).json;
   const pedido = (await api('POST', '/api/pedidos', { token, body: { mesa_id: mesa.id } })).json;
   await api('POST', `/api/pedidos/${pedido.id}/productos`, { token, body: { productos: [{ producto_id: espresso.id, cantidad: 5 }] } });
   const r = await api('POST', `/api/mesas/${mesa.id}/cerrar`, { token, headers: { 'X-ID-Solicitud': `cierre-mov-${++k}-abcd` }, body: { metodo_pago: 'efectivo' } });
   assert.equal(r.status, 200);
+  await esperarMensajes(pool); // Stock aplica el descuento que Ventas le mandó
 
   const ventaCafe = (await kardex('insumo', cafe.id)).find((m) => m.tipo === 'venta');
   assert.deepEqual([ventaCafe.deposito, ventaCafe.cantidad, ventaCafe.documento_tipo], ['Vitrina', -0.1, 'venta']);
-  assert.equal(await stockDe('producto', espresso.id), 15);
-  assert.equal(await stockDe('insumo', cafe.id), 9.9);
+  assert.equal(await stockDe('insumo', cafe.id), 9.9); // un elaborado descuenta sus insumos, no el artículo
 
   const d = await api('POST', '/api/devoluciones', { token, headers: { 'X-ID-Solicitud': `devol-mov-${++k}-abcd` }, body: { venta_id_global: r.json.venta_id_global, motivo: 'prueba', todo: true } });
   assert.equal(d.status, 201);
-  const dev = (await kardex('producto', espresso.id)).find((m) => m.tipo === 'devolucion');
-  assert.deepEqual([dev.deposito, dev.cantidad, dev.documento], ['Vitrina', 5, d.json.devolucion.id_global]);
-  assert.deepEqual([await stockDe('producto', espresso.id), await stockDe('insumo', cafe.id)], [20, 10]);
+  await esperarMensajes(pool);
+  const dev = (await kardex('insumo', cafe.id)).find((m) => m.tipo === 'devolucion');
+  assert.deepEqual([dev.deposito, dev.cantidad, dev.documento], ['Vitrina', 0.1, r.json.venta_id_global]);
+  assert.equal(await stockDe('insumo', cafe.id), 10);
   // La venta ya no pisa el saldo con un piso en cero: un faltante se ve.
   await pool.query('SET @x = 0');
   assert.equal((await egreso({ motivo: 'rotura', observacion: 'se cayó', lineas: [linea(cafe, 15)] })).status, 201);

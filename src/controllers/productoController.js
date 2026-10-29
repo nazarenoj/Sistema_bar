@@ -1,6 +1,7 @@
 const Producto = require('../models/productoModel');
 const Insumo = require('../models/insumoModel');
 const Presentacion = require('../models/presentacionModel');
+const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
 
 const TIPOS = ['estandar', 'variante', 'pesable', 'fraccionable', 'combo', 'elaborado', 'servicio'];
@@ -266,6 +267,7 @@ const addInsumoAProducto = async (req, res) => {
         return res.status(400).json({ error: 'La presentación debe ser una presentación vigente de uso "receta" de ese insumo.' });
     }
     const linea = await Insumo.addToProducto(producto_id, insumo_id, cantidad_consumida, undefined, presentacion ? { presentacion_id: presentacion.id, factor_aplicado: presentacion.factor } : {});
+    await (await puertos.obtener('stock')).recetaCambiada(producto_id, req.usuario?.sub);
     res.status(201).json(linea);
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY')
@@ -291,6 +293,7 @@ const updateInsumoDeProducto = async (req, res) => {
       return res.status(404).json({ error: `Insumo con id de línea ${linea_id} no encontrado en la receta de este producto.` });
 
     await Insumo.updateCantidad(linea_id, cantidad_consumida);
+    await (await puertos.obtener('stock')).recetaCambiada(producto_id, req.usuario?.sub);
     res.json({ ...linea, cantidad_consumida });
   } catch (err) {
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
@@ -310,6 +313,7 @@ const removeInsumoDeProducto = async (req, res) => {
       return res.status(404).json({ error: `Insumo con id de línea ${linea_id} no encontrado en la receta de este producto.` });
 
     await Insumo.removeFromProducto(linea_id);
+    await (await puertos.obtener('stock')).recetaCambiada(producto_id, req.usuario?.sub);
     res.json({ message: 'Insumo quitado de la receta.', producto_id, id: linea_id });
   } catch (err) {
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });

@@ -96,8 +96,14 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
       await conn.query('INSERT INTO devolucion_reintegros (devolucion_id, metodo_pago, importe) VALUES (?, ?, ?)', [r.insertId, x.forma, x.importe]);
 
     // Reingreso al stock (la merma no reingresa). Hasta C3 el stock se mueve directo, como en el cierre.
-    if (reingreso === 'reingreso') {
-      await (await puertos.obtener('stock')).reingresarPorDevolucion(itemsDev, conn, { documento_tipo: 'devolucion', documento: id_global, user_id: userId ?? null });
+    // Solo si la venta tuvo descuento de stock (si no, no hay nada que revertir). Con la misma ID_Global de la venta y una
+    // secuencia posterior, Stock lo retiene hasta que el descuento original esté confirmado.
+    const [[conDescuento]] = await conn.query("SELECT 1 AS si FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'descuento_stock' LIMIT 1", [idGlobalVenta]);
+    if (conDescuento) {
+      await Mensajeria.publicar(conn, {
+        origen: 'ventas', destino: 'stock', tipo: 'reingreso_stock', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud,
+        contenido: { modo: reingreso, items: itemsDev.map((i) => ({ linea: i.linea, cantidad: i.cantidad, cantidad_original: venta.detalle[i.linea].cantidad })), user_id: userId ?? null },
+      });
     }
 
     // Nota de crédito: solo si la venta tenía una factura aprobada que corregir.

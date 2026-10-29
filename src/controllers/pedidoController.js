@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 const Mesa = require('../models/mesaModel');
 const Pedido = require('../models/pedidoModel');
+const Venta = require('../services/ventaService');
+const Mensajeria = require('../mensajeria/servicio');
 const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
@@ -325,7 +327,8 @@ const cerrarPedido = async (req, res) => {
       return res.status(400).json({ error: 'No se puede cerrar un pedido sin productos. Eliminalo en su lugar.' });
     }
 
-    await (await puertos.obtener('stock')).descontarPorVenta(items, conn, { documento_tipo: 'venta', documento: `pedido-${id}`, user_id: req.usuario?.sub ?? null });
+    // El descuento de stock viaja como mensaje en la misma transacción que el cierre de la silla.
+    await Venta.publicarDescuento(conn, { docTipo: 'pedido', docIdGlobal: pedido.id_global, items, userId: req.usuario?.sub ?? null });
     await Pedido.cerrarPedidoIndividual(id, conn);
 
     // Si era la última silla activa de la mesa, la cuenta quedó completa: la mesa sigue "ocupada"
@@ -338,6 +341,7 @@ const cerrarPedido = async (req, res) => {
     }
 
     await conn.commit();
+    Mensajeria.despertar();
 
     const total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
     res.json({

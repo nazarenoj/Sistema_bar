@@ -1,7 +1,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
-const { iniciarApp } = require('./ayudas');
+const { iniciarApp, esperarMensajes } = require('./ayudas');
 
 let api, pool, cerrar, token, n = 0;
 before(async () => {
@@ -34,6 +34,7 @@ test('Ventas.RF08/RN21: cerrar la cuenta crea la venta con ID_Global, su pago y 
   assert.equal(Number(v.total), 200);
   assert.equal(v.id_solicitud, 'cierre-1');
 
+  await esperarMensajes(pool); // Stock aplica su descuento
   await pool.query('UPDATE productos SET precio = 999, nombre = "otro" WHERE id = ?', [producto.id]);
   const venta = (await api('GET', `/api/ventas/${v.id_global}`, { token })).json;
   assert.equal(venta.detalle[0].precio_unitario, 100);
@@ -71,7 +72,7 @@ test('Ventas.RN58/EX43: si falla un efecto la venta no se revierte y queda Parci
     await new Promise((res) => setTimeout(res, 300)); // la entrega inmediata corre en segundo plano
     const parcial = (await api('GET', `/api/ventas/${v.id_global}`, { token })).json;
     assert.equal(parcial.integracion.estado, 'parcial');
-    assert.deepEqual(parcial.integracion.efectos.map((e) => e.modulo), ['financiero']);
+    assert.deepEqual(parcial.integracion.efectos.filter((e) => e.estado !== 'confirmado').map((e) => e.modulo), ['financiero']); // el de Stock sí se aplicó
     assert.equal(parcial.total, '200.00'); // la venta sigue ahí
 
     falla = false;
