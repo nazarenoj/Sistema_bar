@@ -18,6 +18,7 @@ const OBLIGATORIAS = [
   /^POST \/api\/mesas\/:n\/cerrar$/,
   /^POST \/api\/pedidos\/:n\/cerrar$/,
   /^POST \/api\/devoluciones$/,
+  /^POST \/api\/precios\/actualizaciones$/,
   /^POST \/api\/facturas\/:n\/reintentar$/,
 ];
 

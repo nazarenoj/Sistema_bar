@@ -149,6 +149,7 @@ const vuelta = async () => {
       try {
         await procesarIndeterminados();
         await require('./caeaService').mantenimiento();
+        await require('./precioService').aplicarVencidas();
         const dia = new Date().toDateString();
         if (hoy.get(inst.codigo) !== dia) {
           hoy.set(inst.codigo, dia);

@@ -12,6 +12,7 @@ const PERMISOS = [
   { id: 'ventas.catalogo.editar', modulo: 'ventas', descripcion: 'Crear y modificar productos, precios y recetas' },
   { id: 'ventas.devoluciones.crear', modulo: 'ventas', descripcion: 'Anular o devolver una venta (con nota de crédito)' },
   { id: 'ventas.reimprimir', modulo: 'ventas', descripcion: 'Reimprimir comprobantes desde el registro de ventas' },
+  { id: 'ventas.precios.actualizar', modulo: 'ventas', descripcion: 'Actualizar precios del catálogo (por porcentaje, monto o lista), programarlos y revertirlos' },
   { id: 'ventas.historial.ver', modulo: 'ventas', descripcion: 'Ver el historial y los gráficos de ventas', admiteAlcance: true },
   { id: 'ventas.historial.exportar', modulo: 'ventas', descripcion: 'Exportar reportes de ventas' },
   { id: 'facturacion.ver', modulo: 'ventas', descripcion: 'Ver comprobantes electrónicos' },
