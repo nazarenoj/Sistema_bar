@@ -32,12 +32,13 @@ const alIngresar = async (conn, item, cantidad, costo, movimientoId, saldoPrevio
 
 // Un egreso: devuelve el costo unitario según el método y consume las capas más viejas (si no es una transferencia, que no
 // cambia lo que hay). Lo que excede las capas (stock negativo) se valora al último costo conocido y queda provisorio.
-const alEgresar = async (conn, item, cantidad, { consumir = true } = {}) => {
+// `capa`: id del movimiento de ingreso cuya capa se consume primero (la devolución a proveedor sale de la capa de su ingreso, RN80).
+const alEgresar = async (conn, item, cantidad, { consumir = true, capa = null } = {}) => {
   const f = await fila(conn, item);
   const m = await metodo();
   const manual = await respaldo(conn, item);
   const ultimo = f?.ultimo_costo !== null && f?.ultimo_costo !== undefined ? Number(f.ultimo_costo) : manual;
-  const [capas] = await conn.query('SELECT id, cantidad_restante, costo FROM stock_capas WHERE item_tipo = ? AND item_id = ? AND cantidad_restante > 0 ORDER BY id FOR UPDATE', [item.tipo, item.id]);
+  const [capas] = await conn.query('SELECT id, cantidad_restante, costo FROM stock_capas WHERE item_tipo = ? AND item_id = ? AND cantidad_restante > 0 ORDER BY (movimiento_id = ?) DESC, id FOR UPDATE', [item.tipo, item.id, capa ?? 0]);
   let faltante = cantidad;
   let valorPeps = 0;
   for (const c of capas) {

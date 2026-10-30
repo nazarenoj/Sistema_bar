@@ -39,7 +39,7 @@ const registrar = async (conn, m) => {
   let costo = m.costo_unitario ?? null;
   let provisorio = m.costo_provisorio ? 1 : 0;
   if (cantidad < 0) {
-    const e = await Costos.alEgresar(conn, m.item, -cantidad, { consumir: m.tipo !== 'transferencia' });
+    const e = await Costos.alEgresar(conn, m.item, -cantidad, { consumir: m.tipo !== 'transferencia', capa: m.capa_movimiento_id });
     if (costo === null) { costo = e.costo_unitario; provisorio = e.provisorio ? 1 : 0; }
   }
   const [r] = await conn.query(
@@ -273,4 +273,4 @@ const mermas = async ({ desde, hasta } = {}) => {
 // Una presentación con movimientos no se edita (RN61): se crea una versión nueva.
 Presentacion.registrarDetectorUso(async (id) => (await pool.query('SELECT 1 FROM stock_movimientos WHERE presentacion_id = ? LIMIT 1', [id]))[0].length > 0);
 
-module.exports = { MovimientoInvalido, registrar, saldoInicial, ingresar, egresar, transferir, corregir, saldo, existencias, kardex, mermas, motivoDeEgreso, colItem };
+module.exports = { MovimientoInvalido, registrar, saldoInicial, ingresar, egresar, transferir, corregir, saldo, existencias, kardex, mermas, motivoDeEgreso, colItem, claveComprobante };
