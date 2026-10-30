@@ -17,10 +17,10 @@ const lineas = async (productoId, conn = pool) => (await conn.query(
   `SELECT id, insumo_id, componente_producto_id, cantidad_consumida, presentacion_id, factor_aplicado, merma_pct, ${consumoSql} AS consumo
    FROM producto_insumos WHERE producto_id = ? ORDER BY id`, [productoId]))[0];
 
-// Hojas de `cantidad` unidades de un artículo: Map 'insumo:ID' | 'producto:ID' -> cantidad en unidad base.
-const hojas = async (conn, productoId, cantidad, acum = new Map(), nivel = 0) => {
+// Hojas de `cantidad` unidades de un artículo (`expandir`: fabricar un elaborado de producción previa en vez de tomarlo del stock): Map 'insumo:ID' | 'producto:ID' -> cantidad en unidad base.
+const hojas = async (conn, productoId, cantidad, acum = new Map(), nivel = 0, expandir = false) => {
   if (nivel > PROFUNDIDAD_MAXIMA) throw invalida('La receta es demasiado profunda o tiene un ciclo.');
-  const [[p]] = await conn.query('SELECT id, tipo FROM productos WHERE id = ?', [productoId]);
+  const [[p]] = await conn.query('SELECT id, tipo, modo_produccion FROM productos WHERE id = ?', [productoId]);
   const suma = (k, q) => acum.set(k, (acum.get(k) ?? 0) + q);
   if (p?.tipo === 'combo') {
     const [comps] = await conn.query('SELECT componente_id, cantidad FROM producto_componentes WHERE combo_id = ?', [productoId]);
@@ -28,7 +28,7 @@ const hojas = async (conn, productoId, cantidad, acum = new Map(), nivel = 0) =>
       for (const c of comps) await hojas(conn, c.componente_id, cantidad * Number(c.cantidad), acum, nivel + 1);
       return acum; // un combo virtual no tiene stock propio
     }
-  } else if (p?.tipo === 'elaborado') {
+  } else if (p?.tipo === 'elaborado' && (p.modo_produccion !== 'previa' || expandir)) { // producción previa: se vende de su stock (Propio)
     const ls = await lineas(productoId, conn);
     if (ls.length) {
       for (const l of ls) {
@@ -55,13 +55,13 @@ const versiones = async (productoId) => (await pool.query('SELECT version, linea
   .map((r) => ({ ...r, lineas: JSON.parse(r.lineas) }));
 
 const obtener = async (productoId) => {
-  const [[p]] = await pool.query('SELECT id, nombre, tipo FROM productos WHERE id = ?', [productoId]);
+  const [[p]] = await pool.query('SELECT id, nombre, tipo, modo_produccion FROM productos WHERE id = ?', [productoId]);
   if (!p) return null;
   const [filas] = await pool.query(
     `SELECT pi.id, pi.insumo_id, pi.componente_producto_id, pi.cantidad_consumida, pi.presentacion_id, pi.factor_aplicado, pi.merma_pct, i.nombre AS insumo, i.unidad, sp.nombre AS subreceta
      FROM producto_insumos pi LEFT JOIN insumos i ON i.id = pi.insumo_id LEFT JOIN productos sp ON sp.id = pi.componente_producto_id WHERE pi.producto_id = ? ORDER BY pi.id`, [productoId]);
   const [[{ v }]] = await pool.query('SELECT COALESCE(MAX(version), 0) AS v FROM recetas_versiones WHERE producto_id = ?', [productoId]);
-  const modo = p.tipo === 'combo' || (p.tipo === 'elaborado' && filas.length) ? 'componentes' : 'propio';
+  const modo = p.tipo === 'combo' || (p.tipo === 'elaborado' && filas.length && p.modo_produccion !== 'previa') ? 'componentes' : 'propio';
   return { producto: p, modo_descuento: modo, version: v, lineas: filas };
 };
 
