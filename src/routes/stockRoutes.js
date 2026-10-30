@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const pool = require('../config/db');
 const Mov = require('../stock/movimientoService');
+const { TomaBloqueada } = require('../stock/tomaAlcance');
 const Costos = require('../stock/costoService');
 const Compromiso = require('../stock/compromisoService');
 const Parametro = require('../models/parametroModel');
@@ -17,6 +18,7 @@ const REGISTRAR = requierePermiso('stock.movimientos.registrar');
 const manejar = (fn) => async (req, res, next) => {
   try { await fn(req, res); } catch (err) {
     if (err instanceof Mov.MovimientoInvalido) return res.status(err.status || 400).json({ error: err.message, codigo: 'MOVIMIENTO_INVALIDO' });
+    if (err instanceof TomaBloqueada) return res.status(err.status).json({ error: err.message, codigo: 'TOMA_EN_CURSO', detalle: err.detalle });
     next(err);
   }
 };

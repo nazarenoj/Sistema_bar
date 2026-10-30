@@ -3,6 +3,7 @@ const Deposito = require('../models/depositoModel');
 const Presentacion = require('../models/presentacionModel');
 const Costos = require('./costoService');
 const Compromiso = require('./compromisoService');
+const { exigirLibre } = require('./tomaAlcance');
 const { idGlobal } = require('../utils/idGlobal');
 
 // Movimientos y kardex (Stock RF04, RF12, RF13, RF18, RN02). Todo cambio de existencias es un movimiento de solo
@@ -117,6 +118,7 @@ const ingresar = async ({ deposito_id, motivo, proveedor, comprobante, lineas, o
     const movs = [];
     for (const l of lineas) {
       await itemValido(conn, l.item);
+      await exigirLibre(conn, l.item.tipo, l.item.id, dep.id);
       if (l.costo_unitario !== undefined && l.costo_unitario !== null && !(Number(l.costo_unitario) >= 0)) throw invalido('El costo unitario debe ser mayor o igual a cero.');
       const base = await lineaABase(conn, l, 'compra');
       movs.push(await registrar(conn, { item: l.item, deposito_id: dep.id, tipo: 'ingreso', motivo: m.codigo, cantidad: base.cantidad, costo_unitario: l.costo_unitario, presentacion_id: base.presentacion_id,
@@ -147,6 +149,7 @@ const egresar = async ({ deposito_id, motivo, observacion, lineas }, { userId, m
     const movs = [];
     for (const l of lineas) {
       await itemValido(conn, l.item);
+      await exigirLibre(conn, l.item.tipo, l.item.id, dep.id);
       const base = await lineaABase(conn, l, 'receta');
       movs.push(await registrar(conn, { item: l.item, deposito_id: dep.id, tipo: 'egreso', motivo: m.codigo, cantidad: -base.cantidad, presentacion_id: base.presentacion_id,
         factor_aplicado: base.factor_aplicado, cantidad_presentacion: base.cantidad_presentacion, documento_tipo: 'egreso', documento, user_id: userId, observacion }));
@@ -169,6 +172,8 @@ const transferir = async ({ origen_id, destino_id, lineas, observacion }, { user
     const movs = [];
     for (const l of lineas) {
       await itemValido(conn, l.item);
+      await exigirLibre(conn, l.item.tipo, l.item.id, origen_id);
+      await exigirLibre(conn, l.item.tipo, l.item.id, destino_id);
       const base = await lineaABase(conn, l, 'fraccionamiento').catch(() => lineaABase(conn, l, 'receta'));
       const comun = { item: l.item, tipo: 'transferencia', motivo: 'transferencia', documento_tipo: 'transferencia', documento, user_id: userId, observacion, costo_unitario: l.costo_unitario };
       const salida = await registrar(conn, { ...comun, deposito_id: origen_id, cantidad: -base.cantidad });
@@ -191,6 +196,7 @@ const corregir = async (movimientoId, observacion, { userId } = {}) => {
     const [[ya]] = await conn.query('SELECT id FROM stock_movimientos WHERE movimiento_original_id = ?', [o.id]);
     if (ya) throw invalido('Ese movimiento ya fue corregido.', 409);
     const item = o.insumo_id ? { tipo: 'insumo', id: o.insumo_id } : { tipo: 'producto', id: o.producto_id };
+    await exigirLibre(conn, item.tipo, item.id, o.deposito_id);
     return registrar(conn, { item, deposito_id: o.deposito_id, tipo: 'correccion', motivo: 'correccion', cantidad: -Number(o.cantidad), costo_unitario: o.costo_unitario,
       presentacion_id: o.presentacion_id, factor_aplicado: o.factor_aplicado, cantidad_presentacion: o.cantidad_presentacion ? -Number(o.cantidad_presentacion) : null, costo_provisorio: o.costo_provisorio,
       documento_tipo: o.documento_tipo, documento: o.documento, movimiento_original_id: o.id, user_id: userId, observacion });

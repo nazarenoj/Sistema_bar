@@ -21,6 +21,7 @@ const PERMISOS = [
   { id: 'facturacion.reintentar', modulo: 'ventas', descripcion: 'Reintentar la emisión de un comprobante' },
   { id: 'stock.movimientos.ver', modulo: 'stock', descripcion: 'Ver existencias, kardex y mermas' },
   { id: 'stock.movimientos.registrar', modulo: 'stock', descripcion: 'Registrar ingresos, egresos, transferencias y correcciones de stock' },
+  { id: 'stock.inventario.aprobar', modulo: 'stock', descripcion: 'Aprobar una toma de inventario y sus ajustes' },
   { id: 'stock.insumos.ver', modulo: 'stock', descripcion: 'Ver insumos' },
   { id: 'stock.insumos.editar', modulo: 'stock', descripcion: 'Crear y modificar insumos' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

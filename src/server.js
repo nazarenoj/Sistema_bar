@@ -16,6 +16,8 @@ const depositoRoutes   = require('./routes/depositoRoutes');
 const presentacionRoutes = require('./routes/presentacionRoutes');
 const stockRoutes      = require('./routes/stockRoutes');
 const recetaRoutes     = require('./routes/recetaRoutes');
+const inventarioRoutes = require('./routes/inventarioRoutes');
+const mantenimientoStock = require('./stock/mantenimientoStock');
 const insumoRoutes     = require('./routes/insumoRoutes');
 const mesaRoutes       = require('./routes/mesaRoutes');
 const pedidoRoutes     = require('./routes/pedidoRoutes');
@@ -143,6 +145,7 @@ app.use('/api/depositos',   depositoRoutes);
 app.use('/api/presentaciones', presentacionRoutes);
 app.use('/api/stock',       stockRoutes);
 app.use('/api/recetas',     recetaRoutes);
+app.use('/api/inventario',  inventarioRoutes);
 app.use('/api/categorias',  catalogoRoutes.categorias);
 app.use('/api/sectores',    catalogoRoutes.sectores);
 app.use('/api/insumos',     insumoRoutes);
@@ -186,6 +189,7 @@ if (process.env.NODE_ENV !== 'test') {
         logger.info(`Servidor corriendo en http://localhost:${PORT}`);
         trabajador.iniciar(); // entrega de mensajes entre módulos y mantenimiento (A10)
         resolucion.iniciar(); // intentos de emisión indeterminados y validación de la numeración (B7)
+        mantenimientoStock.iniciar(); // alertas de stock y diferencias de integración (C6)
       });
     })
     .catch(async (err) => {
