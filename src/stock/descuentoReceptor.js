@@ -1,7 +1,9 @@
 const M = require('../mensajeria/servicio');
 const Mov = require('./movimientoService');
 const Receta = require('./recetaService');
+const { hojasDeLinea } = require('./lineaVentaService');
 const Lotes = require('./loteService');
+const Porciones = require('./porcionService');
 const Deposito = require('../models/depositoModel');
 const Compromiso = require('./compromisoService');
 const Notificacion = require('../models/notificacionModel');
@@ -76,7 +78,7 @@ M.registrarReceptor('stock', 'descuento_stock', async (conn, c, ctx) => {
     const [[p]] = await conn.query('SELECT sector_id FROM productos WHERE id = ?', [it.producto_id]);
     const deposito = await Deposito.depositoDeSector(p?.sector_id ?? null, conn);
     let hojas;
-    try { hojas = await Receta.hojas(conn, it.producto_id, it.cantidad); } catch (err) {
+    try { hojas = await hojasDeLinea(conn, { producto_id: it.producto_id, cantidad: it.cantidad, opciones: it.opciones, modalidad: c.modalidad }); } catch (err) {
       if (err instanceof Receta.RecetaInvalida) throw new M.RechazoNegocio(err.message);
       throw err;
     }
@@ -112,7 +114,11 @@ M.registrarReceptor('stock', 'descuento_stock', async (conn, c, ctx) => {
 // bloqueado o vencido, el producto no vuelve a stock disponible: solo se admite la merma (EX56).
 M.registrarReceptor('stock', 'reingreso_stock', async (conn, c, ctx) => {
   let aplicados = 0;
+  const [[envio]] = await conn.query("SELECT contenido FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'descuento_stock' ORDER BY id LIMIT 1", [ctx.docIdGlobal]);
+  const vendidos = envio ? JSON.parse(envio.contenido).items ?? [] : [];
   for (const it of c.items) {
+    // La devolución de una porción nunca reingresa a la pieza ni a las porciones: siempre es merma (RF08, RN78).
+    const porcion = await Porciones.esPorcion(conn, vendidos.find((v) => v.linea === it.linea)?.producto_id);
     const [originales] = await conn.query(
       "SELECT * FROM stock_movimientos WHERE documento = ? AND tipo = 'venta' AND operacion_clave LIKE ? ORDER BY insumo_id, producto_id, id", [ctx.docIdGlobal, `%|${it.linea}|%`]);
     for (const o of originales) {
@@ -122,7 +128,7 @@ M.registrarReceptor('stock', 'reingreso_stock', async (conn, c, ctx) => {
       const lote = o.lote_id ? await Lotes.porId(conn, o.lote_id) : null;
       const politica = lote ? (await Lotes.config(conn, item))?.vencido_politica : null;
       const soloMerma = !!lote && !Lotes.usable(lote, politica);
-      const modo = soloMerma ? 'merma' : c.modo;
+      const modo = soloMerma || porcion ? 'merma' : c.modo;
       const comun = { item, deposito_id: o.deposito_id, costo_unitario: o.costo_unitario, documento_tipo: 'devolucion', documento: ctx.docIdGlobal, venta_no_fiscal: o.venta_no_fiscal, costo_provisorio: o.costo_provisorio, lote_id: o.lote_id, user_id: c.user_id ?? null };
       if ((await unaVez(conn, { ...comun, tipo: 'devolucion', motivo: 'devolucion_venta', cantidad: q, operacion_clave: clave(ctx.idOperacion, it.linea, item.tipo, item.id, o.lote_id ? `|L${o.lote_id}` : '') })).nuevo) aplicados++;
       // Merma por devolución: ingreso al costo original más egreso "Devolución a merma", de modo que el costo de la venta se revierte y la pérdida queda valorizada.

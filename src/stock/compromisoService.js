@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 const R = require('../reservas/servicio');
 const Deposito = require('../models/depositoModel');
-const Receta = require('./recetaService');
+const { hojasDeLinea } = require('./lineaVentaService');
 const Lotes = require('./loteService');
 const { idGlobal } = require('../utils/idGlobal');
 
@@ -29,7 +29,7 @@ const requerimientos = async (conn, lineas) => {
   for (const l of lineas) {
     const [[p]] = await conn.query('SELECT sector_id FROM productos WHERE id = ?', [l.producto_id]);
     const dep = await Deposito.depositoDeSector(p?.sector_id ?? null, conn);
-    for (const [k, q] of await Receta.hojas(conn, l.producto_id, l.cantidad)) {
+    for (const [k, q] of await hojasDeLinea(conn, { producto_id: l.producto_id, cantidad: l.cantidad, opciones: l.opciones, modalidad: l.modalidad })) {
       const [tipo, id] = k.split(':');
       const clave = recursoDe(tipo, id, dep.id);
       const e = req.get(clave) ?? { tipo, id: Number(id), deposito_id: dep.id, deposito: dep.nombre, cantidad: 0 };

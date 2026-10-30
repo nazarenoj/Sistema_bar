@@ -25,6 +25,7 @@ const temperaturaRoutes = require('./routes/temperaturaRoutes');
 const serieRoutes      = require('./routes/serieRoutes');
 const etiquetaRoutes   = require('./routes/etiquetaRoutes');
 const stockAppRoutes   = require('./routes/stockAppRoutes');
+const stockPorcionRoutes = require('./routes/stockPorcionRoutes');
 const stockReposicionRoutes = require('./routes/stockReposicionRoutes');
 const mantenimientoStock = require('./stock/mantenimientoStock');
 const insumoRoutes     = require('./routes/insumoRoutes');
@@ -52,6 +53,7 @@ const instancia        = require('./middleware/instancia');
 const idempotencia     = require('./middleware/idempotencia');
 const horaCliente      = require('./middleware/horaCliente');
 require('./models/insumoPuerto'); // Stock registra lo que implementa de los puertos de Ventas
+require('./services/disponibilidadReceptor'); // Ventas aplica la marca de agotado automático que informa Stock
 require('./services/costoVentaReceptor'); // Ventas guarda el costo que Stock informa al confirmar el descuento
 const requestLogger    = require('./middleware/requestLogger');
 const errorHandler     = require('./middleware/errorHandler');
@@ -163,6 +165,7 @@ app.use('/api/temperaturas', temperaturaRoutes);
 app.use('/api/series',      serieRoutes);
 app.use('/api/etiquetas',   etiquetaRoutes);
 app.use('/api/app',         stockAppRoutes);
+app.use('/api/venta-stock', stockPorcionRoutes);
 app.use('/api/reposicion-auto', stockReposicionRoutes);
 app.use('/api/categorias',  catalogoRoutes.categorias);
 app.use('/api/sectores',    catalogoRoutes.sectores);

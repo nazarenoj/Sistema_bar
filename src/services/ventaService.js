@@ -53,9 +53,9 @@ const metodoResumen = (pagos) => (pagos.length > 1 ? 'mixto' : pagos[0].forma);
 
 // Mensaje de descuento de stock (Stock RF07): trae solo la línea vendida, nunca los componentes; Stock la expande según el
 // modo de descuento del artículo. `items`: filas con producto_id y cantidad, en el orden de la venta (la posición es la línea).
-const publicarDescuento = async (conn, { docTipo, docIdGlobal, items, userId, solicitud, noFiscal = false, idCompromiso = null }) => Mensajeria.publicar(conn, {
+const publicarDescuento = async (conn, { docTipo, docIdGlobal, items, userId, solicitud, noFiscal = false, idCompromiso = null, modalidad = null }) => Mensajeria.publicar(conn, {
   origen: 'ventas', destino: 'stock', tipo: 'descuento_stock', docTipo, docIdGlobal, userId, solicitud,
-  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null })), no_fiscal: noFiscal, user_id: userId ?? null, id_compromiso: idCompromiso },
+  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null, ...(i.opciones?.length && { opciones: i.opciones }) })), modalidad, no_fiscal: noFiscal, user_id: userId ?? null, id_compromiso: idCompromiso },
 });
 
 // Compromiso de venta antes de confirmar (Ventas RN63): pide a Stock, con timeout de 3 s, comprometer la línea vendida. Solo
@@ -99,7 +99,7 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
       solicitud: idSolicitud, contenido: { total, pagos, items: detalle },
     });
   }
-  await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso });
+  await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso, modalidad });
   return { id: r.insertId, id_global, numero_no_fiscal: numeroNoFiscal };
 };
 

@@ -57,6 +57,7 @@ const registrar = async (conn, m) => {
   } finally {
     await conn.query('SET @chepola_mov = 0');
   }
+  await require('./agotadoService').alCambiar(conn, m.item); // RF32: avisa a Ventas si un artículo se agota o vuelve
   return { id: r.insertId, id_global, costo_unitario: costo === null ? null : Number(costo), costo_provisorio: provisorio };
 };
 

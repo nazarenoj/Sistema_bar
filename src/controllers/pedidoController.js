@@ -336,7 +336,7 @@ const cerrarPedido = async (req, res) => {
 
     idCompromiso = await Venta.comprometerStock(items, { idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, autorizar: () => validarAutorizacion(req, 'ventas.cuenta.cobrar') });
     // El descuento de stock viaja como mensaje en la misma transacción que el cierre de la silla.
-    await Venta.publicarDescuento(conn, { docTipo: 'pedido', docIdGlobal: pedido.id_global, items, userId: req.usuario?.sub ?? null, idCompromiso });
+    await Venta.publicarDescuento(conn, { docTipo: 'pedido', docIdGlobal: pedido.id_global, items, userId: req.usuario?.sub ?? null, idCompromiso, modalidad: pedido.modalidad ?? null });
     await Pedido.cerrarPedidoIndividual(id, conn);
 
     // Si era la última silla activa de la mesa, la cuenta quedó completa: la mesa sigue "ocupada"
