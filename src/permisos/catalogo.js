@@ -23,6 +23,8 @@ const PERMISOS = [
   { id: 'stock.movimientos.registrar', modulo: 'stock', descripcion: 'Registrar ingresos, egresos, transferencias y correcciones de stock' },
   { id: 'stock.inventario.aprobar', modulo: 'stock', descripcion: 'Aprobar una toma de inventario y sus ajustes' },
   { id: 'stock.produccion.gestionar', modulo: 'stock', funcion: 'STK-PRODUCCION', descripcion: 'Crear, ajustar y confirmar órdenes de producción y ver la ficha técnica' },
+  { id: 'stock.alergenos.gestionar', modulo: 'stock', funcion: 'STK-ALERGENOS', descripcion: 'Administrar el catálogo de alérgenos y declararlos en insumos y artículos' },
+  { id: 'stock.alergenos.quitar', modulo: 'stock', funcion: 'STK-ALERGENOS', descripcion: 'Quitar un alérgeno derivado de un artículo (con motivo auditado)' },
   { id: 'stock.insumos.ver', modulo: 'stock', descripcion: 'Ver insumos' },
   { id: 'stock.insumos.editar', modulo: 'stock', descripcion: 'Crear y modificar insumos' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

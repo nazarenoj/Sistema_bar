@@ -15,7 +15,8 @@ const PUERTOS = {
   stock: {
     define: 'ventas', implementa: 'stock',
     nula: { disponibilidad: async () => ({ bloqueado: false }), saldoInicial: async () => {}, recetaCambiada: async () => {},
-      comprometer: async () => ({ ok: true, id_compromiso: null, sin_compromiso: true }), renovarCompromiso: async () => null, liberarCompromiso: async () => 0 },
+      comprometer: async () => ({ ok: true, id_compromiso: null, sin_compromiso: true }), renovarCompromiso: async () => null, liberarCompromiso: async () => 0,
+      alergenosLinea: async () => ({ alergenos: [], incompletos: false, disponible: false }) },
   },
   // Ventas define; Financiero implementa. Ventas discrimina por forma de pago sin afectar cajas.
   cobros: { define: 'ventas', implementa: 'financiero', nula: { registrarCobro: async () => null } },

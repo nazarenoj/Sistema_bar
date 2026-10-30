@@ -3,6 +3,7 @@ const Receta = require('../stock/recetaService');
 const Costos = require('../stock/costoService');
 const Compromiso = require('../stock/compromisoService');
 require('../stock/descuentoReceptor'); // Stock aplica los mensajes de descuento y reingreso de Ventas
+const Alergenos = require('../stock/alergenoService');
 const puertos = require('../modulos/puertos');
 
 // Implementación de Stock del puerto "stock" que define Ventas (Índice B.2): el descuento de
@@ -18,5 +19,7 @@ puertos.registrar('stock', {
   comprometer: (items, ctx) => Compromiso.comprometer({ idSolicitud: ctx.idSolicitud, lineas: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null })), reemplazaA: ctx.reemplazaA, userId: ctx.userId }),
   renovarCompromiso: (id) => Compromiso.renovar(id),
   liberarCompromiso: (id) => Compromiso.liberar(id),
+  // Alérgenos de una línea de venta (RF39): { alergenos, incompletos }; Ventas los muestra y los publica.
+  alergenosLinea: (productoId, opciones) => Alergenos.linea(productoId, opciones),
   saldoInicial: (item, cantidad, conn, userId) => Mov.saldoInicial(item, cantidad, conn, userId),
 });
