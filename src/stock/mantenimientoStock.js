@@ -2,6 +2,7 @@ const registro = require('../instancias/registro');
 const Parametro = require('../models/parametroModel');
 const Alertas = require('./alertasService');
 const Diferencias = require('./diferenciasService');
+const Temperaturas = require('./temperaturaService');
 const logger = require('../utils/logger');
 
 // Trabajo periódico de Stock (Stock RF16, RF35): cada minuto revisa las alertas de saldo y, a la hora de la conciliación, corre
@@ -15,6 +16,7 @@ const vuelta = async () => {
     await registro.dentroDe(inst, async () => {
       try {
         await Alertas.evaluar();
+        await Temperaturas.evaluar();
         const hora = (await Parametro.todos()).conciliacion_hora ?? 3;
         const hoy = new Date().toDateString();
         if (new Date().getHours() === hora && ultimaDiaria.get(inst.codigo) !== hoy) {
