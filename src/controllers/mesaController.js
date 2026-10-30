@@ -169,7 +169,7 @@ const cerrarCuenta = async (req, res) => {
   } catch (err) {
     await conn.rollback();
     await Venta.liberarCompromiso(idCompromiso); // la venta no se confirmó: lo comprometido se libera
-    if (err.codigo === 'SIN_DISPONIBLE' || err.codigo === 'STOCK_NO_RESPONDE') return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
+    if (['SIN_DISPONIBLE', 'STOCK_NO_RESPONDE', 'LOTE_NO_DISPONIBLE'].includes(err.codigo)) return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
     if (err instanceof Venta.PagoInvalido) return res.status(400).json({ error: err.message, codigo: 'PAGO_INVALIDO' });
     if (err.codigo === 'SIN_CAEA') return res.status(409).json({ error: err.message, codigo: 'SIN_CAEA' });
     if (err.status === 400) return res.status(400).json({ error: err.message, codigo: 'RECEPTOR_INVALIDO' });

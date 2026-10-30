@@ -45,7 +45,7 @@ test('Stock.RN50/RF07: el descuento llega como mensaje de Ventas con su ID_Opera
   const [[m]] = await pool.query("SELECT * FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'descuento_stock'", [v.venta_id_global]);
   assert.equal(m.id_operacion, `ventas:descuento_stock:${v.venta_id_global}:1`);
   assert.equal(m.estado, 'confirmado');
-  assert.deepEqual(JSON.parse(m.contenido).items, [{ linea: 0, producto_id: p.id, cantidad: 3 }]); // solo la línea vendida
+  assert.deepEqual(JSON.parse(m.contenido).items, [{ linea: 0, producto_id: p.id, cantidad: 3, lote_indicado: null }]); // solo la línea vendida
   const mov = (await movs('producto', p.id)).find((x) => x.tipo === 'venta');
   assert.deepEqual([mov.documento_tipo, mov.documento, Number(mov.cantidad)], ['venta', v.venta_id_global, -3]);
 });

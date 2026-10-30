@@ -72,7 +72,7 @@ const getItemsByPedidoIds = async (pedidoIds, conn = pool) => {
   if (!pedidoIds.length) return [];
   const placeholders = pedidoIds.map(() => '?').join(',');
   const [rows] = await conn.query(
-    `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado,
+    `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado, lote_indicado,
             (cantidad * precio_unitario) AS subtotal
      FROM pedido_productos
      WHERE pedido_id IN (${placeholders})
@@ -95,10 +95,10 @@ const getTotalAcumulado = async (pedidoIds, conn) => {
 };
 
 const addProductos = async (pedido_id, productos, conn) => {
-  for (const { producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones } of productos) {
+  for (const { producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado } of productos) {
     await conn.query(
-      'INSERT INTO pedido_productos (pedido_id, producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [pedido_id, producto_id, cantidad, nombre, descripcion ?? null, precio_unitario, observaciones ?? null]
+      'INSERT INTO pedido_productos (pedido_id, producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [pedido_id, producto_id, cantidad, nombre, descripcion ?? null, precio_unitario, observaciones ?? null, lote_indicado ?? null]
     );
   }
 };
@@ -233,7 +233,7 @@ const getEstadisticas = async (tipo, fecha) => {
 
 const getItems = async (pedido_id, conn = pool) => {
   const [rows] = await conn.query(
-    `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado,
+    `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado, lote_indicado,
             (cantidad * precio_unitario) AS subtotal
      FROM pedido_productos
      WHERE pedido_id = ?

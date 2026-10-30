@@ -3,6 +3,7 @@ const Deposito = require('../models/depositoModel');
 const Presentacion = require('../models/presentacionModel');
 const Costos = require('./costoService');
 const Compromiso = require('./compromisoService');
+const Lotes = require('./loteService');
 const { exigirLibre } = require('./tomaAlcance');
 const { idGlobal } = require('../utils/idGlobal');
 
@@ -43,10 +44,12 @@ const registrar = async (conn, m) => {
   }
   const [r] = await conn.query(
     `INSERT INTO stock_movimientos (id_global, ${COL[m.item.tipo]}, deposito_id, tipo, motivo, cantidad, costo_unitario, presentacion_id, factor_aplicado,
-       cantidad_presentacion, documento_tipo, documento, movimiento_original_id, user_id, observacion, operacion_clave, venta_no_fiscal, costo_provisorio)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       cantidad_presentacion, documento_tipo, documento, movimiento_original_id, user_id, observacion, operacion_clave, venta_no_fiscal, costo_provisorio,
+       lote_id, origen_lote, lote_indicado)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id_global, m.item.id, deposito, m.tipo, m.motivo, cantidad, costo, m.presentacion_id ?? null, m.factor_aplicado ?? null,
-      m.cantidad_presentacion ?? null, m.documento_tipo ?? null, m.documento ?? null, m.movimiento_original_id ?? null, m.user_id ?? null, m.observacion ?? null, m.operacion_clave ?? null, m.venta_no_fiscal ? 1 : 0, provisorio]);
+      m.cantidad_presentacion ?? null, m.documento_tipo ?? null, m.documento ?? null, m.movimiento_original_id ?? null, m.user_id ?? null, m.observacion ?? null, m.operacion_clave ?? null, m.venta_no_fiscal ? 1 : 0, provisorio,
+      m.lote_id ?? null, m.origen_lote ?? null, m.lote_indicado ?? null]);
   if (cantidad > 0 && costo !== null && m.tipo !== 'transferencia') await Costos.alIngresar(conn, m.item, cantidad, Number(costo), r.insertId, fila.stock);
   await conn.query('SET @chepola_mov = 1');
   try {
@@ -121,7 +124,8 @@ const ingresar = async ({ deposito_id, motivo, proveedor, comprobante, lineas, o
       await exigirLibre(conn, l.item.tipo, l.item.id, dep.id);
       if (l.costo_unitario !== undefined && l.costo_unitario !== null && !(Number(l.costo_unitario) >= 0)) throw invalido('El costo unitario debe ser mayor o igual a cero.');
       const base = await lineaABase(conn, l, 'compra');
-      movs.push(await registrar(conn, { item: l.item, deposito_id: dep.id, tipo: 'ingreso', motivo: m.codigo, cantidad: base.cantidad, costo_unitario: l.costo_unitario, presentacion_id: base.presentacion_id,
+      const lote = await Lotes.paraIngreso(conn, l.item, l.lote); // código, elaboración y vencimiento si el ítem controla lote
+      movs.push(await registrar(conn, { item: l.item, deposito_id: dep.id, tipo: 'ingreso', motivo: m.codigo, cantidad: base.cantidad, costo_unitario: l.costo_unitario, lote_id: lote?.id, presentacion_id: base.presentacion_id,
         factor_aplicado: base.factor_aplicado, cantidad_presentacion: base.cantidad_presentacion, documento_tipo: 'ingreso', documento: id_global, user_id: userId, observacion }));
     }
     return { id_global, deposito_id: dep.id, motivo: m.codigo, movimientos: movs };
@@ -151,8 +155,9 @@ const egresar = async ({ deposito_id, motivo, observacion, lineas }, { userId, m
       await itemValido(conn, l.item);
       await exigirLibre(conn, l.item.tipo, l.item.id, dep.id);
       const base = await lineaABase(conn, l, 'receta');
-      movs.push(await registrar(conn, { item: l.item, deposito_id: dep.id, tipo: 'egreso', motivo: m.codigo, cantidad: -base.cantidad, presentacion_id: base.presentacion_id,
-        factor_aplicado: base.factor_aplicado, cantidad_presentacion: base.cantidad_presentacion, documento_tipo: 'egreso', documento, user_id: userId, observacion }));
+      for (const a of await Lotes.paraEgreso(conn, l.item, dep.id, base.cantidad, l.lote)) // FEFO, o el lote que se nombra
+        movs.push(await registrar(conn, { item: l.item, deposito_id: dep.id, tipo: 'egreso', motivo: m.codigo, cantidad: -a.cantidad, lote_id: a.lote?.id, origen_lote: a.origen, presentacion_id: base.presentacion_id,
+          factor_aplicado: base.factor_aplicado, cantidad_presentacion: base.cantidad_presentacion, documento_tipo: 'egreso', documento, user_id: userId, observacion }));
     }
     return { documento, deposito_id: dep.id, motivo: m.codigo, clase_contable: m.clase_contable, movimientos: movs };
   });
@@ -176,10 +181,12 @@ const transferir = async ({ origen_id, destino_id, lineas, observacion }, { user
       await exigirLibre(conn, l.item.tipo, l.item.id, destino_id);
       const base = await lineaABase(conn, l, 'fraccionamiento').catch(() => lineaABase(conn, l, 'receta'));
       const comun = { item: l.item, tipo: 'transferencia', motivo: 'transferencia', documento_tipo: 'transferencia', documento, user_id: userId, observacion, costo_unitario: l.costo_unitario };
-      const salida = await registrar(conn, { ...comun, deposito_id: origen_id, cantidad: -base.cantidad });
-      movs.push(salida);
-      // Lo que entra al destino conserva el costo con que salió del origen (RF13).
-      movs.push(await registrar(conn, { ...comun, deposito_id: destino_id, cantidad: base.cantidad, costo_unitario: salida.costo_unitario, costo_provisorio: salida.costo_provisorio }));
+      // FEFO en el origen (o el lote que se nombra); lo que entra al destino conserva el lote y el costo con que salió (RF13).
+      for (const a of await Lotes.paraEgreso(conn, l.item, origen_id, base.cantidad, l.lote)) {
+        const salida = await registrar(conn, { ...comun, deposito_id: origen_id, cantidad: -a.cantidad, lote_id: a.lote?.id, origen_lote: a.origen });
+        movs.push(salida);
+        movs.push(await registrar(conn, { ...comun, deposito_id: destino_id, cantidad: a.cantidad, lote_id: a.lote?.id, costo_unitario: salida.costo_unitario, costo_provisorio: salida.costo_provisorio }));
+      }
     }
     return { documento, origen_id, destino_id, movimientos: movs };
   });
@@ -198,7 +205,7 @@ const corregir = async (movimientoId, observacion, { userId } = {}) => {
     const item = o.insumo_id ? { tipo: 'insumo', id: o.insumo_id } : { tipo: 'producto', id: o.producto_id };
     await exigirLibre(conn, item.tipo, item.id, o.deposito_id);
     return registrar(conn, { item, deposito_id: o.deposito_id, tipo: 'correccion', motivo: 'correccion', cantidad: -Number(o.cantidad), costo_unitario: o.costo_unitario,
-      presentacion_id: o.presentacion_id, factor_aplicado: o.factor_aplicado, cantidad_presentacion: o.cantidad_presentacion ? -Number(o.cantidad_presentacion) : null, costo_provisorio: o.costo_provisorio,
+      presentacion_id: o.presentacion_id, factor_aplicado: o.factor_aplicado, cantidad_presentacion: o.cantidad_presentacion ? -Number(o.cantidad_presentacion) : null, costo_provisorio: o.costo_provisorio, lote_id: o.lote_id,
       documento_tipo: o.documento_tipo, documento: o.documento, movimiento_original_id: o.id, user_id: userId, observacion });
   });
 };

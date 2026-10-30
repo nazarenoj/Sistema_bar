@@ -15,7 +15,7 @@ puertos.registrar('stock', {
   disponibilidad: async () => ({ bloqueado: false }), // el bloqueo por existencias llega con Stock C3
   recetaCambiada: (productoId, userId) => Receta.snapshot(productoId, userId),
   // Compromiso de venta (RF36): items = filas con producto_id y cantidad, en el orden de la venta.
-  comprometer: (items, ctx) => Compromiso.comprometer({ idSolicitud: ctx.idSolicitud, lineas: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad })), reemplazaA: ctx.reemplazaA, userId: ctx.userId }),
+  comprometer: (items, ctx) => Compromiso.comprometer({ idSolicitud: ctx.idSolicitud, lineas: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null })), reemplazaA: ctx.reemplazaA, userId: ctx.userId }),
   renovarCompromiso: (id) => Compromiso.renovar(id),
   liberarCompromiso: (id) => Compromiso.liberar(id),
   saldoInicial: (item, cantidad, conn, userId) => Mov.saldoInicial(item, cantidad, conn, userId),

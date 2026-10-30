@@ -8,6 +8,7 @@ const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
 const Funciones = require('../funciones/servicio');
+const Modulos = require('../modulos/registro');
 const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
 const { esFechaISO } = require('../utils/validaciones');
 const {
@@ -199,7 +200,9 @@ const addProductos = async (req, res) => {
     return res.status(400).json({ error: 'El campo "productos" debe ser un array no vacío.' });
 
   for (let i = 0; i < productos.length; i++) {
-    const { producto_id, cantidad, observaciones } = productos[i];
+    const { producto_id, cantidad, observaciones, lote_indicado } = productos[i];
+    if (lote_indicado !== undefined && lote_indicado !== null && (typeof lote_indicado !== 'string' || lote_indicado.length > 60))
+      return res.status(400).json({ error: `productos[${i}]: "lote_indicado" debe ser un texto de hasta 60 caracteres.` });
     if (observaciones !== undefined && (typeof observaciones !== 'string' || observaciones.length > 255))
       return res.status(400).json({ error: `productos[${i}]: "observaciones" debe ser un texto de hasta 255 caracteres.` });
     if (!producto_id || !Number.isInteger(producto_id) || producto_id <= 0)
@@ -213,7 +216,8 @@ const addProductos = async (req, res) => {
   let productosConDatos;
   try {
     productosConDatos = [];
-    for (const { producto_id, cantidad, observaciones } of productos) {
+    const conLotes = (await Funciones.estaActiva('STK-LOTES')) && (await Modulos.estaInstalado('stock')); // sin eso el campo no se ofrece
+    for (const { producto_id, cantidad, observaciones, lote_indicado } of productos) {
       const [rows] = await conn.query(
         'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE id = ?',
         [producto_id]
@@ -233,6 +237,7 @@ const addProductos = async (req, res) => {
         descripcion: rows[0].descripcion,
         precio_unitario: Number(rows[0].precio),
         observaciones: observaciones?.trim() || null,
+        lote_indicado: conLotes ? lote_indicado?.trim() || null : null,
       });
     }
   } catch (err) {
@@ -356,7 +361,7 @@ const cerrarPedido = async (req, res) => {
   } catch (err) {
     await conn.rollback();
     await Venta.liberarCompromiso(idCompromiso);
-    if (err.codigo === 'SIN_DISPONIBLE' || err.codigo === 'STOCK_NO_RESPONDE') return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
+    if (['SIN_DISPONIBLE', 'STOCK_NO_RESPONDE', 'LOTE_NO_DISPONIBLE'].includes(err.codigo)) return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
     res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
   } finally {

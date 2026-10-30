@@ -55,7 +55,7 @@ const metodoResumen = (pagos) => (pagos.length > 1 ? 'mixto' : pagos[0].forma);
 // modo de descuento del artículo. `items`: filas con producto_id y cantidad, en el orden de la venta (la posición es la línea).
 const publicarDescuento = async (conn, { docTipo, docIdGlobal, items, userId, solicitud, noFiscal = false, idCompromiso = null }) => Mensajeria.publicar(conn, {
   origen: 'ventas', destino: 'stock', tipo: 'descuento_stock', docTipo, docIdGlobal, userId, solicitud,
-  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad })), no_fiscal: noFiscal, user_id: userId ?? null, id_compromiso: idCompromiso },
+  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null })), no_fiscal: noFiscal, user_id: userId ?? null, id_compromiso: idCompromiso },
 });
 
 // Compromiso de venta antes de confirmar (Ventas RN63): pide a Stock, con timeout de 3 s, comprometer la línea vendida. Solo
@@ -69,6 +69,7 @@ const comprometerStock = async (items, { idSolicitud, userId, autorizar }) => {
     if (!a?.ok) throw Object.assign(new Error('Stock no respondió: el cierre necesita la autorización de un supervisor.'), { status: 409, codigo: 'STOCK_NO_RESPONDE' });
     return null;
   }
+  if (r.valor.lote_no_disponible) throw Object.assign(new Error(`Lote no disponible: ${r.valor.lote_no_disponible.map((l) => `${l.lote} (${l.motivo})`).join('; ')}. Elegí otro lote o dejá que se asigne por FEFO.`), { status: 409, codigo: 'LOTE_NO_DISPONIBLE', detalle: r.valor.lote_no_disponible });
   if (!r.valor.ok) throw Object.assign(new Error(`Sin disponible: ${r.valor.sin_disponible.map((s) => `${s.nombre} (${s.deposito}): quedan ${s.disponible}, hacen falta ${s.requerido}`).join('; ')}.`), { status: 409, codigo: 'SIN_DISPONIBLE', detalle: r.valor.sin_disponible });
   return r.valor.id_compromiso;
 };

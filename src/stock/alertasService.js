@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const Notificacion = require('../models/notificacionModel');
+const Parametro = require('../models/parametroModel');
+const Lotes = require('./loteService');
 
 // Alertas de Stock por el Centro de Notificaciones (Stock RF16). Cada alerta tiene una clave: existe una sola vez mientras
 // siga abierta y se resuelve sola cuando la situación se corrige.
@@ -45,6 +47,20 @@ const evaluar = async () => {
         await Notificacion.crear({ modulo: 'stock', tipo: 'stock_negativo', severidad: 'alta', roles: ROLES, clave, mensaje: `${it.nombre} quedó con saldo negativo (${Number(it.stock)}): revisá el descuento o ajustalo.` });
       } else await Notificacion.resolverPorClave(clave, 'El saldo ya no es negativo');
     }
+  }
+  // Lotes vencidos o que vencen dentro de N días (STK-LOTES). Una alerta por lote, hasta que se agota o se retira.
+  if (await Lotes.habilitado()) {
+    const dias = (await Parametro.todos()).lotes_dias_alerta ?? 3;
+    const vigentes = new Set();
+    for (const l of await Lotes.proximosAVencer(dias)) {
+      const clave = `lote-vence:${l.id}:${l.deposito_id}`;
+      vigentes.add(clave);
+      abiertas++;
+      await Notificacion.crear({ modulo: 'stock', tipo: 'lote_por_vencer', severidad: l.vencido ? 'alta' : 'media', roles: ROLES, clave,
+        mensaje: `${l.nombre}, lote ${l.codigo} en ${l.deposito}: ${l.saldo} ${l.vencido ? 'vencido' : 'vence'} el ${l.fecha_vencimiento}.` });
+    }
+    const [abiertasLotes] = await pool.query("SELECT clave FROM notificaciones WHERE tipo = 'lote_por_vencer' AND estado <> 'resuelta'");
+    for (const a of abiertasLotes) if (!vigentes.has(a.clave)) await Notificacion.resolverPorClave(a.clave, 'El lote se agotó o se retiró');
   }
   return abiertas;
 };

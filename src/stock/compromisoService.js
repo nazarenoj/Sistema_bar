@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const R = require('../reservas/servicio');
 const Deposito = require('../models/depositoModel');
 const Receta = require('./recetaService');
+const Lotes = require('./loteService');
 const { idGlobal } = require('../utils/idGlobal');
 
 // Compromiso de venta, "última unidad" (Stock RF36, RN59, RN60; Ventas RN63). Ventas pide, antes de confirmar, un
@@ -11,6 +12,8 @@ const { idGlobal } = require('../utils/idGlobal');
 const recursoDe = (tipo, id, deposito) => `${tipo}:${id}:${deposito}`;
 
 const fisico = async (conn, tipo, id, deposito) => {
+  // Con control de lote solo cuenta lo utilizable: nada de lo bloqueado ni de lo vencido que el ítem no admite.
+  if (await Lotes.controla(conn, { tipo, id })) return Lotes.fisicoUtil(conn, { tipo, id }, deposito);
   const [[r]] = await conn.query(`SELECT COALESCE(SUM(cantidad), 0) AS s FROM stock_movimientos WHERE ${tipo}_id = ? AND deposito_id = ?`, [id, deposito]);
   return Number(r.s);
 };
@@ -51,6 +54,17 @@ const reservasDe = async (idCompromiso, conn = pool) =>
 // [{ nombre, deposito, requerido, disponible }] con lo que no alcanza. Con la misma idSolicitud devuelve el mismo compromiso.
 // `reemplazaA`: el compromiso anterior (cambió la cantidad o venció) se libera y se toma el nuevo.
 const comprometer = async ({ idSolicitud, lineas, reemplazaA = null, userId = null }) => {
+  // Lote indicado en la línea (Ventas RF48): si no sirve, se rechaza informando el motivo para elegir otro o dejar FEFO (EX57).
+  const loteNo = [];
+  for (const l of lineas.filter((x) => x.lote_indicado)) {
+    const [[p]] = await pool.query('SELECT sector_id FROM productos WHERE id = ?', [l.producto_id]);
+    const dep = await Deposito.depositoDeSector(p?.sector_id ?? null, pool);
+    const item = { tipo: 'producto', id: l.producto_id };
+    if (!(await Lotes.controla(pool, item))) continue; // un ítem sin control de lote ignora el lote indicado
+    const motivo = await Lotes.motivoNoDisponible(pool, item, dep.id, l.lote_indicado, l.cantidad);
+    if (motivo) loteNo.push({ linea: l.linea, producto_id: l.producto_id, lote: l.lote_indicado, motivo });
+  }
+  if (loteNo.length) return { ok: false, lote_no_disponible: loteNo };
   const [[previa]] = await pool.query('SELECT contenido FROM reservas WHERE id_solicitud = ?', [`${idSolicitud}:0`]);
   if (previa) {
     const id = JSON.parse(previa.contenido).compromiso;
