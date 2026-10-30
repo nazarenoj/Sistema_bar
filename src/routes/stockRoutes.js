@@ -2,6 +2,7 @@ const { Router } = require('express');
 const pool = require('../config/db');
 const Mov = require('../stock/movimientoService');
 const Costos = require('../stock/costoService');
+const Compromiso = require('../stock/compromisoService');
 const Parametro = require('../models/parametroModel');
 const soloAdministrador = require('../middleware/soloAdministrador');
 const { requierePermiso, validarAutorizacion } = require('../middleware/requierePermiso');
@@ -66,6 +67,37 @@ router.put('/valuacion', soloAdministrador, manejar(async (req, res) => {
   await auditar(req, { modulo: 'stock', accion: 'cambio_metodo_valuacion', entidad: 'parametro', entidad_id: 'metodo_valuacion', detalle: `${anterior} -> ${req.body.metodo}` });
   res.json({ metodo: req.body.metodo, anterior });
 }));
+
+// Si un artículo del catálogo controla stock y si admite negativo (RF01). Por defecto se vende igual; el control estricto
+// (que bloquea con "Sin disponible", RN63) se activa por artículo.
+router.get('/configuracion/producto/:id', VER, manejar(async (req, res) => {
+  const [[p]] = await pool.query('SELECT id, nombre, tipo, controla_stock, permite_negativo FROM productos WHERE id = ?', [req.params.id]);
+  return p ? res.json(p) : res.status(404).json({ error: 'Artículo no encontrado.' });
+}));
+router.put('/configuracion/producto/:id', REGISTRAR, manejar(async (req, res) => {
+  for (const c of ['controla_stock', 'permite_negativo']) if (req.body[c] !== undefined && typeof req.body[c] !== 'boolean') return res.status(400).json({ error: `"${c}" debe ser true o false.` });
+  const [[p]] = await pool.query('SELECT id FROM productos WHERE id = ?', [req.params.id]);
+  if (!p) return res.status(404).json({ error: 'Artículo no encontrado.' });
+  for (const c of ['controla_stock', 'permite_negativo']) if (req.body[c] !== undefined) await pool.query(`UPDATE productos SET ${c} = ? WHERE id = ?`, [req.body[c] ? 1 : 0, p.id]);
+  res.json((await pool.query('SELECT id, nombre, tipo, controla_stock, permite_negativo FROM productos WHERE id = ?', [p.id]))[0][0]);
+}));
+
+// Compromiso de venta (RF36) para quien lo pida sin pasar por el cierre (por ejemplo, la comanda). Cuerpo: id_solicitud,
+// lineas [{ producto_id, cantidad }], reemplaza_a (el compromiso anterior, si cambió la cantidad o venció).
+router.post('/compromisos', requierePermiso('ventas.pedidos.operar'), manejar(async (req, res) => {
+  const { id_solicitud: idSolicitud, lineas, reemplaza_a: reemplazaA } = req.body;
+  if (typeof idSolicitud !== 'string' || !idSolicitud || !Array.isArray(lineas) || !lineas.length || lineas.some((l) => !Number.isInteger(l.producto_id) || !(l.cantidad > 0)))
+    return res.status(400).json({ error: 'Indicá id_solicitud y lineas [{ producto_id, cantidad > 0 }].' });
+  const r = await Compromiso.comprometer({ idSolicitud, lineas, reemplazaA, userId: usuario(req) });
+  res.status(r.ok ? 201 : 409).json(r);
+}));
+router.post('/compromisos/:id/renovar', requierePermiso('ventas.pedidos.operar'), async (req, res, next) => {
+  try { res.json(await Compromiso.renovar(req.params.id)); } catch (err) {
+    if (err.codigo) return res.status(409).json({ error: err.message, codigo: err.codigo });
+    next(err);
+  }
+});
+router.delete('/compromisos/:id', requierePermiso('ventas.pedidos.operar'), manejar(async (req, res) => res.json({ liberados: await Compromiso.liberar(req.params.id) })));
 
 router.get('/mermas', VER, manejar(async (req, res) => res.json(await Mov.mermas(req.query))));
 

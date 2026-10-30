@@ -58,6 +58,8 @@ test('Stock.RF03: la venta descuenta del depósito del sector y la devolución l
   const barra = (await api('POST', '/api/sectores', { token, body: { nombre: 'Barra' } })).json;
   await api('PUT', `/api/depositos/sectores/${barra.id}`, { token, body: { deposito_id: vitrina.id } });
   const cafe = await insumo('Café en grano', 'kg', 10);
+  // La barra descuenta de Vitrina: el stock tiene que estar ahí (el compromiso de venta mira el depósito del sector).
+  assert.equal((await api('POST', '/api/stock/transferencias', { token, body: { origen_id: principal.id, destino_id: vitrina.id, lineas: [{ item: { tipo: 'insumo', id: cafe.id }, cantidad: 10 }] } })).status, 201);
   const espresso = (await api('POST', '/api/productos', { token, body: { nombre: 'Espresso', tipo: 'elaborado', precio: 100, sector_id: barra.id } })).json;
   await api('POST', `/api/productos/${espresso.id}/insumos`, { token, body: { insumo_id: cafe.id, cantidad_consumida: 0.02 } });
   const mesa = (await api('POST', '/api/mesas', { token, body: { numero_mesa: ++n, salon_id: 1 } })).json;

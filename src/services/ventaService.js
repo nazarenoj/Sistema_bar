@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const Mensajeria = require('../mensajeria/servicio');
+const llamar = require('../modulos/llamar');
+const puertos = require('../modulos/puertos');
 const Funciones = require('../funciones/servicio');
 const { idGlobal } = require('../utils/idGlobal');
 const Caea = require('./caeaService');
@@ -51,14 +53,31 @@ const metodoResumen = (pagos) => (pagos.length > 1 ? 'mixto' : pagos[0].forma);
 
 // Mensaje de descuento de stock (Stock RF07): trae solo la línea vendida, nunca los componentes; Stock la expande según el
 // modo de descuento del artículo. `items`: filas con producto_id y cantidad, en el orden de la venta (la posición es la línea).
-const publicarDescuento = async (conn, { docTipo, docIdGlobal, items, userId, solicitud, noFiscal = false }) => Mensajeria.publicar(conn, {
+const publicarDescuento = async (conn, { docTipo, docIdGlobal, items, userId, solicitud, noFiscal = false, idCompromiso = null }) => Mensajeria.publicar(conn, {
   origen: 'ventas', destino: 'stock', tipo: 'descuento_stock', docTipo, docIdGlobal, userId, solicitud,
-  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad })), no_fiscal: noFiscal, user_id: userId ?? null },
+  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad })), no_fiscal: noFiscal, user_id: userId ?? null, id_compromiso: idCompromiso },
 });
+
+// Compromiso de venta antes de confirmar (Ventas RN63): pide a Stock, con timeout de 3 s, comprometer la línea vendida. Solo
+// bloquean los ítems que no admiten stock negativo. "Sin disponible" no se cierra; si Stock no responde, la política es abrir con
+// la autorización de un supervisor (`autorizar`). Devuelve el ID_Compromiso (o null si no hizo falta).
+const comprometerStock = async (items, { idSolicitud, userId, autorizar }) => {
+  const r = await llamar(3, 'ventas', async () => (await puertos.obtener('stock')).comprometer(items, { idSolicitud: `${idSolicitud}:compromiso`, userId }));
+  if (r.fallo) {
+    if (r.degradado) return null; // Stock no está instalado: se vende sin control de existencias (RN01)
+    const a = autorizar ? await autorizar() : null;
+    if (!a?.ok) throw Object.assign(new Error('Stock no respondió: el cierre necesita la autorización de un supervisor.'), { status: 409, codigo: 'STOCK_NO_RESPONDE' });
+    return null;
+  }
+  if (!r.valor.ok) throw Object.assign(new Error(`Sin disponible: ${r.valor.sin_disponible.map((s) => `${s.nombre} (${s.deposito}): quedan ${s.disponible}, hacen falta ${s.requerido}`).join('; ')}.`), { status: 409, codigo: 'SIN_DISPONIBLE', detalle: r.valor.sin_disponible });
+  return r.valor.id_compromiso;
+};
+
+const liberarCompromiso = async (id) => { if (id) await (await puertos.obtener('stock')).liberarCompromiso(id).catch(() => {}); };
 
 // Registra la venta de una cuenta cerrada. Va con la `conn` de la transacción del cierre: si el cierre
 // se revierte, no queda ni la venta ni sus mensajes. Un efecto que falle después nunca revierte la venta.
-const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null }) => {
+const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null }) => {
   const id_global = await idGlobal();
   // Un no fiscal tiene numeración propia, diferenciada de la fiscal, y queda "pendiente de facturación" (RF12, RN84).
   const numeroNoFiscal = tipoNoFiscal ? await Caea.siguienteNumero(`NF:${tipoNoFiscal}`, conn) : null;
@@ -79,7 +98,7 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
       solicitud: idSolicitud, contenido: { total, pagos, items: detalle },
     });
   }
-  await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal });
+  await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso });
   return { id: r.insertId, id_global, numero_no_fiscal: numeroNoFiscal };
 };
 
@@ -187,4 +206,4 @@ const margen = async ({ desde, hasta } = {}) => {
   }).sort((a, b) => b.margen - a.margen);
 };
 
-module.exports = { margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+module.exports = { comprometerStock, liberarCompromiso, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };

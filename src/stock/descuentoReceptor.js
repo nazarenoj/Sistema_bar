@@ -2,6 +2,7 @@ const M = require('../mensajeria/servicio');
 const Mov = require('./movimientoService');
 const Receta = require('./recetaService');
 const Deposito = require('../models/depositoModel');
+const Compromiso = require('./compromisoService');
 
 // Stock como receptor idempotente de los mensajes de Ventas (Stock RN50, RN51, RF07, RF08): descuento por venta y
 // reingreso por anulación o devolución. La idempotencia es por (ID_Operacion, línea, componente): cada movimiento
@@ -29,6 +30,8 @@ const unaVez = async (conn, mov) => {
 // componentes), que Ventas guarda como Costo_Aplicado con origen "Movimiento de Stock" (RN63).
 M.registrarReceptor('stock', 'descuento_stock', async (conn, c, ctx) => {
   let aplicados = 0;
+  // El descuento consume el compromiso vigente de la venta (RN59): el mismo hueco no se cuenta dos veces.
+  if (c.id_compromiso) await Compromiso.consumir(conn, c.id_compromiso);
   const lineasCosto = [];
   for (const it of c.items) {
     const [[p]] = await conn.query('SELECT sector_id FROM productos WHERE id = ?', [it.producto_id]);

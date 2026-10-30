@@ -5,6 +5,7 @@ const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
 const Factura = require('../models/facturaModel');
 const Venta = require('../services/ventaService');
+const { validarAutorizacion } = require('../middleware/requierePermiso');
 const Mensajeria = require('../mensajeria/servicio');
 const Caea = require('../services/caeaService');
 const afipService = require('../services/afipService');
@@ -88,7 +89,7 @@ const cerrarCuenta = async (req, res) => {
   }
 
   const conn = await pool.getConnection();
-  let mesa, pedidoIds, totalAcumulado, factura, venta, metodoPago;
+  let mesa, pedidoIds, totalAcumulado, factura, venta, metodoPago, idCompromiso;
   try {
     await conn.beginTransaction();
 
@@ -124,6 +125,9 @@ const cerrarCuenta = async (req, res) => {
 
     const items = await Pedido.getItemsByPedidoIds(pedidoIds, conn);
 
+    // "Sin disponible" no se cierra (RN63); si Stock no responde en 3 s, solo con la autorización de un supervisor.
+    idCompromiso = await Venta.comprometerStock(items, { idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, autorizar: () => validarAutorizacion(req, 'ventas.cuenta.cobrar') });
+
     await Pedido.cerrarPedidosMesa(id, conn);
     const pagos = await Venta.validarPagos(conn, Array.isArray(req.body.pagos) ? req.body.pagos : [{ forma: metodo_pago, importe: totalAcumulado }], totalAcumulado);
     metodoPago = Venta.metodoResumen(pagos);
@@ -132,7 +136,7 @@ const cerrarCuenta = async (req, res) => {
     venta = await Venta.registrar(conn, {
       mesa_id: id, sesion_apertura: pedidosActivos[0].sesion_apertura, items, total: totalAcumulado, pagos,
       idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, tipoNoFiscal,
-      modalidad: pedidosActivos[0].modalidad, mozoId: pedidosActivos[0].mozo_id,
+      modalidad: pedidosActivos[0].modalidad, mozoId: pedidosActivos[0].mozo_id, idCompromiso,
     });
     // La mesa sigue "ocupada": recién se libera cuando se confirma que se imprimió/descargó el
     // comprobante (ver confirmarTicket), para no dejar la mesa disponible sin haberlo entregado.
@@ -164,6 +168,8 @@ const cerrarCuenta = async (req, res) => {
     Mensajeria.despertar();
   } catch (err) {
     await conn.rollback();
+    await Venta.liberarCompromiso(idCompromiso); // la venta no se confirmó: lo comprometido se libera
+    if (err.codigo === 'SIN_DISPONIBLE' || err.codigo === 'STOCK_NO_RESPONDE') return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
     if (err instanceof Venta.PagoInvalido) return res.status(400).json({ error: err.message, codigo: 'PAGO_INVALIDO' });
     if (err.codigo === 'SIN_CAEA') return res.status(409).json({ error: err.message, codigo: 'SIN_CAEA' });
     if (err.status === 400) return res.status(400).json({ error: err.message, codigo: 'RECEPTOR_INVALIDO' });

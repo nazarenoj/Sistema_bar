@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const Deposito = require('../models/depositoModel');
 const Presentacion = require('../models/presentacionModel');
 const Costos = require('./costoService');
+const Compromiso = require('./compromisoService');
 const { idGlobal } = require('../utils/idGlobal');
 
 // Movimientos y kardex (Stock RF04, RF12, RF13, RF18, RN02). Todo cambio de existencias es un movimiento de solo
@@ -206,19 +207,25 @@ const saldo = async (item, deposito_id, conn = pool) => {
   return Number(r.saldo);
 };
 
-// Existencias por ítem y depósito (físico). Reservado y comprometido llegan con C5.
+// Existencias por ítem y depósito: físico, comprometido por ventas en curso y disponible = físico − comprometido (RF18).
+// El reservado de Ventas Online no existe sin ese módulo.
 const existencias = async ({ deposito_id, tipo } = {}) => {
   const donde = [];
   const params = [];
   if (deposito_id) { donde.push('m.deposito_id = ?'); params.push(deposito_id); }
   const filtro = donde.length ? `WHERE ${donde.join(' AND ')}` : '';
   const filas = [];
+  const tomados = await Compromiso.comprometidos();
   for (const t of tipo ? [tipo] : ['insumo', 'producto']) {
     const [rows] = await pool.query(
       `SELECT '${t}' AS tipo, x.id AS item_id, x.nombre, ${t === 'insumo' ? 'x.unidad' : "'unidad'"} AS unidad, d.id AS deposito_id, d.nombre AS deposito, SUM(m.cantidad) AS fisico
        FROM stock_movimientos m JOIN ${TABLA[t]} x ON x.id = m.${COL[t]} JOIN depositos d ON d.id = m.deposito_id ${filtro ? `${filtro} AND` : 'WHERE'} m.${COL[t]} IS NOT NULL
        GROUP BY x.id, x.nombre, d.id, d.nombre ${t === 'insumo' ? ', x.unidad' : ''} ORDER BY x.nombre, d.nombre`, params);
-    filas.push(...rows.map((r) => ({ ...r, fisico: Number(r.fisico) })));
+    filas.push(...rows.map((r) => {
+      const fisico = Number(r.fisico);
+      const comprometido = tomados.get(Compromiso.recursoDe(t, r.item_id, r.deposito_id)) ?? 0;
+      return { ...r, fisico, comprometido, disponible: fisico - comprometido };
+    }));
   }
   return filas;
 };

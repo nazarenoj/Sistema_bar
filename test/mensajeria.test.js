@@ -47,7 +47,16 @@ const emitir = async (docId, { tipo = 'descuento', secuencia = 1, contenido = {}
   } finally { conn.release(); }
 };
 const msg = async (docId, tipo = 'descuento') => (await pool.query('SELECT * FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = ?', [docId, tipo]))[0][0];
-const entregar = async () => M.procesarPendientes();
+// La entrega en segundo plano (despertar) es global: toma cualquier mensaje pendiente, también el de esta prueba. Antes de
+// entregar a mano se espera a que no haya nada reservado en curso; si no, el entregar() lo saltaría (está reservado a propósito).
+const quieto = async () => {
+  for (let i = 0; i < 150; i++) {
+    const [[{ n }]] = await pool.query("SELECT COUNT(*) AS n FROM mensajes_integracion WHERE estado = 'enviado'");
+    if (!n) return;
+    await new Promise((res) => setTimeout(res, 20));
+  }
+};
+const entregar = async () => { await quieto(); return M.procesarPendientes(); };
 // `despertar` (que llaman reintentar y reenviar) entrega en segundo plano y reserva el mensaje: un `entregar()` en paralelo
 // lo salta a propósito. Se espera el estado final, insistiendo mientras no llegue, en vez de contar milisegundos.
 const hasta = async (docId, tipo = 'descuento', estado = 'confirmado') => {

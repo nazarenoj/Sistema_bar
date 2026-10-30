@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const Mesa = require('../models/mesaModel');
 const Pedido = require('../models/pedidoModel');
 const Venta = require('../services/ventaService');
+const { validarAutorizacion } = require('../middleware/requierePermiso');
 const Mensajeria = require('../mensajeria/servicio');
 const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
@@ -307,6 +308,7 @@ const cerrarPedido = async (req, res) => {
   if (isNaN(id))
     return res.status(400).json({ error: 'El parámetro "id" debe ser un entero válido.' });
 
+  let idCompromiso = null;
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -327,8 +329,9 @@ const cerrarPedido = async (req, res) => {
       return res.status(400).json({ error: 'No se puede cerrar un pedido sin productos. Eliminalo en su lugar.' });
     }
 
+    idCompromiso = await Venta.comprometerStock(items, { idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, autorizar: () => validarAutorizacion(req, 'ventas.cuenta.cobrar') });
     // El descuento de stock viaja como mensaje en la misma transacción que el cierre de la silla.
-    await Venta.publicarDescuento(conn, { docTipo: 'pedido', docIdGlobal: pedido.id_global, items, userId: req.usuario?.sub ?? null });
+    await Venta.publicarDescuento(conn, { docTipo: 'pedido', docIdGlobal: pedido.id_global, items, userId: req.usuario?.sub ?? null, idCompromiso });
     await Pedido.cerrarPedidoIndividual(id, conn);
 
     // Si era la última silla activa de la mesa, la cuenta quedó completa: la mesa sigue "ocupada"
@@ -352,6 +355,8 @@ const cerrarPedido = async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
+    await Venta.liberarCompromiso(idCompromiso);
+    if (err.codigo === 'SIN_DISPONIBLE' || err.codigo === 'STOCK_NO_RESPONDE') return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
     res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
   } finally {
