@@ -31,6 +31,7 @@ const PERMISOS = [
   { id: 'stock.temperaturas.configurar', modulo: 'stock', funcion: 'STK-TEMP', descripcion: 'Definir puntos de control, rangos, frecuencias y listas de verificación' },
   { id: 'stock.series.gestionar', modulo: 'stock', funcion: 'STK-SERIE', descripcion: 'Ingresar, comprometer, vender y devolver series y consultar su historial' },
   { id: 'stock.series.baja', modulo: 'stock', descripcion: 'Dar de baja o convertir series (con supervisor)' },
+  { id: 'stock.etiquetas.gestionar', modulo: 'stock', funcion: 'STK-ETIQUETAS', descripcion: 'Imprimir etiquetas, definir plantillas y códigos de peso' },
   { id: 'stock.insumos.ver', modulo: 'stock', descripcion: 'Ver insumos' },
   { id: 'stock.insumos.editar', modulo: 'stock', descripcion: 'Crear y modificar insumos' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

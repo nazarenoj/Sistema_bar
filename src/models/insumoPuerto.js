@@ -4,6 +4,7 @@ const Costos = require('../stock/costoService');
 const Compromiso = require('../stock/compromisoService');
 require('../stock/descuentoReceptor'); // Stock aplica los mensajes de descuento y reingreso de Ventas
 const Alergenos = require('../stock/alergenoService');
+const Etiquetas = require('../stock/etiquetaService');
 const puertos = require('../modulos/puertos');
 
 // Implementación de Stock del puerto "stock" que define Ventas (Índice B.2): el descuento de
@@ -21,5 +22,7 @@ puertos.registrar('stock', {
   liberarCompromiso: (id) => Compromiso.liberar(id),
   // Alérgenos de una línea de venta (RF39): { alergenos, incompletos }; Ventas los muestra y los publica.
   alergenosLinea: (productoId, opciones) => Alergenos.linea(productoId, opciones),
+  // Etiqueta propia de peso (RN82, EX59): Stock valida prefijo y verificador y devuelve artículo y peso.
+  validarEtiqueta: (codigo) => Etiquetas.validar(codigo),
   saldoInicial: (item, cantidad, conn, userId) => Mov.saldoInicial(item, cantidad, conn, userId),
 });
