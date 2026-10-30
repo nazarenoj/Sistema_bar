@@ -25,6 +25,8 @@ const PERMISOS = [
   { id: 'stock.produccion.gestionar', modulo: 'stock', funcion: 'STK-PRODUCCION', descripcion: 'Crear, ajustar y confirmar órdenes de producción y ver la ficha técnica' },
   { id: 'stock.alergenos.gestionar', modulo: 'stock', funcion: 'STK-ALERGENOS', descripcion: 'Administrar el catálogo de alérgenos y declararlos en insumos y artículos' },
   { id: 'stock.alergenos.quitar', modulo: 'stock', funcion: 'STK-ALERGENOS', descripcion: 'Quitar un alérgeno derivado de un artículo (con motivo auditado)' },
+  { id: 'stock.trazabilidad.ver', modulo: 'stock', funcion: 'STK-TRAZA', descripcion: 'Consultar la trazabilidad de un lote y los retiros' },
+  { id: 'stock.trazabilidad.retirar', modulo: 'stock', funcion: 'STK-TRAZA', descripcion: 'Retirar y liberar un lote (con supervisor)' },
   { id: 'stock.insumos.ver', modulo: 'stock', descripcion: 'Ver insumos' },
   { id: 'stock.insumos.editar', modulo: 'stock', descripcion: 'Crear y modificar insumos' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },
