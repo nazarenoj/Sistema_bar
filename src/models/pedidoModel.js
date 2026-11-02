@@ -72,9 +72,9 @@ const getItemsByPedidoIds = async (pedidoIds, conn = pool) => {
   if (!pedidoIds.length) return [];
   const placeholders = pedidoIds.map(() => '?').join(',');
   const [rows] = await conn.query(
-    `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado, lote_indicado, alergenos_linea, alergenos_pendientes,
+    `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado, lote_indicado, alergenos_linea, alergenos_pendientes, importe_descuento,
             (SELECT l.nombre FROM listas_precio l WHERE l.id = pedido_productos.lista_precio_id) AS lista,
-            (cantidad * precio_unitario) AS subtotal
+            (cantidad * precio_unitario - importe_descuento) AS subtotal
      FROM pedido_productos
      WHERE pedido_id IN (${placeholders})
      ORDER BY id ASC`,
@@ -87,7 +87,7 @@ const getTotalAcumulado = async (pedidoIds, conn) => {
   if (!pedidoIds.length) return 0;
   const placeholders = pedidoIds.map(() => '?').join(',');
   const [rows] = await conn.query(
-    `SELECT COALESCE(SUM(cantidad * precio_unitario), 0) AS total
+    `SELECT COALESCE(SUM(cantidad * precio_unitario - importe_descuento), 0) AS total
      FROM pedido_productos
      WHERE pedido_id IN (${placeholders})`,
     pedidoIds
@@ -249,9 +249,9 @@ const getEstadisticas = async (tipo, fecha) => {
 
 const getItems = async (pedido_id, conn = pool) => {
   const [rows] = await conn.query(
-    `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado, lote_indicado, alergenos_linea, alergenos_pendientes,
+    `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado, lote_indicado, alergenos_linea, alergenos_pendientes, importe_descuento,
             (SELECT l.nombre FROM listas_precio l WHERE l.id = pedido_productos.lista_precio_id) AS lista,
-            (cantidad * precio_unitario) AS subtotal
+            (cantidad * precio_unitario - importe_descuento) AS subtotal
      FROM pedido_productos
      WHERE pedido_id = ?
      ORDER BY id ASC`,
@@ -331,7 +331,7 @@ const cerrarPedidoIndividual = async (pedido_id, conn) => {
   await conn.query(
     `UPDATE pedidos p
      LEFT JOIN (
-       SELECT pedido_id, SUM(cantidad * precio_unitario) AS subtotal
+       SELECT pedido_id, SUM(cantidad * precio_unitario - importe_descuento) AS subtotal
        FROM pedido_productos
        WHERE pedido_id = ?
        GROUP BY pedido_id
@@ -349,7 +349,7 @@ const cerrarPedidosMesa = async (mesa_id, conn) => {
   await conn.query(
     `UPDATE pedidos p
      LEFT JOIN (
-       SELECT pedido_id, SUM(cantidad * precio_unitario) AS subtotal
+       SELECT pedido_id, SUM(cantidad * precio_unitario - importe_descuento) AS subtotal
        FROM pedido_productos
        GROUP BY pedido_id
      ) pp ON p.id = pp.pedido_id

@@ -11,6 +11,7 @@ const Funciones = require('../funciones/servicio');
 const Modificadores = require('../services/modificadorService');
 const AlergenosVenta = require('../services/alergenoVentaService');
 const Listas = require('../services/listaPrecioService');
+const Promociones = require('../services/promocionService');
 const Modulos = require('../modulos/registro');
 const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
 const { esFechaISO } = require('../utils/validaciones');
@@ -364,6 +365,7 @@ const cerrarPedido = async (req, res) => {
       return res.status(400).json({ error: 'Este pedido ya está cerrado.' });
     }
 
+    await Promociones.aplicar(conn, [id], { clave: `pedido:${id}` });
     const items = await Pedido.getItems(id, conn);
     if (!items.length) {
       await conn.rollback();

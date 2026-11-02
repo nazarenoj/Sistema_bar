@@ -67,10 +67,12 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
       const l = venta.detalle[linea];
       if (!l || !Number.isInteger(cantidad) || cantidad <= 0) throw new DevolucionInvalida('Ítem de devolución inválido.');
       if (cantidad > l.cantidad - (devuelto.get(linea) ?? 0)) throw new DevolucionInvalida(`No se puede devolver más de lo vendido y no devuelto de "${l.nombre}".`);
-      return { linea, producto_id: l.producto_id, nombre: l.nombre, cantidad, precio_unitario: l.precio_unitario };
+      // Lo devuelto es el precio efectivamente cobrado: el importe de la línea menos su descuento de promoción, en proporción (RN34).
+      const importe = Math.round((cantidad * l.precio_unitario - (l.importe_descuento ?? 0) * cantidad / l.cantidad) * 100) / 100;
+      return { linea, producto_id: l.producto_id, nombre: l.nombre, cantidad, precio_unitario: Math.round(importe / cantidad * 100) / 100, importe };
     });
     if (new Set(itemsDev.map((i) => i.linea)).size !== itemsDev.length) throw new DevolucionInvalida('Hay líneas repetidas.');
-    const total = itemsDev.reduce((a, i) => a + centavos(i.precio_unitario) * i.cantidad, 0) / 100;
+    const total = itemsDev.reduce((a, i) => a + centavos(i.importe), 0) / 100;
 
     // Reintegro: el reparto original salvo que el usuario elija otro (RF49).
     reintegros = reintegro?.length ? reintegro : repartoOriginal(venta.pagos, venta.total, total);

@@ -5,6 +5,7 @@ const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
 const Factura = require('../models/facturaModel');
 const Venta = require('../services/ventaService');
+const Promociones = require('../services/promocionService');
 const { validarAutorizacion } = require('../middleware/requierePermiso');
 const Mensajeria = require('../mensajeria/servicio');
 const Caea = require('../services/caeaService');
@@ -117,6 +118,9 @@ const cerrarCuenta = async (req, res) => {
     }
 
     pedidoIds = pedidosActivos.map(p => p.id);
+    // Las promociones se evalúan al cobrar y dejan su descuento en cada línea (Ventas RN33); con pago mixto no rige la de forma de pago.
+    const formaPromo = Array.isArray(req.body.pagos) ? (req.body.pagos.length === 1 ? req.body.pagos[0].forma : null) : metodo_pago;
+    await Promociones.aplicar(conn, pedidoIds, { formaPago: formaPromo, clave: `cuenta:${id}:${pedidosActivos[0].sesion_apertura}` });
     totalAcumulado = await Pedido.getTotalAcumulado(pedidoIds, conn);
     // Las reglas del receptor (tipo A, tope de consumidor final) se miran antes de cerrar la cuenta, no después.
     if (facturar && modalidad === 'caea' && !(await Caea.vigente(afipConfig.puntoVenta)))

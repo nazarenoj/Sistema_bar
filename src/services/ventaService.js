@@ -83,7 +83,9 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
   // Un no fiscal tiene numeración propia, diferenciada de la fiscal, y queda "pendiente de facturación" (RF12, RN84).
   const numeroNoFiscal = tipoNoFiscal ? await Caea.siguienteNumero(`NF:${tipoNoFiscal}`, conn) : null;
   const snap = await Funciones.instantanea('pedido');
-  const detalle = items.map((i) => ({ producto_id: i.producto_id, nombre: i.nombre, cantidad: i.cantidad, precio_unitario: Number(i.precio_unitario), ...(i.modificadores && { modificadores: i.modificadores }), ...(i.alergenos && { alergenos: i.alergenos }), ...(i.lista && { lista: i.lista }) }));
+  const [promos] = items.length ? await conn.query('SELECT item_id, nombre, importe FROM promociones_aplicadas WHERE item_id IN (?)', [items.map((i) => i.id)]) : [[]];
+  const detalle = items.map((i) => ({ producto_id: i.producto_id, nombre: i.nombre, cantidad: i.cantidad, precio_unitario: Number(i.precio_unitario), ...(i.modificadores && { modificadores: i.modificadores }), ...(i.alergenos && { alergenos: i.alergenos }), ...(i.lista && { lista: i.lista }),
+    ...(Number(i.importe_descuento) > 0 && { importe_descuento: Number(i.importe_descuento), promociones: promos.filter((p) => p.item_id === i.id).map((p) => ({ nombre: p.nombre, importe: Number(p.importe) })) }) }));
   const [r] = await conn.query(
     'INSERT INTO ventas (id_global, mesa_id, sesion_apertura, total, detalle, id_solicitud, config_version, creado_por, condicion_fiscal, tipo_no_fiscal, numero_no_fiscal, modalidad, mozo_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [id_global, mesa_id, sesion_apertura, total, JSON.stringify(detalle), idSolicitud ?? null, snap.version, userId ?? null, tipoNoFiscal ? 'no_fiscal' : 'fiscal', tipoNoFiscal, numeroNoFiscal, modalidad, mozoId]
