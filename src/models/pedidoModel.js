@@ -24,7 +24,7 @@ const FACTURA_COLUMNAS = `
 
 const getById = async (id, conn = pool) => {
   const [rows] = await conn.query(
-    `SELECT p.*, m.numero_mesa, m.estado AS mesa_estado, ${HORA_CIERRE_MESA_SUBQUERY}, ${FACTURA_COLUMNAS}
+    `SELECT p.*, (SELECT l.nombre FROM listas_precio l WHERE l.id = p.lista_precio_id) AS lista_precio, m.numero_mesa, m.estado AS mesa_estado, ${HORA_CIERRE_MESA_SUBQUERY}, ${FACTURA_COLUMNAS}
      FROM pedidos p
      JOIN mesas m ON p.mesa_id = m.id
      ${FACTURA_JOIN}
@@ -73,6 +73,7 @@ const getItemsByPedidoIds = async (pedidoIds, conn = pool) => {
   const placeholders = pedidoIds.map(() => '?').join(',');
   const [rows] = await conn.query(
     `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado, lote_indicado, alergenos_linea, alergenos_pendientes,
+            (SELECT l.nombre FROM listas_precio l WHERE l.id = pedido_productos.lista_precio_id) AS lista,
             (cantidad * precio_unitario) AS subtotal
      FROM pedido_productos
      WHERE pedido_id IN (${placeholders})
@@ -96,10 +97,10 @@ const getTotalAcumulado = async (pedidoIds, conn) => {
 
 // `modificadores`: lo elegido en el ítem (VEN-MODIF), con su ajuste ya sumado a `precio_unitario` (Ventas RN41).
 const addProductos = async (pedido_id, productos, conn) => {
-  for (const { producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado, modificadores, alergenos } of productos) {
+  for (const { producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado, modificadores, alergenos, lista_precio_id } of productos) {
     const [r] = await conn.query(
-      'INSERT INTO pedido_productos (pedido_id, producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado, alergenos_linea, alergenos_pendientes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [pedido_id, producto_id, cantidad, nombre, descripcion ?? null, precio_unitario, observaciones ?? null, lote_indicado ?? null, alergenos ? JSON.stringify(alergenos.alergenos) : null, alergenos?.pendientes ? 1 : 0]
+      'INSERT INTO pedido_productos (pedido_id, producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado, alergenos_linea, alergenos_pendientes, lista_precio_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [pedido_id, producto_id, cantidad, nombre, descripcion ?? null, precio_unitario, observaciones ?? null, lote_indicado ?? null, alergenos ? JSON.stringify(alergenos.alergenos) : null, alergenos?.pendientes ? 1 : 0, lista_precio_id ?? null]
     );
     for (const m of modificadores ?? [])
       await conn.query('INSERT INTO pedido_item_modificadores (item_id, opcion_id, grupo_id, nombre, ajuste_precio_aplicado) VALUES (?, ?, ?, ?, ?)', [r.insertId, m.opcion_id, m.grupo_id, m.nombre, m.ajuste_precio_aplicado]);
@@ -249,6 +250,7 @@ const getEstadisticas = async (tipo, fecha) => {
 const getItems = async (pedido_id, conn = pool) => {
   const [rows] = await conn.query(
     `SELECT id, pedido_id, producto_id, nombre, descripcion, cantidad, precio_unitario, entregado, lote_indicado, alergenos_linea, alergenos_pendientes,
+            (SELECT l.nombre FROM listas_precio l WHERE l.id = pedido_productos.lista_precio_id) AS lista,
             (cantidad * precio_unitario) AS subtotal
      FROM pedido_productos
      WHERE pedido_id = ?

@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
 const Funciones = require('../funciones/servicio');
 const Modificadores = require('../services/modificadorService');
 const AlergenosVenta = require('../services/alergenoVentaService');
+const Listas = require('../services/listaPrecioService');
 const Modulos = require('../modulos/registro');
 const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
 const { esFechaISO } = require('../utils/validaciones');
@@ -64,6 +65,8 @@ const create = async (req, res) => {
     }
 
     const pedido = await Pedido.create(mesa.id, { modalidad, origen, mozo_id, silla_id: modalidad === 'salon' ? silla_id ?? null : null, referencia: referencia?.trim() || null });
+
+    if (await Funciones.estaActiva('VEN-LISTAS')) pedido.lista_precio_id = await Listas.alAbrirPedido(pedido.id, req.usuario?.terminal_id);
 
     if (mesa.estado === 'libre')
       await Mesa.updateEstado(mesa.id, 'ocupado');
@@ -155,7 +158,7 @@ const dividir = async (req, res) => {
 };
 
 // Lógica común de validación y cierre de transacción para ambos endpoints de productos
-const _resolverYAgregarProductos = async (pedido_id, productosConDatos, res) => {
+const _resolverYAgregarProductos = async (pedido_id, productosConDatos, res, advertencias = []) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -181,6 +184,7 @@ const _resolverYAgregarProductos = async (pedido_id, productosConDatos, res) => 
       message: `${productosConDatos.length} producto(s) añadidos al pedido ${pedido_id}.`,
       pedido_id,
       productos: productosConDatos,
+      ...(advertencias.length && { advertencias }),
     });
   } catch (err) {
     await conn.rollback();
@@ -218,11 +222,14 @@ const addProductos = async (req, res) => {
   // Resuelve precio, nombre y descripcion por ID
   const conn = await pool.getConnection();
   let productosConDatos;
+  let advertencias;
   try {
     productosConDatos = [];
     const conLotes = (await Funciones.estaActiva('STK-LOTES')) && (await Modulos.estaInstalado('stock')); // sin eso el campo no se ofrece
     const conModif = await Funciones.estaActiva('VEN-MODIF');
     const conAlergenos = await Funciones.estaActiva('VEN-ALERGENOS');
+    const conListas = await Funciones.estaActiva('VEN-LISTAS');
+    advertencias = [];
     for (const { producto_id, cantidad, observaciones, lote_indicado, opciones } of productos) {
       const [rows] = await conn.query(
         'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE id = ?',
@@ -247,6 +254,15 @@ const addProductos = async (req, res) => {
         }
       }
       const ajuste = modificadores.reduce((a, m) => a + Number(m.ajuste_precio_aplicado), 0);
+      // Precio de la lista del pedido (VEN-LISTAS); sin precio en la lista se usa el base y se advierte (EX23).
+      let precioBase = Number(rows[0].precio);
+      let listaId = null;
+      if (conListas) {
+        const pr = await Listas.precioDe(conn, pedido_id, producto_id, rows[0].nombre, precioBase);
+        precioBase = pr.precio;
+        listaId = pr.lista_precio_id;
+        if (pr.advertencia) advertencias.push(pr.advertencia);
+      }
       productosConDatos.push({
         producto_id,
         cantidad,
@@ -254,7 +270,8 @@ const addProductos = async (req, res) => {
         descripcion: rows[0].descripcion,
         modificadores,
         alergenos: conAlergenos ? await AlergenosVenta.calcularLinea(conn, producto_id, modificadores.map((m) => m.opcion_id)) : null,
-        precio_unitario: Math.round((Number(rows[0].precio) + ajuste) * 100) / 100,
+        lista_precio_id: listaId,
+        precio_unitario: Math.round((precioBase + ajuste) * 100) / 100,
         observaciones: observaciones?.trim() || null,
         lote_indicado: conLotes ? lote_indicado?.trim() || null : null,
       });
@@ -266,7 +283,7 @@ const addProductos = async (req, res) => {
   }
   conn.release();
 
-  await _resolverYAgregarProductos(pedido_id, productosConDatos, res);
+  await _resolverYAgregarProductos(pedido_id, productosConDatos, res, advertencias);
 };
 
 const addProductosPorNombre = async (req, res) => {
