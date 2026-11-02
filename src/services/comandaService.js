@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 const { idGlobal } = require('../utils/idGlobal');
 const { auditar } = require('../utils/auditar');
+const Modificadores = require('./modificadorService');
+const Funciones = require('../funciones/servicio');
 
 // Comandas (Ventas RF07, RN11, RN69, EX08): cada envío de ítems a producción genera una comanda por sector de
 // destino, según el sector del artículo. Un combo se descompone en sus componentes, cada uno a su sector.
@@ -34,6 +36,15 @@ const enviar = async (mesaId, { userId } = {}) => {
        FROM pedido_productos pp JOIN pedidos p ON p.id = pp.pedido_id
        WHERE p.mesa_id = ? AND p.estado = 'activo' AND pp.enviado_at IS NULL ORDER BY pp.id`, [mesaId]);
     if (!items.length) throw new ComandaInvalida('No hay ítems nuevos para enviar a producción.');
+    // Un grupo obligatorio incompleto impide enviar ese ítem; el resto del pedido sale igual (Ventas EX31).
+    const omitidos = [];
+    if (await Funciones.estaActiva('VEN-MODIF', conn)) {
+      for (const it of [...items]) {
+        const f = await Modificadores.faltantes(conn, it.id, it.producto_id);
+        if (f.length) { omitidos.push({ item_id: it.id, nombre: it.nombre, faltan: f }); items.splice(items.indexOf(it), 1); }
+      }
+      if (!items.length) throw Object.assign(new ComandaInvalida(`Falta elegir: ${omitidos.map((o) => `${o.nombre} (${o.faltan.map((g) => g.grupo).join(', ')})`).join('; ')}.`), { status: 409, omitidos });
+    }
 
     const porSector = new Map(); // sector_id (o null) -> líneas
     for (const it of items)
@@ -58,7 +69,7 @@ const enviar = async (mesaId, { userId } = {}) => {
     }
     await conn.query(`UPDATE pedido_productos SET enviado_at = NOW() WHERE id IN (${items.map(() => '?').join(',')})`, items.map((i) => i.id));
     await conn.commit();
-    return { envio, comandas: await Promise.all(comandas.map(obtener)) };
+    return { envio, comandas: await Promise.all(comandas.map(obtener)), omitidos };
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
 };
 
@@ -66,8 +77,11 @@ const obtener = async (id) => {
   const [[c]] = await pool.query(
     `SELECT c.*, s.nombre AS sector, m.numero_mesa FROM comandas c LEFT JOIN sectores_comanda s ON s.id = c.sector_id JOIN mesas m ON m.id = c.mesa_id WHERE c.id = ?`, [id]);
   if (!c) return null;
-  const [items] = await pool.query('SELECT nombre, cantidad, observaciones, pedido_id FROM comanda_items WHERE comanda_id = ? ORDER BY id', [id]);
-  return { ...c, items };
+  const [items] = await pool.query(
+    `SELECT ci.nombre, ci.cantidad, ci.observaciones, ci.pedido_id,
+            (SELECT GROUP_CONCAT(m.nombre ORDER BY m.id SEPARATOR '||') FROM pedido_item_modificadores m WHERE m.item_id = ci.pedido_producto_id) AS opciones
+     FROM comanda_items ci WHERE ci.comanda_id = ? ORDER BY ci.id`, [id]);
+  return { ...c, items: items.map((i) => ({ ...i, opciones: i.opciones ? i.opciones.split('||') : [] })) };
 };
 
 // Cola de una terminal: las que aún no se imprimieron (EX08), por sector. `todas` incluye las ya impresas.

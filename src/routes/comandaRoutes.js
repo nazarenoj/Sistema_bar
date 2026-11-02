@@ -9,7 +9,7 @@ const actor = (req) => ({ id: req.usuario?.sub, username: req.usuario?.username,
 
 const manejar = (fn) => async (req, res, next) => {
   try { await fn(req, res); } catch (err) {
-    if (err instanceof Comandas.ComandaInvalida) return res.status(err.status || 400).json({ error: err.message, codigo: 'COMANDA_INVALIDA' });
+    if (err instanceof Comandas.ComandaInvalida) return res.status(err.status || 400).json({ error: err.message, codigo: 'COMANDA_INVALIDA', ...(err.omitidos && { omitidos: err.omitidos }) });
     next(err);
   }
 };

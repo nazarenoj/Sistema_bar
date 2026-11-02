@@ -79,7 +79,7 @@ const getItemsByPedidoIds = async (pedidoIds, conn = pool) => {
      ORDER BY id ASC`,
     pedidoIds
   );
-  return rows;
+  return conModificadores(rows, conn);
 };
 
 const getTotalAcumulado = async (pedidoIds, conn) => {
@@ -94,13 +94,26 @@ const getTotalAcumulado = async (pedidoIds, conn) => {
   return Number(rows[0].total);
 };
 
+// `modificadores`: lo elegido en el ítem (VEN-MODIF), con su ajuste ya sumado a `precio_unitario` (Ventas RN41).
 const addProductos = async (pedido_id, productos, conn) => {
-  for (const { producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado } of productos) {
-    await conn.query(
+  for (const { producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado, modificadores } of productos) {
+    const [r] = await conn.query(
       'INSERT INTO pedido_productos (pedido_id, producto_id, cantidad, nombre, descripcion, precio_unitario, observaciones, lote_indicado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [pedido_id, producto_id, cantidad, nombre, descripcion ?? null, precio_unitario, observaciones ?? null, lote_indicado ?? null]
     );
+    for (const m of modificadores ?? [])
+      await conn.query('INSERT INTO pedido_item_modificadores (item_id, opcion_id, grupo_id, nombre, ajuste_precio_aplicado) VALUES (?, ?, ?, ?, ?)', [r.insertId, m.opcion_id, m.grupo_id, m.nombre, m.ajuste_precio_aplicado]);
   }
+};
+
+// Agrega a cada ítem lo elegido en sus modificadores: `opciones` (ids, para Stock) y `modificadores` (nombre y ajuste, para comanda, ticket y detalle).
+const conModificadores = async (rows, conn) => {
+  if (!rows.length) return rows;
+  const [mods] = await conn.query(`SELECT item_id, opcion_id, nombre, ajuste_precio_aplicado FROM pedido_item_modificadores WHERE item_id IN (${rows.map(() => '?').join(',')}) ORDER BY id`, rows.map((r) => r.id));
+  return rows.map((r) => {
+    const ms = mods.filter((m) => m.item_id === r.id);
+    return ms.length ? { ...r, opciones: ms.map((m) => m.opcion_id), modificadores: ms.map((m) => ({ nombre: m.nombre, ajuste: Number(m.ajuste_precio_aplicado) })) } : r;
+  });
 };
 
 // Columnas por las que se puede ordenar el historial (whitelist: van directo a un ORDER BY
@@ -240,7 +253,7 @@ const getItems = async (pedido_id, conn = pool) => {
      ORDER BY id ASC`,
     [pedido_id]
   );
-  return rows;
+  return conModificadores(rows, conn);
 };
 
 // Ids de todos los pedidos (sillas) de una misma sesión de mesa, ordenados por apertura;

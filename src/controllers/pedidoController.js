@@ -8,6 +8,7 @@ const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
 const Funciones = require('../funciones/servicio');
+const Modificadores = require('../services/modificadorService');
 const Modulos = require('../modulos/registro');
 const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
 const { esFechaISO } = require('../utils/validaciones');
@@ -200,7 +201,9 @@ const addProductos = async (req, res) => {
     return res.status(400).json({ error: 'El campo "productos" debe ser un array no vacío.' });
 
   for (let i = 0; i < productos.length; i++) {
-    const { producto_id, cantidad, observaciones, lote_indicado } = productos[i];
+    const { producto_id, cantidad, observaciones, lote_indicado, opciones } = productos[i];
+    if (opciones !== undefined && (!Array.isArray(opciones) || opciones.some((o) => !Number.isInteger(o) || o <= 0)))
+      return res.status(400).json({ error: `productos[${i}]: "opciones" debe ser una lista de ids de opción.` });
     if (lote_indicado !== undefined && lote_indicado !== null && (typeof lote_indicado !== 'string' || lote_indicado.length > 60))
       return res.status(400).json({ error: `productos[${i}]: "lote_indicado" debe ser un texto de hasta 60 caracteres.` });
     if (observaciones !== undefined && (typeof observaciones !== 'string' || observaciones.length > 255))
@@ -217,7 +220,8 @@ const addProductos = async (req, res) => {
   try {
     productosConDatos = [];
     const conLotes = (await Funciones.estaActiva('STK-LOTES')) && (await Modulos.estaInstalado('stock')); // sin eso el campo no se ofrece
-    for (const { producto_id, cantidad, observaciones, lote_indicado } of productos) {
+    const conModif = await Funciones.estaActiva('VEN-MODIF');
+    for (const { producto_id, cantidad, observaciones, lote_indicado, opciones } of productos) {
       const [rows] = await conn.query(
         'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE id = ?',
         [producto_id]
@@ -230,12 +234,24 @@ const addProductos = async (req, res) => {
         conn.release();
         return res.status(409).json({ error: `El producto "${rows[0].nombre}" está agotado.`, codigo: 'PRODUCTO_AGOTADO' });
       }
+      // Las opciones elegidas ajustan el precio, que queda fijado al agregar el ítem (Ventas RN41).
+      let modificadores = [];
+      if (opciones?.length) {
+        if (!conModif) { conn.release(); return res.status(409).json({ error: 'Los modificadores no están activos en esta instancia.', codigo: 'FUNCION_INACTIVA' }); }
+        try { modificadores = await Modificadores.resolver(conn, producto_id, opciones); } catch (err) {
+          conn.release();
+          if (err instanceof Modificadores.ModificadorInvalido) return res.status(err.status ?? 400).json({ error: err.message });
+          throw err;
+        }
+      }
+      const ajuste = modificadores.reduce((a, m) => a + Number(m.ajuste_precio_aplicado), 0);
       productosConDatos.push({
         producto_id,
         cantidad,
         nombre: rows[0].nombre,
         descripcion: rows[0].descripcion,
-        precio_unitario: Number(rows[0].precio),
+        modificadores,
+        precio_unitario: Math.round((Number(rows[0].precio) + ajuste) * 100) / 100,
         observaciones: observaciones?.trim() || null,
         lote_indicado: conLotes ? lote_indicado?.trim() || null : null,
       });
