@@ -79,9 +79,11 @@ const obtener = async (id) => {
   if (!c) return null;
   const [items] = await pool.query(
     `SELECT ci.nombre, ci.cantidad, ci.observaciones, ci.pedido_id,
-            (SELECT GROUP_CONCAT(m.nombre ORDER BY m.id SEPARATOR '||') FROM pedido_item_modificadores m WHERE m.item_id = ci.pedido_producto_id) AS opciones
+            (SELECT GROUP_CONCAT(m.nombre ORDER BY m.id SEPARATOR '||') FROM pedido_item_modificadores m WHERE m.item_id = ci.pedido_producto_id) AS opciones,
+            (SELECT pp.alergenos_linea FROM pedido_productos pp WHERE pp.id = ci.pedido_producto_id) AS alergenos_linea,
+            (SELECT pp.alergenos_pendientes FROM pedido_productos pp WHERE pp.id = ci.pedido_producto_id) AS alergenos_pendientes
      FROM comanda_items ci WHERE ci.comanda_id = ? ORDER BY ci.id`, [id]);
-  return { ...c, items: items.map((i) => ({ ...i, opciones: i.opciones ? i.opciones.split('||') : [] })) };
+  return { ...c, items: items.map(({ alergenos_linea, alergenos_pendientes, ...i }) => ({ ...i, opciones: i.opciones ? i.opciones.split('||') : [], ...(alergenos_linea && { alergenos: JSON.parse(alergenos_linea).map((a) => a.nombre), alergenos_pendientes: !!alergenos_pendientes }) })) };
 };
 
 // Cola de una terminal: las que aún no se imprimieron (EX08), por sector. `todas` incluye las ya impresas.

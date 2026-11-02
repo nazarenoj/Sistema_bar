@@ -24,6 +24,8 @@ const imprimirItem = (doc, item) => {
   doc.text(detalle, MARGEN, y, { width: ANCHO_UTIL * 0.55 });
   doc.text(formatMoneda(item.subtotal), MARGEN, y, { width: ANCHO_UTIL, align: 'right' });
   if (item.modificadores?.length) doc.font('Helvetica-Oblique').fontSize(7.5).text(item.modificadores.map((m) => m.nombre).join(', '), MARGEN + 6, doc.y, { width: ANCHO_UTIL - 6 });
+  if (item.alergenos?.length) doc.font('Helvetica-Bold').fontSize(7.5).text(`Alérgenos: ${item.alergenos.map((a) => a.nombre).join(', ')}`, MARGEN + 6, doc.y, { width: ANCHO_UTIL - 6 });
+  if (item.alergenos_pendientes) doc.font('Helvetica-Oblique').fontSize(7).text('(alérgenos derivados pendientes de calcular)', MARGEN + 6, doc.y, { width: ANCHO_UTIL - 6 });
   doc.moveDown(0.4);
 };
 
@@ -199,6 +201,8 @@ const generarComandaSector = (res, comanda) => {
   for (const item of comanda.items) {
     doc.font('Helvetica-Bold').fontSize(10).text(`${Number(item.cantidad)} x ${item.nombre}`, MARGEN, doc.y, { width: ANCHO_UTIL });
     if (item.opciones?.length) doc.font('Helvetica').fontSize(9).text(`+ ${item.opciones.join(', ')}`, MARGEN + 8, doc.y, { width: ANCHO_UTIL - 8 });
+    if (item.alergenos?.length) doc.font('Helvetica-Bold').fontSize(8.5).text(`ALÉRGENOS: ${item.alergenos.join(', ')}`, MARGEN + 8, doc.y, { width: ANCHO_UTIL - 8 });
+    if (item.alergenos_pendientes) doc.font('Helvetica-Oblique').fontSize(7.5).text('(alérgenos derivados pendientes de calcular)', MARGEN + 8, doc.y, { width: ANCHO_UTIL - 8 });
     if (item.observaciones) doc.font('Helvetica-Oblique').fontSize(8.5).text(item.observaciones, MARGEN, doc.y, { width: ANCHO_UTIL });
     doc.moveDown(0.4);
   }

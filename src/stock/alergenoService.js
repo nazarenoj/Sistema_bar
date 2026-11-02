@@ -125,7 +125,11 @@ const articulo = async (productoId, conn = pool) => salida(await derivar(conn, p
 
 // Alérgenos de una línea de venta (RF39): el artículo más las opciones elegidas ({ insumo_id } sustituto o agregado, RN77).
 // Una sustitución no quita los del artículo base. Las porciones heredan del origen en C15.
-const linea = async (productoId, opciones = [], conn = pool) => {
+const linea = async (productoId, opciones = [], conn = pool, opcionIds = []) => {
+  if (opcionIds.length) {
+    const [ms] = await conn.query("SELECT insumo_id FROM modificador_insumos WHERE opcion_id IN (?) AND accion IN ('agregar', 'sustituir') AND insumo_id IS NOT NULL", [opcionIds.map(String)]);
+    opciones = [...opciones, ...ms.map((m) => ({ insumo_id: m.insumo_id }))];
+  }
   const r = await derivar(conn, productoId);
   const acum = new Map(r.alergenos.map((x) => [x.alergeno_id, x]));
   for (const o of opciones) {

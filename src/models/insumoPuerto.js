@@ -21,7 +21,7 @@ puertos.registrar('stock', {
   renovarCompromiso: (id) => Compromiso.renovar(id),
   liberarCompromiso: (id) => Compromiso.liberar(id),
   // Alérgenos de una línea de venta (RF39): { alergenos, incompletos }; Ventas los muestra y los publica.
-  alergenosLinea: (productoId, opciones) => Alergenos.linea(productoId, opciones),
+  alergenosLinea: (productoId, opciones, opcionIds = []) => Alergenos.linea(productoId, opciones, undefined, opcionIds),
   // Etiqueta propia de peso (RN82, EX59): Stock valida prefijo y verificador y devuelve artículo y peso.
   validarEtiqueta: (codigo) => Etiquetas.validar(codigo),
   saldoInicial: (item, cantidad, conn, userId) => Mov.saldoInicial(item, cantidad, conn, userId),

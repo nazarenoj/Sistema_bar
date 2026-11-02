@@ -9,6 +9,7 @@ const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
 const Funciones = require('../funciones/servicio');
 const Modificadores = require('../services/modificadorService');
+const AlergenosVenta = require('../services/alergenoVentaService');
 const Modulos = require('../modulos/registro');
 const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
 const { esFechaISO } = require('../utils/validaciones');
@@ -221,6 +222,7 @@ const addProductos = async (req, res) => {
     productosConDatos = [];
     const conLotes = (await Funciones.estaActiva('STK-LOTES')) && (await Modulos.estaInstalado('stock')); // sin eso el campo no se ofrece
     const conModif = await Funciones.estaActiva('VEN-MODIF');
+    const conAlergenos = await Funciones.estaActiva('VEN-ALERGENOS');
     for (const { producto_id, cantidad, observaciones, lote_indicado, opciones } of productos) {
       const [rows] = await conn.query(
         'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE id = ?',
@@ -251,6 +253,7 @@ const addProductos = async (req, res) => {
         nombre: rows[0].nombre,
         descripcion: rows[0].descripcion,
         modificadores,
+        alergenos: conAlergenos ? await AlergenosVenta.calcularLinea(conn, producto_id, modificadores.map((m) => m.opcion_id)) : null,
         precio_unitario: Math.round((Number(rows[0].precio) + ajuste) * 100) / 100,
         observaciones: observaciones?.trim() || null,
         lote_indicado: conLotes ? lote_indicado?.trim() || null : null,
