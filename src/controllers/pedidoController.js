@@ -2,7 +2,8 @@ const pool = require('../config/db');
 const Mesa = require('../models/mesaModel');
 const Pedido = require('../models/pedidoModel');
 const Venta = require('../services/ventaService');
-const { validarAutorizacion } = require('../middleware/requierePermiso');
+const { validarAutorizacion, permisosDe } = require('../middleware/requierePermiso');
+const Cocina = require('../services/cocinaService');
 const Mensajeria = require('../mensajeria/servicio');
 const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
@@ -230,10 +231,14 @@ const addProductos = async (req, res) => {
     const conModif = await Funciones.estaActiva('VEN-MODIF');
     const conAlergenos = await Funciones.estaActiva('VEN-ALERGENOS');
     const conListas = await Funciones.estaActiva('VEN-LISTAS');
+    // Con la pantalla de cocina, un agotado (manual o de Stock) se puede vender con permiso si el modo es "advertir" (Ventas RN35).
+    const conKds = await Funciones.estaActiva('VEN-KDS');
+    const modoAgotado = conKds ? await Cocina.modoAgotado() : 'bloquear';
+    const puedeAgotado = conKds && modoAgotado === 'advertir' && (await permisosDe(req)).niveles['ventas.agotados.vender'] === 'permitido';
     advertencias = [];
     for (const { producto_id, cantidad, observaciones, lote_indicado, opciones } of productos) {
       const [rows] = await conn.query(
-        'SELECT id, nombre, descripcion, precio, agotado FROM productos WHERE id = ?',
+        'SELECT id, nombre, descripcion, precio, agotado, agotado_auto FROM productos WHERE id = ?',
         [producto_id]
       );
       if (!rows.length) {
@@ -241,8 +246,13 @@ const addProductos = async (req, res) => {
         return res.status(404).json({ error: `Producto con id ${producto_id} no encontrado.` });
       }
       if (rows[0].agotado) {
-        conn.release();
-        return res.status(409).json({ error: `El producto "${rows[0].nombre}" está agotado.`, codigo: 'PRODUCTO_AGOTADO' });
+        if (!puedeAgotado) {
+          conn.release();
+          return res.status(409).json({ error: `El producto "${rows[0].nombre}" está agotado.`, codigo: 'PRODUCTO_AGOTADO' });
+        }
+        advertencias.push(`"${rows[0].nombre}" está agotado: se vendió con tu permiso.`);
+      } else if (conKds && rows[0].agotado_auto) {
+        advertencias.push(`"${rows[0].nombre}" figura sin existencias en Stock: la marca avisa y no bloquea la venta.`); // Stock RF32, Ventas RN01
       }
       // Las opciones elegidas ajustan el precio, que queda fijado al agregar el ítem (Ventas RN41).
       let modificadores = [];
