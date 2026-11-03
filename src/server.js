@@ -34,6 +34,8 @@ const promocionRoutes = require('./routes/promocionRoutes');
 const cocinaRoutes = require('./routes/cocinaRoutes');
 const franjaRoutes = require('./routes/franjaRoutes');
 const movilRoutes = require('./routes/movilRoutes');
+const reservaRoutes = require('./routes/reservaRoutes');
+const mantenimientoVentas = require('./services/mantenimientoVentas');
 const stockReposicionRoutes = require('./routes/stockReposicionRoutes');
 const mantenimientoStock = require('./stock/mantenimientoStock');
 const insumoRoutes     = require('./routes/insumoRoutes');
@@ -182,6 +184,7 @@ app.use('/api/promociones', promocionRoutes);
 app.use('/api/cocina', cocinaRoutes);
 app.use('/api/franjas', franjaRoutes);
 app.use('/api/movil', movilRoutes);
+app.use('/api/reservas', reservaRoutes);
 app.use('/api/reposicion-auto', stockReposicionRoutes);
 app.use('/api/categorias',  catalogoRoutes.categorias);
 app.use('/api/sectores',    catalogoRoutes.sectores);
@@ -227,6 +230,7 @@ if (process.env.NODE_ENV !== 'test') {
         trabajador.iniciar(); // entrega de mensajes entre módulos y mantenimiento (A10)
         resolucion.iniciar(); // intentos de emisión indeterminados y validación de la numeración (B7)
         mantenimientoStock.iniciar(); // alertas de stock y diferencias de integración (C6)
+        mantenimientoVentas.iniciar(); // reservas vencidas, recordatorios y pedidos especiales (D8)
       });
     })
     .catch(async (err) => {
