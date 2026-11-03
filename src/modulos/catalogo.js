@@ -11,7 +11,7 @@ const MODULOS = {
       /^(config|db|instancias|permisos|modulos|funciones|mensajeria|reservas)\//, /^server\.js$/,
       /^middleware\/(auth|instancia|requiere|solo|idempotencia|hora|errorHandler|requestLogger)/,
       /^utils\//,
-      /^(controllers|routes)\/(auth|usuario|terminal|sesion|rol|auditoria|modulo|funcion|notificacion|integracion|mensaj|moneda|copia|tablero|consolidacion)/,
+      /^(controllers|routes)\/(auth|usuario|terminal|sesion|rol|auditoria|modulo|funcion|notificacion|integracion|mensaj|moneda|copia|tablero|consolidacion|segundoFactor)/,
       /^models\/(user|sesion|terminal|parametro|permiso|auditoria|instancia|modulo|funcion|notificacion|mensaj)/,
       /^(servicios|trabajadores)\//,
     ],

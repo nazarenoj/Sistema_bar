@@ -9,6 +9,7 @@ const { hashCodigo } = require('../utils/credenciales');
 const throttle = require('../utils/throttle');
 const logger = require('../utils/logger');
 const { auditar } = require('../utils/auditar');
+const SegundoFactor = require('../servicios/segundoFactorService');
 
 // Tope absoluto de vida del token; el vencimiento real por inactividad lo decide el servidor.
 const JWT_EXPIRES_IN = '12h';
@@ -47,7 +48,7 @@ const abrirSesion = async (req, res, user, terminal) => {
   );
   const params = await Parametro.todos();
   const minutos = terminal?.inactividad_min ?? params[`inactividad_min_${user.rol}`] ?? 10;
-  res.json({ token, usuario: datosUsuario(user, terminal, await Permiso.efectivos(user.id, user.rol)), inactividad_min: minutos });
+  res.json({ token, usuario: datosUsuario(user, terminal, await Permiso.efectivos(user.id, user.rol)), inactividad_min: minutos, ...(req.segundoFactor?.debe_enlazar && { debe_enlazar_2fa: true }), ...(req.segundoFactor?.recuperacion && { codigos_recuperacion_restantes: req.segundoFactor.restantes }) });
 };
 
 // Rechazo de un usuario que ya se identificó bien (contraseña, PIN o tarjeta correctos): ahí sí se
@@ -94,6 +95,18 @@ const login = async (req, res) => {
       return res.status(rechazo.status).json({ error: rechazo.error });
     }
 
+    // Segundo factor (RF21): a los roles que lo exigen se les pide el código después de la contraseña. Uno equivocado cuenta como intento fallido (RN04, EX26).
+    const sf = await SegundoFactor.controlarIngreso(user, req.body.codigo);
+    if (!sf.ok && sf.motivo === 'falta_codigo') return res.status(401).json({ error: 'Ingresá el código de tu aplicación de autenticación.', requiere_2fa: true });
+    if (!sf.ok) {
+      const p = await Parametro.todos();
+      await User.registrarFallo(user.id, p.intentos_max ?? 5, p.bloqueo_minutos ?? 15);
+      await auditar(req, { modulo: 'sesiones', accion: 'ingreso_fallido', resultado: 'denegado', detalle: 'segundo factor inválido' }, actorIngreso(req, user, terminalRow));
+      return res.status(401).json({ error: 'El código no es válido.', requiere_2fa: true });
+    }
+    if (sf.recuperacion) await auditar(req, { modulo: 'sesiones', accion: '2fa_recuperacion_usada', entidad: 'usuario', entidad_id: String(user.id), detalle: `quedan ${sf.restantes}` }, actorIngreso(req, user, terminalRow));
+
+    req.segundoFactor = sf;
     await abrirSesion(req, res, user, terminalRow);
   } catch (err) {
     falla500(req, res, err);
