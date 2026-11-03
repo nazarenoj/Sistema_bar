@@ -17,4 +17,5 @@ M.registrarReceptor('clientes', 'debito_venta', debito('venta'));
 M.registrarReceptor('clientes', 'remito_emitido', debito('remito'));
 const anulacion = (conn, c, ctx) => Cuentas.anularDebito(conn, { ref: c.venta_id_global ?? c.remito_id_global, idOperacion: ctx.idOperacion });
 M.registrarReceptor('clientes', 'anulacion_debito', anulacion, { revierte: 'debito_venta' });
+M.registrarReceptor('clientes', 'devolucion_debito', (conn, c, ctx) => Cuentas.devolverDebito(conn, { ref: c.venta_id_global, importe: c.importe, idOperacion: ctx.idOperacion }), { revierte: 'debito_venta' });
 M.registrarReceptor('clientes', 'anulacion_remito', anulacion, { revierte: 'remito_emitido' });

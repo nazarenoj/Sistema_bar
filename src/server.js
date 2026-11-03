@@ -41,6 +41,7 @@ const copiaRoutes = require('./routes/copiaRoutes');
 const tableroRoutes = require('./routes/tableroRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
 const clienteCuentaRoutes = require('./routes/clienteCuentaRoutes');
+const clienteCreditoRoutes = require('./routes/clienteCreditoRoutes');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
 const comprobanteTerceroRoutes = require('./routes/comprobanteTerceroRoutes');
@@ -212,6 +213,7 @@ app.use('/api/monedas', monedaRoutes);
 app.use('/api/copias', copiaRoutes);
 app.use('/api/tablero', tableroRoutes);
 app.use('/api/clientes', clienteRoutes);
+app.use('/api/cuentas-corrientes', clienteCreditoRoutes);
 app.use('/api/cuentas-corrientes', clienteCuentaRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
@@ -264,6 +266,7 @@ if (process.env.NODE_ENV !== 'test') {
         trabajador.iniciar(); // entrega de mensajes entre módulos y mantenimiento (A10)
         resolucion.iniciar(); // intentos de emisión indeterminados y validación de la numeración (B7)
         mantenimientoStock.iniciar(); // alertas de stock y diferencias de integración (C6)
+        require('./clientes/mantenimientoClientes').iniciar(); // bloqueo automático por mora (E3)
         mantenimientoVentas.iniciar(); // reservas vencidas, recordatorios y pedidos especiales (D8)
       });
     })

@@ -5,7 +5,7 @@ const PUERTOS = {
   // Ventas define; Clientes y CC implementa.
   credito: {
     define: 'ventas', implementa: 'clientes',
-    nula: { disponible: false, veredicto: async () => ({ ofrecido: false }), retenerSaldo: async () => ({ ofrecido: false }), buscarCliente: async () => [], resolverCliente: async (id) => ({ id }) },
+    nula: { disponible: false, veredicto: async () => ({ ofrecido: false }), retenerSaldo: async () => ({ ofrecido: false }), buscarCliente: async () => [], reservar: async () => ({ veredicto: 'bloqueada', motivos: ['Cuenta corriente no disponible: falta el módulo Clientes.'] }), liberarReserva: async () => 0, resolverCliente: async (id) => ({ id }) },
   },
   // Ventas define; Compras implementa. Sin Compras los precios son manuales.
   costoReposicion: { define: 'ventas', implementa: 'compras', nula: { costo: async () => null } },

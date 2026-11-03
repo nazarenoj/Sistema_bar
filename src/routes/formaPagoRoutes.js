@@ -2,6 +2,7 @@ const { Router } = require('express');
 const pool = require('../config/db');
 const { requierePermiso } = require('../middleware/requierePermiso');
 const Monedas = require('../servicios/monedaService');
+const puertos = require('../modulos/puertos');
 const Funciones = require('../funciones/servicio');
 
 // Formas de pago configurables (Ventas RF09). No se borran: una forma usada en ventas solo se desactiva.
@@ -23,8 +24,10 @@ router.get('/', requierePermiso('ventas.cuenta.cobrar'), async (req, res, next) 
     const formas = (await pool.query('SELECT * FROM formas_pago ORDER BY orden, id'))[0];
     const conDivisa = await Funciones.estaActiva('VEN-DIVISA');
     const cot = new Map();
+    const conCuenta = (await Funciones.estaActiva('VEN-CC')) && (await puertos.obtener('credito')).disponible;
     for (const f of formas) {
       f.disponible = true;
+      if (f.codigo === 'cuenta_corriente' && !conCuenta) { f.disponible = false; f.motivo_no_disponible = 'La cuenta corriente necesita la función VEN-CC y el módulo Clientes.'; continue; }
       if (f.moneda === 'ARS') continue;
       if (!conDivisa) { f.disponible = false; f.motivo_no_disponible = 'VEN-DIVISA está inactiva.'; continue; }
       if (!cot.has(f.moneda)) cot.set(f.moneda, await Monedas.vigente(f.moneda).catch(() => null));

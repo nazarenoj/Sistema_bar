@@ -13,6 +13,8 @@ class CuentaInvalida extends Error {}
 const invalida = (m, status = 400, extra = {}) => Object.assign(new CuentaInvalida(m), { status, ...extra });
 
 const MOTIVOS_NOTA = ['intereses_mora', 'diferencia_cambio', 'bonificacion', 'cheque_rechazado', 'error_facturacion', 'otros'];
+let postDebito = null; // el control de crédito engancha acá: convierte la reserva y avisa si el crédito quedó excedido (E3)
+const usarPostDebito = (fn) => { postDebito = fn; };
 const num = (x) => Math.round(Number(x) * 100) / 100;
 const hoy = () => { const d = new Date(), p = (x) => String(x).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 const sumarDias = (fecha, dias) => { const d = new Date(`${fecha}T12:00:00`); d.setDate(d.getDate() + Number(dias)); const p = (x) => String(x).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
@@ -26,7 +28,8 @@ const vista = async (c, conn = pool) => {
   const saldo = await saldoDe(c.id, conn);
   const dMoraAut = c.dias_mora_autorizacion ?? await parametro('cc_dias_mora_autorizacion', 5, conn);
   const dMoraBlq = c.dias_mora_bloqueo ?? await parametro('cc_dias_mora_bloqueo', 30, conn);
-  return { ...c, limite_credito: num(c.limite_credito), dias_mora_autorizacion: dMoraAut, dias_mora_bloqueo: dMoraBlq, saldo, disponible: num(Number(c.limite_credito) - Math.max(saldo, 0)) };
+  const reservas = num((await conn.query("SELECT COALESCE(SUM(importe), 0) AS t FROM reservas_credito WHERE cuenta_id = ? AND estado = 'vigente' AND vence_ms > ?", [c.id, Date.now()]))[0][0].t);
+  return { ...c, limite_credito: num(c.limite_credito), dias_mora_autorizacion: dMoraAut, dias_mora_bloqueo: dMoraBlq, saldo, reservas_vigentes: reservas, disponible: num(Number(c.limite_credito) - Math.max(saldo, 0) - reservas) };
 };
 
 const validarMora = (aut, blq) => {
@@ -139,6 +142,7 @@ const registrarDebito = async (conn, { tipo, clienteId, moneda = 'ARS', importe,
     `INSERT INTO movimientos_cc (id_global, cuenta_id, tipo, naturaleza, comprobante_ref, id_operacion, id_reserva_credito, en_contingencia, detalle, fecha, fecha_vencimiento, importe, importe_moneda_cuenta, cotizacion, saldo_pendiente)
      VALUES (?, ?, ?, 'debito', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [await idGlobal(), cuenta.id, tipo, ref, idOperacion, reservaId, contingencia ? 1 : 0, detalle, f, sumarDias(f, cuenta.plazo_dias), imp, importeMonedaCuenta, cotizacion, imp]);
+  if (postDebito) await postDebito(conn, { cuenta, movimientoId: r.insertId, importe: imp, reservaId, contingencia, ref });
   return { cuenta, movimientoId: r.insertId };
 };
 
@@ -244,4 +248,20 @@ const emitirFiscal = async (movId) => {
   return unMovimiento(m.id);
 };
 
-module.exports = { CuentaInvalida, MOTIVOS_NOTA, abrir, obtener, deCliente, actualizar, cerrar, movimientos, pendientes, saldoDe, cuentaDe, vista, registrarDebito, anularDebito, nota, emitirFiscal, usarEmisor, hoy, sumarDias, num, parametro };
+// Devolución parcial de una venta a cuenta: crédito interno que baja lo pendiente del comprobante (RN06: el débito original no se toca).
+const devolverDebito = async (conn, { ref, importe, idOperacion }) => {
+  const [[orig]] = await conn.query("SELECT * FROM movimientos_cc WHERE comprobante_ref = ? AND naturaleza = 'debito' AND tipo IN ('venta', 'remito') ORDER BY id LIMIT 1 FOR UPDATE", [ref]);
+  if (!orig) throw new M.RechazoNegocio('No hay un débito registrado para ese comprobante.');
+  if (orig.estado === 'anulado') throw new M.RechazoNegocio('El débito ya estaba anulado.');
+  const imp = num(importe);
+  if (!(imp > 0)) throw new M.RechazoNegocio('El importe de la devolución no es válido.');
+  const [[{ ya }]] = await conn.query("SELECT COALESCE(SUM(importe), 0) AS ya FROM movimientos_cc WHERE referencia_id = ? AND naturaleza = 'credito' AND estado <> 'anulado'", [orig.id]);
+  if (imp > num(orig.importe) - num(ya)) throw new M.RechazoNegocio('La devolución supera lo que queda del comprobante.');
+  const [r] = await conn.query(
+    `INSERT INTO movimientos_cc (id_global, cuenta_id, tipo, naturaleza, comprobante_ref, referencia_id, id_operacion, motivo, detalle, fecha, importe, saldo_pendiente, estado)
+     VALUES (?, ?, 'nc', 'credito', ?, ?, ?, 'otros', 'Devolución de mercadería', ?, ?, 0, 'pendiente')`, [await idGlobal(), orig.cuenta_id, ref, orig.id, idOperacion, hoy(), imp]);
+  await aplicarNC(conn, { id: r.insertId, importe: imp }, orig);
+  return { movimiento_id: r.insertId };
+};
+
+module.exports = { devolverDebito, usarPostDebito, CuentaInvalida, MOTIVOS_NOTA, abrir, obtener, deCliente, actualizar, cerrar, movimientos, pendientes, saldoDe, cuentaDe, vista, registrarDebito, anularDebito, nota, emitirFiscal, usarEmisor, hoy, sumarDias, num, parametro };

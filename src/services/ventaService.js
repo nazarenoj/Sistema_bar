@@ -51,6 +51,7 @@ const validarPagos = async (conn, pagos, total) => {
   for (const p of pagos) {
     const f = porCodigo.get(p.forma);
     if (!f) throw new PagoInvalido(`La forma de pago "${p.forma}" no existe o está desactivada.`);
+    if (p.forma === 'cuenta_corriente' && !(await Funciones.estaActiva('VEN-CC', conn))) throw new PagoInvalido('La forma de pago "Cuenta Corriente" necesita la función VEN-CC.');
     let importe = Number(p.importe);
     let divisa = {};
     let vuelto = 0;
@@ -115,13 +116,46 @@ const comprometerStock = async (items, { idSolicitud, userId, autorizar }) => {
   return r.valor.id_compromiso;
 };
 
+// Venta a cuenta corriente (Ventas RF16, RN27; Clientes RF12, RF26, RF27): antes de cerrar pide a Clientes el veredicto y la reserva de crédito por el
+// importe a cuenta y los cumple sin reglas propias. «Requiere autorización» solo se resuelve con un supervisor; «Bloqueada» no admite autorización. Si
+// Clientes no responde en 3 s, la venta no se cierra salvo autorización de un supervisor con motivo (contingencia).
+const importeACuenta = (pagos) => redondear2((pagos ?? []).filter((p) => p.forma === 'cuenta_corriente').reduce((a, p) => a + Number(p.importe), 0));
+const reservarCredito = async (pagos, { clienteId, idSolicitud, userId, autorizar, moneda = 'ARS', motivoContingencia }) => {
+  const importe = importeACuenta(pagos);
+  if (!importe) return null;
+  if (!(await Funciones.estaActiva('VEN-CC'))) throw new PagoInvalido('La forma de pago "Cuenta Corriente" necesita la función VEN-CC.');
+  const falla = (status, codigo, error, detalle) => Object.assign(new Error(error), { status, codigo, detalle });
+  if (!clienteId) throw falla(400, 'CLIENTE_NO_IDENTIFICADO', 'Para vender a cuenta corriente identificá al cliente.');
+  const puerto = await puertos.obtener('credito');
+  if (!puerto.disponible) throw falla(409, 'CUENTA_CORRIENTE_NO_DISPONIBLE', 'La cuenta corriente no está disponible: falta el módulo Clientes.');
+  const pedir = (extra = {}) => llamar(1, 'ventas', async () => puerto.reservar({ cliente_id: clienteId, moneda, importe, idSolicitud: `${idSolicitud}:credito${extra.autorizado ? ':aut' : ''}`, origen: `venta:${idSolicitud}`, ...extra }));
+  let r;
+  try { r = await pedir(); } catch (err) {
+    if (err.codigo !== 'LLAMADA_CERRADA') throw err;
+    // Clientes no responde (EX20): contingencia solo con la autorización de un supervisor y un motivo; no se reserva.
+    const a = autorizar ? await autorizar() : null;
+    if (!a?.ok || !String(motivoContingencia ?? '').trim()) throw falla(409, 'CREDITO_NO_RESPONDE', 'Clientes no respondió: la venta a cuenta necesita la autorización de un supervisor y el motivo de la contingencia.');
+    return { clienteId, importe, moneda, reservaId: null, contingencia: true, supervisorId: a.supervisor.id, motivo: motivoContingencia.trim() };
+  }
+  let v = r.valor;
+  if (v.veredicto === 'bloqueada') throw falla(409, 'CREDITO_BLOQUEADO', v.motivos.join(' '), v);
+  if (v.veredicto === 'requiere_autorizacion') {
+    const a = autorizar ? await autorizar() : null;
+    if (!a?.ok) throw falla(403, 'CREDITO_REQUIERE_AUTORIZACION', v.motivos.join(' '), v);
+    v = (await pedir({ autorizado: true, supervisorId: a.supervisor.id })).valor;
+    if (!v.id_reserva) throw falla(409, 'CREDITO_BLOQUEADO', (v.motivos ?? []).join(' '), v);
+  }
+  return { clienteId, importe, moneda, reservaId: v.id_reserva, contingencia: false, aviso: v.aviso ?? null };
+};
+const liberarCredito = async (credito) => { if (credito?.reservaId) await (await puertos.obtener('credito')).liberarReserva(credito.reservaId).catch(() => {}); };
+
 const liberarCompromiso = async (id) => { if (id) await (await puertos.obtener('stock')).liberarCompromiso(id).catch(() => {}); };
 // Libera las series que tomó un cierre que no se completó.
 const liberarSeries = async (idSolicitud) => { if (idSolicitud) await (await puertos.obtener('stock')).liberarSeries(idSolicitud).catch(() => {}); };
 
 // Registra la venta de una cuenta cerrada. Va con la `conn` de la transacción del cierre: si el cierre
 // se revierte, no queda ni la venta ni sus mensajes. Un efecto que falle después nunca revierte la venta.
-const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null }) => {
+const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null, credito = null }) => {
   const id_global = await idGlobal();
   // Un no fiscal tiene numeración propia, diferenciada de la fiscal, y queda "pendiente de facturación" (RF12, RN84).
   const numeroNoFiscal = tipoNoFiscal ? await Caea.siguienteNumero(`NF:${tipoNoFiscal}`, conn) : null;
@@ -146,6 +180,9 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
     });
   }
   await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso, modalidad, seriesRegistradas: true });
+  // El débito a la cuenta viaja por el protocolo de integración, en esta misma transacción; la reserva de crédito se convierte en deuda en el mismo registro (Clientes RF04).
+  if (credito) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'debito_venta', docTipo: 'venta', docIdGlobal: id_global, userId, solicitud: idSolicitud,
+    contenido: { cliente_id: credito.clienteId, moneda: credito.moneda, importe: credito.importe, venta_id_global: id_global, fecha: new Date().toISOString().slice(0, 10), reserva_id: credito.reservaId, contingencia: credito.contingencia, concepto: credito.contingencia ? `Contingencia: ${credito.motivo}` : null } });
   return { id: r.insertId, id_global, numero_no_fiscal: numeroNoFiscal };
 };
 
@@ -260,4 +297,4 @@ const margen = async ({ desde, hasta } = {}) => {
   }).sort((a, b) => b.margen - a.margen);
 };
 
-module.exports = { porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+module.exports = { reservarCredito, liberarCredito, importeACuenta, porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };

@@ -120,6 +120,16 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
       });
     }
 
+    // Venta a cuenta corriente: el débito se anula (devolución total) o baja (parcial) en la cuenta del cliente. Con la misma ID_Global de la venta y una
+    // secuencia posterior, Clientes lo retiene hasta que el débito original esté confirmado (Clientes RN37).
+    const [[debitoCC]] = await conn.query("SELECT JSON_EXTRACT(contenido, '$.importe') AS importe FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'debito_venta' LIMIT 1", [idGlobalVenta]);
+    if (debitoCC) {
+      const aCuenta = Number(debitoCC.importe);
+      await Mensajeria.publicar(conn, tipo === 'total' || total >= Number(venta.total)
+        ? { origen: 'ventas', destino: 'clientes', tipo: 'anulacion_debito', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud, contenido: { venta_id_global: idGlobalVenta } }
+        : { origen: 'ventas', destino: 'clientes', tipo: 'devolucion_debito', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud, contenido: { venta_id_global: idGlobalVenta, importe: Math.min(total, aCuenta) } });
+    }
+
     // Nota de crédito: solo si la venta tenía una factura aprobada que corregir.
     const original = await Factura.getBySesion(venta.mesa_id, venta.sesion_apertura, conn);
     if (original?.estado === 'aprobada') {
