@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const Informes = require('../clientes/informesService');
+const Retiros = require('../clientes/retiroService');
 const Cuentas = require('../clientes/cuentaService');
 const requiereModulo = require('../middleware/requiereModulo');
 const { requierePermiso } = require('../middleware/requierePermiso');
@@ -13,7 +14,7 @@ const VER = requierePermiso('clientes.ver');
 
 const manejar = (fn) => async (req, res, next) => {
   try { await fn(req, res); } catch (err) {
-    if (err instanceof Informes.InformeInvalido || err instanceof Cuentas.CuentaInvalida) { const { status, message, ...resto } = err; return res.status(status ?? 400).json({ error: message, ...resto }); }
+    if (err instanceof Informes.InformeInvalido || err instanceof Cuentas.CuentaInvalida || err instanceof Retiros.RetiroInvalido) { const { status, message, ...resto } = err; return res.status(status ?? 400).json({ error: message, ...resto }); }
     next(err);
   }
 };
@@ -62,6 +63,18 @@ router.get('/retenciones', VER, manejar(async (req, res) => {
   const r = await Informes.retenciones(req.query);
   await exportar(req, res, r, { titulo: 'Retenciones sufridas', resumen: [{ label: 'Total retenido', valor: r.total, tipo: 'moneda' }],
     hojas: [{ nombre: 'Retenciones', columnas: [col('fecha', 'Fecha', 'fecha'), col('cliente', 'Cliente', 'texto', 28), col('impuesto', 'Impuesto'), col('regimen', 'Régimen'), col('jurisdiccion', 'Jurisdicción'), col('nro_certificado', 'Certificado', 'texto', 20), col('recibo', 'Recibo', 'texto', 18), col('importe', 'Importe', 'moneda')], filas: r.retenciones }] });
+}));
+// Clientes alcanzados por un retiro de lote (RF30; requiere Stock con STK-TRAZA): el alcance que informa Stock con el contacto de cada cliente, y el aviso por línea.
+router.get('/retiros/:retiroId/alcance', VER, manejar(async (req, res) => {
+  const a = await Retiros.alcance(Number(req.params.retiroId));
+  await exportar(req, res, a, { titulo: 'Clientes alcanzados por un retiro de lote', subtitulo: `${a.lote}: ${a.motivo}`, resumen: [{ label: 'Clientes alcanzados', valor: a.clientes_alcanzados, tipo: 'numero' }, { label: 'Líneas sin cliente identificado', valor: a.sin_cliente, tipo: 'numero' }],
+    hojas: [{ nombre: 'Alcance', columnas: [col('comprobante', 'Comprobante', 'texto', 30), col('fecha', 'Fecha', 'fecha'), col('articulo', 'Artículo', 'texto', 24), col('lote', 'Lote'), col('cantidad', 'Cantidad', 'numero'), col('estado_aviso', 'Aviso'), col('cliente', 'Cliente', 'texto', 28), col('telefono', 'Teléfono'), col('email', 'Correo', 'texto', 26), col('domicilio', 'Domicilio', 'texto', 30)],
+      filas: a.lineas.map((l) => ({ ...l, cliente: l.contacto?.cliente ?? 'Sin cliente identificado', telefono: l.contacto?.telefono ?? '', email: l.contacto?.email ?? '', domicilio: l.contacto?.domicilio ?? '' })) }] });
+}));
+router.post('/retiros/lineas/:lineaId/avisado', requierePermiso('clientes.retiros.avisar'), manejar(async (req, res) => {
+  const r = await Retiros.marcarAvisado(Number(req.params.lineaId), req.body, { userId: req.usuario?.sub });
+  await auditar(req, { modulo: 'clientes', accion: 'aviso_retiro', entidad: 'retiro_linea', entidad_id: req.params.lineaId, detalle: req.body.medio });
+  res.json(r);
 }));
 router.get('/proyeccion', VER, manejar(async (req, res) => {
   const p = await Informes.proyeccion(req.query);

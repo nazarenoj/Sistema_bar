@@ -133,12 +133,12 @@ const linea = async (conn, id) => {
   return li;
 };
 
-const avisar = async (lineaId, { userId } = {}) => {
+const avisar = async (lineaId, { userId, medio = null } = {}) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const li = await linea(conn, lineaId);
-    if (li.estado_aviso === 'pendiente') await conn.query("UPDATE retiro_lineas SET estado_aviso = 'avisado', avisado_por = ?, avisado_at = NOW() WHERE id = ?", [userId ?? null, lineaId]);
+    if (li.estado_aviso === 'pendiente') await conn.query("UPDATE retiro_lineas SET estado_aviso = 'avisado', avisado_por = ?, avisado_at = NOW(), avisado_medio = ? WHERE id = ?", [userId ?? null, medio, lineaId]);
     await conn.commit();
     return obtener(li.retiro_id);
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
@@ -179,4 +179,20 @@ const liberar = async (id, motivo, { userId } = {}) => {
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
 };
 
-module.exports = { TrazaInvalida, ascendente, descendente, retirar, obtener, listar, avisar, recuperar, liberar };
+// Servicio «Alcance de un retiro de lote» que Stock expone hacia abajo a Clientes y CC (RF30, llamada n.º 13): las líneas alcanzadas con comprobante, fecha, artículo, lote, cantidad, estado
+// de aviso y, si la venta tenía un cliente identificado, su ID_Cliente (que Stock toma del mensaje de descuento de esa venta). No devuelve datos de contacto: los completa Clientes.
+const alcance = async (retiroId) => {
+  const ret = await obtener(retiroId);
+  if (!ret) return null;
+  const lineas = [];
+  for (const li of ret.lineas) {
+    const [[a]] = await pool.query('SELECT COALESCE(i.nombre, p.nombre) AS articulo FROM stock_movimientos m LEFT JOIN insumos i ON i.id = m.insumo_id LEFT JOIN productos p ON p.id = m.producto_id WHERE m.id = ?', [li.movimiento_id]);
+    const [[msg]] = await pool.query("SELECT JSON_UNQUOTE(JSON_EXTRACT(contenido, '$.cliente_id')) AS cliente FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'descuento_stock' LIMIT 1", [li.documento]);
+    const cliente = msg?.cliente && msg.cliente !== 'null' ? Number(msg.cliente) : null;
+    lineas.push({ id: li.id, comprobante: li.documento, documento_tipo: li.documento_tipo, fecha: li.fecha, articulo: a?.articulo ?? null, lote: li.lote, cantidad: li.cantidad, no_confirmado: !!li.no_confirmado,
+      estado_aviso: li.estado_aviso, avisado_medio: li.avisado_medio ?? null, aviso_vencido: li.aviso_vencido, cliente_id: cliente });
+  }
+  return { retiro_id: ret.id, id_global: ret.id_global, estado: ret.estado, motivo: ret.motivo, lote: ret.lote_codigo, lineas };
+};
+
+module.exports = { alcance, TrazaInvalida, ascendente, descendente, retirar, obtener, listar, avisar, recuperar, liberar };
