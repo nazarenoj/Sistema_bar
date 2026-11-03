@@ -4,6 +4,7 @@ const Pedido = require('../models/pedidoModel');
 const Venta = require('../services/ventaService');
 const { validarAutorizacion, permisosDe } = require('../middleware/requierePermiso');
 const Cocina = require('../services/cocinaService');
+const Franjas = require('../services/franjaService');
 const Mensajeria = require('../mensajeria/servicio');
 const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
@@ -232,6 +233,7 @@ const addProductos = async (req, res) => {
     const conAlergenos = await Funciones.estaActiva('VEN-ALERGENOS');
     const conListas = await Funciones.estaActiva('VEN-LISTAS');
     // Con la pantalla de cocina, un agotado (manual o de Stock) se puede vender con permiso si el modo es "advertir" (Ventas RN35).
+    const conFranja = await Funciones.estaActiva('VEN-FRANJA');
     const conKds = await Funciones.estaActiva('VEN-KDS');
     const modoAgotado = conKds ? await Cocina.modoAgotado() : 'bloquear';
     const puedeAgotado = conKds && modoAgotado === 'advertir' && (await permisosDe(req)).niveles['ventas.agotados.vender'] === 'permitido';
@@ -244,6 +246,14 @@ const addProductos = async (req, res) => {
       if (!rows.length) {
         conn.release();
         return res.status(404).json({ error: `Producto con id ${producto_id} no encontrado.` });
+      }
+      // Fuera de su franja un ítem no se ofrece (Ventas RN45); lo ya agregado conserva su precio y puede enviarse.
+      if (conFranja) {
+        const fr = await Franjas.disponible(conn, producto_id);
+        if (!fr.disponible) {
+          conn.release();
+          return res.status(409).json({ error: `"${rows[0].nombre}" no se ofrece en este horario (${fr.franjas.join(', ')}).`, codigo: 'FUERA_DE_FRANJA', franjas: fr.franjas });
+        }
       }
       if (rows[0].agotado) {
         if (!puedeAgotado) {

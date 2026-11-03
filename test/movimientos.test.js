@@ -189,7 +189,7 @@ test('Stock.RF18: el kardex filtra por fecha y depósito, se exporta, y las merm
   await egreso({ motivo: 'merma_fin_dia', lineas: [linea(pan, 6)] });
   await egreso({ motivo: 'rotura', observacion: 'se cayó', lineas: [linea(pan, 1)] });
   await egreso({ motivo: 'consumo_interno', lineas: [linea(pan, 9)] }); // no es merma
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = new Date().toLocaleDateString('sv-SE');
   assert.equal((await kardex('insumo', pan.id, `&desde=${hoy}&hasta=${hoy}`)).length, 5);
   assert.equal((await kardex('insumo', pan.id, '&desde=2000-01-01&hasta=2000-01-02')).length, 0);
   assert.equal((await kardex('insumo', pan.id, `&deposito_id=${principal.id}`)).length, 5);
