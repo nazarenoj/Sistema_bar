@@ -42,7 +42,7 @@ const instaladosSet = async () => {
   const { codigo } = instancias.actual();
   const c = cache.get(codigo);
   if (c && Date.now() < c.hasta) return c.set;
-  const [rows] = await pool.query('SELECT codigo FROM modulos_instalados');
+  const [rows] = await pool.query("SELECT codigo FROM modulos_instalados WHERE estado = 'instalado'"); // uno en desinstalación ya no cuenta como instalado (RN87)
   const set = new Set(rows.map((r) => r.codigo));
   cache.set(codigo, { set, hasta: Date.now() + TTL_MS });
   return set;
@@ -54,9 +54,10 @@ const estaInstalado = async (codigo) => (await instaladosSet()).has(codigo);
 
 const listar = async () => {
   const set = await instaladosSet();
+  const enDesinstalacion = new Set((await pool.query("SELECT codigo FROM modulos_instalados WHERE estado = 'en_desinstalacion'"))[0].map((r) => r.codigo));
   return Object.entries(MODULOS).map(([codigo, m]) => ({
     codigo, nombre: m.nombre, capa: m.capa, dependeDe: m.dependeDe,
-    obligatorio: !!m.obligatorio, disponible: !m.noConstruido, instalado: set.has(codigo),
+    obligatorio: !!m.obligatorio, disponible: !m.noConstruido, instalado: set.has(codigo), en_desinstalacion: enDesinstalacion.has(codigo),
   }));
 };
 

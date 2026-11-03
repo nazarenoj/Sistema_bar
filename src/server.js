@@ -75,7 +75,8 @@ require('./services/indicadoresVentas');
 require('./services/paqueteVentas'); // y publican su paquete de consolidación (F4)
 require('./stock/paqueteStock'); // Ventas registra sus indicadores del tablero (F3)
 require('./stock/indicadoresStock');
-require('./stock/destinoEquivalencia'); // destinos del diccionario de equivalencias (F7)
+require('./stock/destinoEquivalencia');
+require('./stock/documentosAbiertos'); // lo que Stock deja abierto al desinstalarse (F9) // destinos del diccionario de equivalencias (F7)
 require('./services/destinoEquivalencia'); // y Stock los suyos
 require('./models/insumoPuerto'); // Stock registra lo que implementa de los puertos de Ventas
 require('./services/disponibilidadReceptor'); // Ventas aplica la marca de agotado automático que informa Stock
