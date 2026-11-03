@@ -4,6 +4,7 @@ const Receta = require('./recetaService');
 const { hojasDeLinea } = require('./lineaVentaService');
 const Lotes = require('./loteService');
 const Porciones = require('./porcionService');
+const Series = require('./serieService');
 const Deposito = require('../models/depositoModel');
 const Compromiso = require('./compromisoService');
 const Notificacion = require('../models/notificacionModel');
@@ -76,6 +77,14 @@ M.registrarReceptor('stock', 'descuento_stock', async (conn, c, ctx) => {
   if (c.id_compromiso) await Compromiso.consumir(conn, c.id_compromiso);
   for (const it of c.items) {
     const [[p]] = await conn.query('SELECT sector_id FROM productos WHERE id = ?', [it.producto_id]);
+    // Una serie se vende como unidad (Disponible → Comprometida → Vendida) con el costo de esa unidad y su garantía (RN05, RN79).
+    if (it.serie && (await Series.controla(conn, it.producto_id))) {
+      const r = await Series.venderEnDescuento(conn, { producto_id: it.producto_id, serie: it.serie, documento: ctx.docIdGlobal, fecha_fin_garantia: it.fecha_fin_garantia }, { userId: c.user_id });
+      if (!r.repetida) aplicados++;
+      lineasCosto.push({ linea: it.linea, costo_unitario: r.costo_unitario, origen_costo: r.costo_unitario === null ? 'sin_costo' : 'movimiento_stock', provisorio: false,
+        detalle: [{ item: `producto:${it.producto_id}`, cantidad: 1, costo_unitario: r.costo_unitario, provisorio: false, lotes: [], serie: it.serie }] });
+      continue;
+    }
     const deposito = await Deposito.depositoDeSector(p?.sector_id ?? null, conn);
     let hojas;
     try { hojas = await hojasDeLinea(conn, { producto_id: it.producto_id, cantidad: it.cantidad, opciones: it.opciones, modalidad: c.modalidad }); } catch (err) {
@@ -118,6 +127,11 @@ M.registrarReceptor('stock', 'reingreso_stock', async (conn, c, ctx) => {
   const vendidos = envio ? JSON.parse(envio.contenido).items ?? [] : [];
   for (const it of c.items) {
     // La devolución de una porción nunca reingresa a la pieza ni a las porciones: siempre es merma (RF08, RN78).
+    if (it.serie && (await Series.controla(conn, it.producto_id))) { // la serie vuelve Disponible o se da de baja si tiene falla (RN79)
+      const r = await Series.devolverEnReingreso(conn, { producto_id: it.producto_id, serie: it.serie, condicion: it.condicion, motivo: it.motivo, documento: ctx.docIdGlobal }, { userId: c.user_id });
+      if (!r.sin_efecto) aplicados++;
+      continue;
+    }
     const porcion = await Porciones.esPorcion(conn, vendidos.find((v) => v.linea === it.linea)?.producto_id);
     const [originales] = await conn.query(
       "SELECT * FROM stock_movimientos WHERE documento = ? AND tipo = 'venta' AND operacion_clave LIKE ? ORDER BY insumo_id, producto_id, id", [ctx.docIdGlobal, `%|${it.linea}|%`]);

@@ -1,3 +1,4 @@
+const SerieVenta = require('./serieVentaService');
 const pool = require('../config/db');
 const afipConfig = require('../config/afipConfig');
 const Mensajeria = require('../mensajeria/servicio');
@@ -44,7 +45,7 @@ const yaDevuelto = async (conn, ventaId) => {
 };
 
 // items: [{ linea, cantidad }] o `todo: true` para anular lo que quede.
-const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reingreso', reintegro }, { idSolicitud, userId, autorizadoPor } = {}) => {
+const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reingreso', reintegro, series = [] }, { idSolicitud, userId, autorizadoPor } = {}) => {
   if (typeof motivo !== 'string' || !motivo.trim()) throw new DevolucionInvalida('El motivo es obligatorio.');
   if (!['reingreso', 'merma'].includes(reingreso)) throw new DevolucionInvalida('"reingreso" debe ser reingreso o merma.');
   const venta = await Venta.obtener(idGlobalVenta);
@@ -52,6 +53,7 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
 
   const conn = await pool.getConnection();
   let devolucion, itemsDev, reintegros, nc;
+  const advertencias = [];
   try {
     await conn.beginTransaction();
     // Se serializa sobre la venta: dos devoluciones simultáneas no pueden devolver dos veces lo mismo.
@@ -69,7 +71,13 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
       if (cantidad > l.cantidad - (devuelto.get(linea) ?? 0)) throw new DevolucionInvalida(`No se puede devolver más de lo vendido y no devuelto de "${l.nombre}".`);
       // Lo devuelto es el precio efectivamente cobrado: el importe de la línea menos su descuento de promoción, en proporción (RN34).
       const importe = Math.round((cantidad * l.precio_unitario - (l.importe_descuento ?? 0) * cantidad / l.cantidad) * 100) / 100;
-      return { linea, producto_id: l.producto_id, nombre: l.nombre, cantidad, precio_unitario: Math.round(importe / cantidad * 100) / 100, importe };
+      const base = { linea, producto_id: l.producto_id, nombre: l.nombre, cantidad, precio_unitario: Math.round(importe / cantidad * 100) / 100, importe };
+      if (!l.serie) return base;
+      // Un artículo con número de serie: Ventas pide indicar si tiene falla y, con falla, el motivo (Ventas RN79).
+      const dato = (Array.isArray(series) ? series : []).find((s) => s.linea === linea);
+      if (typeof dato?.falla !== 'boolean') throw new DevolucionInvalida(`Indicá si la serie ${l.serie} de "${l.nombre}" tiene falla (series: [{ linea, falla, motivo }]).`);
+      if (dato.falla && !String(dato.motivo ?? '').trim()) throw new DevolucionInvalida(`La serie ${l.serie} vuelve con falla: indicá el motivo de la baja.`);
+      return { ...base, serie: l.serie, condicion: dato.falla ? 'con_falla' : 'sin_falla', motivo_falla: dato.falla ? String(dato.motivo).trim() : null };
     });
     if (new Set(itemsDev.map((i) => i.linea)).size !== itemsDev.length) throw new DevolucionInvalida('Hay líneas repetidas.');
     const total = itemsDev.reduce((a, i) => a + centavos(i.importe), 0) / 100;
@@ -86,6 +94,10 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
       throw new DevolucionInvalida(`El reintegro (${reintegros.reduce((a, r) => a + Number(r.importe), 0)}) debe sumar lo devuelto (${total}).`);
 
     const restante = venta.detalle.reduce((a, l, i) => a + l.cantidad - (devuelto.get(i) ?? 0), 0);
+    for (const i of itemsDev.filter((x) => x.serie)) {
+      const r = await SerieVenta.devolver(conn, { producto_id: i.producto_id, serie: i.serie, venta_id_global: idGlobalVenta, falla: i.condicion === 'con_falla', motivo: i.motivo_falla });
+      if (r.advertencia) advertencias.push(r.advertencia); // garantía vencida: se advierte y no se bloquea
+    }
     const tipo = itemsDev.reduce((a, i) => a + i.cantidad, 0) === restante ? 'total' : 'parcial';
     const id_global = await idGlobal();
     const [r] = await conn.query(
@@ -104,7 +116,7 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
     if (conDescuento) {
       await Mensajeria.publicar(conn, {
         origen: 'ventas', destino: 'stock', tipo: 'reingreso_stock', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud,
-        contenido: { modo: reingreso, items: itemsDev.map((i) => ({ linea: i.linea, cantidad: i.cantidad, cantidad_original: venta.detalle[i.linea].cantidad })), user_id: userId ?? null },
+        contenido: { modo: reingreso, items: itemsDev.map((i) => ({ linea: i.linea, producto_id: i.producto_id, cantidad: i.cantidad, cantidad_original: venta.detalle[i.linea].cantidad, ...(i.serie && { serie: i.serie, condicion: i.condicion, motivo: i.motivo_falla }) })), user_id: userId ?? null },
       });
     }
 
@@ -152,7 +164,7 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
     }
     notaCredito = await Factura.getById(nc.id);
   }
-  return { devolucion, reintegros, nota_credito: notaCredito };
+  return { devolucion, reintegros, nota_credito: notaCredito, ...(advertencias.length && { advertencias }) };
 };
 
 const listar = async (idGlobalVenta) => {

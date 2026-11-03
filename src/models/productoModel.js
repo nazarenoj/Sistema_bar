@@ -21,7 +21,7 @@ const getByNombre = async (nombre) => {
 
 // Campos del catálogo (B1) además de nombre, precio y descripción; todos opcionales salvo el tipo, que por defecto es estándar.
 const CAMPOS = ['tipo', 'sku', 'codigo_barras', 'categoria_id', 'sector_id', 'producto_base_id',
-  'alicuota_iva', 'agotado', 'tara', 'peso_minimo', 'peso_maximo'];
+  'alicuota_iva', 'agotado', 'tara', 'peso_minimo', 'peso_maximo', 'plazo_garantia_dias'];
 const extras = (d) => CAMPOS.filter((c) => d[c] !== undefined);
 
 const create = async ({ nombre, precio, descripcion, stock, ...resto }) => {

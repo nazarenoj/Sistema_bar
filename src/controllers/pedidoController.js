@@ -5,6 +5,7 @@ const Venta = require('../services/ventaService');
 const { validarAutorizacion, permisosDe } = require('../middleware/requierePermiso');
 const Cocina = require('../services/cocinaService');
 const Franjas = require('../services/franjaService');
+const SerieVenta = require('../services/serieVentaService');
 const Mensajeria = require('../mensajeria/servicio');
 const Producto = require('../models/productoModel');
 const puertos = require('../modulos/puertos');
@@ -209,7 +210,9 @@ const addProductos = async (req, res) => {
     return res.status(400).json({ error: 'El campo "productos" debe ser un array no vacío.' });
 
   for (let i = 0; i < productos.length; i++) {
-    const { producto_id, cantidad, observaciones, lote_indicado, opciones } = productos[i];
+    const { producto_id, cantidad, observaciones, lote_indicado, opciones, serie } = productos[i];
+    if (serie !== undefined && serie !== null && (typeof serie !== 'string' || serie.length > 80))
+      return res.status(400).json({ error: `productos[${i}]: "serie" debe ser un texto de hasta 80 caracteres.` });
     if (opciones !== undefined && (!Array.isArray(opciones) || opciones.some((o) => !Number.isInteger(o) || o <= 0)))
       return res.status(400).json({ error: `productos[${i}]: "opciones" debe ser una lista de ids de opción.` });
     if (lote_indicado !== undefined && lote_indicado !== null && (typeof lote_indicado !== 'string' || lote_indicado.length > 60))
@@ -238,9 +241,10 @@ const addProductos = async (req, res) => {
     const modoAgotado = conKds ? await Cocina.modoAgotado() : 'bloquear';
     const puedeAgotado = conKds && modoAgotado === 'advertir' && (await permisosDe(req)).niveles['ventas.agotados.vender'] === 'permitido';
     advertencias = [];
-    for (const { producto_id, cantidad, observaciones, lote_indicado, opciones } of productos) {
+    const seriesDelPedido = new Set();
+    for (const { producto_id, cantidad, observaciones, lote_indicado, opciones, serie } of productos) {
       const [rows] = await conn.query(
-        'SELECT id, nombre, descripcion, precio, agotado, agotado_auto FROM productos WHERE id = ?',
+        'SELECT id, nombre, descripcion, precio, agotado, agotado_auto, tipo FROM productos WHERE id = ?',
         [producto_id]
       );
       if (!rows.length) {
@@ -263,6 +267,19 @@ const addProductos = async (req, res) => {
         advertencias.push(`"${rows[0].nombre}" está agotado: se vendió con tu permiso.`);
       } else if (conKds && rows[0].agotado_auto) {
         advertencias.push(`"${rows[0].nombre}" figura sin existencias en Stock: la marca avisa y no bloquea la venta.`); // Stock RF32, Ventas RN01
+      }
+      // Artículo con número de serie (RN05, EX33): exige la serie, que no puede estar vendida ni en otro pedido abierto.
+      let serieLinea = null;
+      try {
+        serieLinea = await SerieVenta.validarEnPedido(conn, { producto: rows[0], serie, cantidad, pedidoId: pedido_id });
+        if (serieLinea) {
+          if (seriesDelPedido.has(`${producto_id}:${serieLinea}`)) throw Object.assign(new SerieVenta.SerieVentaInvalida(`La serie ${serieLinea} está repetida en el pedido.`), { status: 409 });
+          seriesDelPedido.add(`${producto_id}:${serieLinea}`);
+        }
+      } catch (err) {
+        conn.release();
+        if (err instanceof SerieVenta.SerieVentaInvalida) return res.status(err.status ?? 400).json({ error: err.message, ...(err.codigo && { codigo: err.codigo }), ...(err.estado && { estado: err.estado }) });
+        throw err;
       }
       // Las opciones elegidas ajustan el precio, que queda fijado al agregar el ítem (Ventas RN41).
       let modificadores = [];
@@ -290,6 +307,7 @@ const addProductos = async (req, res) => {
         nombre: rows[0].nombre,
         descripcion: rows[0].descripcion,
         modificadores,
+        serie: serieLinea,
         alergenos: conAlergenos ? await AlergenosVenta.calcularLinea(conn, producto_id, modificadores.map((m) => m.opcion_id)) : null,
         lista_precio_id: listaId,
         precio_unitario: Math.round((precioBase + ajuste) * 100) / 100,
@@ -419,7 +437,8 @@ const cerrarPedido = async (req, res) => {
   } catch (err) {
     await conn.rollback();
     await Venta.liberarCompromiso(idCompromiso);
-    if (['SIN_DISPONIBLE', 'STOCK_NO_RESPONDE', 'LOTE_NO_DISPONIBLE'].includes(err.codigo)) return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
+    await Venta.liberarSeries(req.get('X-ID-Solicitud'));
+    if (['SIN_DISPONIBLE', 'STOCK_NO_RESPONDE', 'LOTE_NO_DISPONIBLE', 'SERIE_NO_DISPONIBLE'].includes(err.codigo)) return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
     logger.error(`${req.method} ${req.originalUrl} - ${err.message}`, { stack: err.stack });
     res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
   } finally {

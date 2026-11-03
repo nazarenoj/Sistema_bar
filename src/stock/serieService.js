@@ -10,7 +10,8 @@ const { idGlobal } = require('../utils/idGlobal');
 class SerieInvalida extends Error {}
 const invalida = (m, status = 400) => Object.assign(new SerieInvalida(m), { status });
 
-const nuevoConn = async (fn) => {
+const nuevoConn = async (fn, externa = null) => {
+  if (externa) return fn(externa); // dentro de la transacción de quien llama (el descuento de una venta)
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -83,13 +84,13 @@ const pasar = async (conn, s, de, a, set = {}) => {
   if (!r.affectedRows) throw invalida(`La serie ${s.numero_serie} está "${s.estado}", no "${de}".`, 409);
 };
 
-const comprometer = async (productoId, numero, idCompromiso, { userId } = {}) => nuevoConn(async (conn) => {
+const comprometer = async (productoId, numero, idCompromiso, { userId, conn: externa } = {}) => nuevoConn(async (conn) => {
   await exigirSerializado(conn, productoId);
   const s = await serie(conn, productoId, numero, true);
   await pasar(conn, s, 'disponible', 'comprometida', { id_compromiso: idCompromiso ?? null });
   await evento(conn, s.id, 'compromiso', { documento: idCompromiso, userId });
   return { numero_serie: s.numero_serie, estado: 'comprometida' };
-});
+}, externa);
 
 const liberar = async (productoId, numero, { userId } = {}) => nuevoConn(async (conn) => {
   const s = await serie(conn, productoId, numero, true);
@@ -99,17 +100,17 @@ const liberar = async (productoId, numero, { userId } = {}) => nuevoConn(async (
 });
 
 // Venta de una serie comprometida: egresa la unidad y guarda la garantía que informa Ventas (Stock no la calcula, RN79).
-const vender = async (productoId, numero, { documento, cliente, fecha_fin_garantia } = {}, { userId } = {}) => nuevoConn(async (conn) => {
+const vender = async (productoId, numero, { documento, cliente, fecha_fin_garantia } = {}, { userId, conn: externa } = {}) => nuevoConn(async (conn) => {
   await exigirSerializado(conn, productoId);
   const s = await serie(conn, productoId, numero, true);
   await pasar(conn, s, 'comprometida', 'vendida', { fecha_fin_garantia: fecha_fin_garantia ?? null, id_compromiso: null });
   await Mov.registrar(conn, { item: { tipo: 'producto', id: productoId }, deposito_id: s.deposito_id, tipo: 'venta', motivo: 'venta', cantidad: -1, costo_unitario: s.costo_unitario, documento_tipo: 'venta', documento: documento ?? null, user_id: userId });
   await evento(conn, s.id, 'venta', { detalle: { cliente: cliente ?? null, fecha_fin_garantia: fecha_fin_garantia ?? null }, documento, userId });
-  return { numero_serie: s.numero_serie, estado: 'vendida', fecha_fin_garantia: fecha_fin_garantia ?? null };
-});
+  return { numero_serie: s.numero_serie, estado: 'vendida', fecha_fin_garantia: fecha_fin_garantia ?? null, costo_unitario: s.costo_unitario === null ? null : Number(s.costo_unitario) };
+}, externa);
 
 // Devolución (RN79): sin falla vuelve Disponible; con falla pasa a Baja con motivo (reingreso y baja de la unidad).
-const devolver = async (productoId, numero, { condicion, motivo, documento } = {}, { userId } = {}) => {
+const devolver = async (productoId, numero, { condicion, motivo, documento } = {}, { userId, conn: externa } = {}) => {
   if (!['sin_falla', 'con_falla'].includes(condicion)) throw invalida('La condición debe ser "sin_falla" o "con_falla".');
   if (condicion === 'con_falla' && !String(motivo ?? '').trim()) throw invalida('Una devolución con falla exige el motivo de la baja.');
   return nuevoConn(async (conn) => {
@@ -121,7 +122,7 @@ const devolver = async (productoId, numero, { condicion, motivo, documento } = {
     if (condicion === 'con_falla') await Mov.registrar(conn, { ...comun, tipo: 'egreso', motivo: 'baja_serie', cantidad: -1, observacion: String(motivo).trim() });
     await evento(conn, s.id, 'devolucion', { detalle: { condicion, motivo: motivo ?? null }, documento, userId });
     return { numero_serie: s.numero_serie, estado: condicion === 'sin_falla' ? 'disponible' : 'baja' };
-  });
+  }, externa);
 };
 
 // Baja de series Disponibles con motivo (RF37a): egreso de motivo "Baja de serie". Una comprometida se consume o vence antes; una vendida no se toca.
@@ -184,4 +185,55 @@ const contar = async (productoId, depositoId, contadas, { userId } = {}) => nuev
   return { faltantes: faltantes.map((s) => s.numero_serie), sobrantes };
 });
 
-module.exports = { SerieInvalida, activar, ingresar, comprometer, liberar, vender, devolver, baja, convertir, vigentes, listar, historial, contar };
+// ---- La venta de una serie (Ventas RF33, RN05, EX33): compromiso al cerrar, venta en el descuento y devolución ----
+
+// ¿Se maneja esa serie con Stock? Con STK-SERIE activa y el artículo serializado.
+const controla = async (conn, productoId) => (await Funciones.estaActiva('STK-SERIE', conn)) && !!(await producto(conn, productoId).catch(() => null))?.controla_serie;
+
+// Estado de una serie para decirle al vendedor por qué no se puede vender (EX33).
+const estadoParaVenta = async (productoId, numero) => {
+  if (!(await controla(pool, productoId))) return { controlada: false };
+  const [[s]] = await pool.query('SELECT estado FROM series WHERE producto_id = ? AND numero_serie = ?', [productoId, String(numero ?? '').trim()]);
+  return { controlada: true, existe: !!s, estado: s?.estado ?? null };
+};
+
+// Compromete las series de las líneas del cierre (Disponible → Comprometida, atómico por serie). Si alguna no sirve, libera las que tomó.
+const comprometerParaVenta = async (lineas, idCompromiso, { userId } = {}) => {
+  const tomadas = [];
+  for (const l of lineas.filter((x) => x.serie)) {
+    if (!(await controla(pool, l.producto_id))) continue;
+    try { await comprometer(l.producto_id, l.serie, idCompromiso, { userId }); tomadas.push(l); } catch (err) {
+      if (!(err instanceof SerieInvalida)) throw err;
+      for (const t of tomadas) await liberar(t.producto_id, t.serie, { userId }).catch(() => {});
+      const e = await estadoParaVenta(l.producto_id, l.serie);
+      return { ok: false, no_disponible: [{ producto_id: l.producto_id, serie: l.serie, existe: e.existe, estado: e.estado, motivo: e.existe ? `está ${e.estado}` : 'no existe' }] };
+    }
+  }
+  return { ok: true, comprometidas: tomadas.length };
+};
+// Libera lo comprometido por un cierre que no se completó.
+const liberarPorCompromiso = async (idCompromiso, { userId } = {}) => {
+  const [filas] = await pool.query("SELECT producto_id, numero_serie FROM series WHERE estado = 'comprometida' AND id_compromiso = ?", [idCompromiso]);
+  for (const s of filas) await liberar(s.producto_id, s.numero_serie, { userId }).catch(() => {});
+  return filas.length;
+};
+
+// Venta de la serie en el descuento (idempotente: una serie ya vendida no se vuelve a vender). Devuelve el costo con que salió.
+const venderEnDescuento = async (conn, { producto_id, serie: numero, documento, fecha_fin_garantia, cliente }, { userId } = {}) => {
+  const s = await serie(conn, producto_id, numero, true);
+  if (s.estado === 'vendida') return { costo_unitario: s.costo_unitario === null ? null : Number(s.costo_unitario), repetida: true };
+  if (s.estado === 'disponible') await comprometer(producto_id, numero, documento, { userId, conn });
+  else if (s.estado !== 'comprometida') throw invalida(`La serie ${numero} está ${s.estado}: no se puede vender.`, 409);
+  const r = await vender(producto_id, numero, { documento, cliente, fecha_fin_garantia }, { userId, conn });
+  return { costo_unitario: r.costo_unitario, repetida: false };
+};
+
+// Devolución de la serie (idempotente): sin falla vuelve Disponible; con falla se da de baja con el motivo.
+const devolverEnReingreso = async (conn, { producto_id, serie: numero, condicion, motivo, documento }, { userId } = {}) => {
+  const s = await serie(conn, producto_id, numero, true);
+  if (s.estado !== 'vendida') return { sin_efecto: true };
+  await devolver(producto_id, numero, { condicion, motivo, documento }, { userId, conn });
+  return { sin_efecto: false };
+};
+
+module.exports = { SerieInvalida, controla, estadoParaVenta, comprometerParaVenta, liberarPorCompromiso, venderEnDescuento, devolverEnReingreso, activar, ingresar, comprometer, liberar, vender, devolver, baja, convertir, vigentes, listar, historial, contar };

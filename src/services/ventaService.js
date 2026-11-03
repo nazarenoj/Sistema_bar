@@ -1,3 +1,4 @@
+const SerieVenta = require('./serieVentaService');
 const pool = require('../config/db');
 const Mensajeria = require('../mensajeria/servicio');
 const llamar = require('../modulos/llamar');
@@ -53,10 +54,13 @@ const metodoResumen = (pagos) => (pagos.length > 1 ? 'mixto' : pagos[0].forma);
 
 // Mensaje de descuento de stock (Stock RF07): trae solo la línea vendida, nunca los componentes; Stock la expande según el
 // modo de descuento del artículo. `items`: filas con producto_id y cantidad, en el orden de la venta (la posición es la línea).
-const publicarDescuento = async (conn, { docTipo, docIdGlobal, items, userId, solicitud, noFiscal = false, idCompromiso = null, modalidad = null }) => Mensajeria.publicar(conn, {
+const publicarDescuento = async (conn, { docTipo, docIdGlobal, items, userId, solicitud, noFiscal = false, idCompromiso = null, modalidad = null, seriesRegistradas = false }) => {
+  if (!seriesRegistradas) items = await SerieVenta.registrarVenta(conn, items, docIdGlobal); // cada serie vendida con su garantía (RN79)
+  return Mensajeria.publicar(conn, {
   origen: 'ventas', destino: 'stock', tipo: 'descuento_stock', docTipo, docIdGlobal, userId, solicitud,
-  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null, ...(i.opciones?.length && { opciones: i.opciones }) })), modalidad, no_fiscal: noFiscal, user_id: userId ?? null, id_compromiso: idCompromiso },
-});
+  contenido: { doc_tipo: docTipo, items: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null, ...(i.opciones?.length && { opciones: i.opciones }), ...(i.serie && { serie: i.serie, fecha_fin_garantia: i.fecha_fin_garantia ?? null }) })), modalidad, no_fiscal: noFiscal, user_id: userId ?? null, id_compromiso: idCompromiso },
+  });
+};
 
 // Compromiso de venta antes de confirmar (Ventas RN63): pide a Stock, con timeout de 3 s, comprometer la línea vendida. Solo
 // bloquean los ítems que no admiten stock negativo. "Sin disponible" no se cierra; si Stock no responde, la política es abrir con
@@ -69,12 +73,15 @@ const comprometerStock = async (items, { idSolicitud, userId, autorizar }) => {
     if (!a?.ok) throw Object.assign(new Error('Stock no respondió: el cierre necesita la autorización de un supervisor.'), { status: 409, codigo: 'STOCK_NO_RESPONDE' });
     return null;
   }
+  if (r.valor.serie_no_disponible) throw Object.assign(new Error(`Serie no disponible: ${r.valor.serie_no_disponible.map((s) => `${s.serie} (${s.motivo})`).join('; ')}.`), { status: 409, codigo: 'SERIE_NO_DISPONIBLE', detalle: r.valor.serie_no_disponible });
   if (r.valor.lote_no_disponible) throw Object.assign(new Error(`Lote no disponible: ${r.valor.lote_no_disponible.map((l) => `${l.lote} (${l.motivo})`).join('; ')}. Elegí otro lote o dejá que se asigne por FEFO.`), { status: 409, codigo: 'LOTE_NO_DISPONIBLE', detalle: r.valor.lote_no_disponible });
   if (!r.valor.ok) throw Object.assign(new Error(`Sin disponible: ${r.valor.sin_disponible.map((s) => `${s.nombre} (${s.deposito}): quedan ${s.disponible}, hacen falta ${s.requerido}`).join('; ')}.`), { status: 409, codigo: 'SIN_DISPONIBLE', detalle: r.valor.sin_disponible });
   return r.valor.id_compromiso;
 };
 
 const liberarCompromiso = async (id) => { if (id) await (await puertos.obtener('stock')).liberarCompromiso(id).catch(() => {}); };
+// Libera las series que tomó un cierre que no se completó.
+const liberarSeries = async (idSolicitud) => { if (idSolicitud) await (await puertos.obtener('stock')).liberarSeries(idSolicitud).catch(() => {}); };
 
 // Registra la venta de una cuenta cerrada. Va con la `conn` de la transacción del cierre: si el cierre
 // se revierte, no queda ni la venta ni sus mensajes. Un efecto que falle después nunca revierte la venta.
@@ -84,7 +91,8 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
   const numeroNoFiscal = tipoNoFiscal ? await Caea.siguienteNumero(`NF:${tipoNoFiscal}`, conn) : null;
   const snap = await Funciones.instantanea('pedido');
   const [promos] = items.length ? await conn.query('SELECT item_id, nombre, importe FROM promociones_aplicadas WHERE item_id IN (?)', [items.map((i) => i.id)]) : [[]];
-  const detalle = items.map((i) => ({ producto_id: i.producto_id, nombre: i.nombre, cantidad: i.cantidad, precio_unitario: Number(i.precio_unitario), ...(i.modificadores && { modificadores: i.modificadores }), ...(i.alergenos && { alergenos: i.alergenos }), ...(i.lista && { lista: i.lista }),
+  items = await SerieVenta.registrarVenta(conn, items, id_global);
+  const detalle = items.map((i) => ({ producto_id: i.producto_id, nombre: i.nombre, cantidad: i.cantidad, precio_unitario: Number(i.precio_unitario), ...(i.serie && { serie: i.serie, fecha_fin_garantia: i.fecha_fin_garantia }), ...(i.modificadores && { modificadores: i.modificadores }), ...(i.alergenos && { alergenos: i.alergenos }), ...(i.lista && { lista: i.lista }),
     ...(Number(i.importe_descuento) > 0 && { importe_descuento: Number(i.importe_descuento), promociones: promos.filter((p) => p.item_id === i.id).map((p) => ({ nombre: p.nombre, importe: Number(p.importe) })) }) }));
   const [r] = await conn.query(
     'INSERT INTO ventas (id_global, mesa_id, sesion_apertura, total, detalle, id_solicitud, config_version, creado_por, condicion_fiscal, tipo_no_fiscal, numero_no_fiscal, modalidad, mozo_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -101,7 +109,7 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
       solicitud: idSolicitud, contenido: { total, pagos, items: detalle },
     });
   }
-  await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso, modalidad });
+  await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso, modalidad, seriesRegistradas: true });
   return { id: r.insertId, id_global, numero_no_fiscal: numeroNoFiscal };
 };
 
@@ -209,4 +217,4 @@ const margen = async ({ desde, hasta } = {}) => {
   }).sort((a, b) => b.margen - a.margen);
 };
 
-module.exports = { comprometerStock, liberarCompromiso, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+module.exports = { comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };

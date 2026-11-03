@@ -3,11 +3,12 @@ const Insumo = require('../models/insumoModel');
 const Presentacion = require('../models/presentacionModel');
 const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
+const Funciones = require('../funciones/servicio');
 
-const TIPOS = ['estandar', 'variante', 'pesable', 'fraccionable', 'combo', 'elaborado', 'servicio'];
+const TIPOS = ['estandar', 'variante', 'pesable', 'fraccionable', 'combo', 'elaborado', 'servicio', 'serializado'];
 const IVA = [0, 2.5, 5, 10.5, 21, 27]; // alícuotas vigentes de ARCA
 const CAMPOS_TEXTO = ['sku', 'codigo_barras'];
-const CAMPOS_ENTEROS = ['categoria_id', 'sector_id', 'producto_base_id'];
+const CAMPOS_ENTEROS = ['categoria_id', 'sector_id', 'producto_base_id', 'plazo_garantia_dias'];
 const CAMPOS_PESO = ['tara', 'peso_minimo', 'peso_maximo'];
 
 // Valida los campos del catálogo (B1) que vengan en el cuerpo; los que faltan no se tocan.
@@ -114,6 +115,8 @@ const create = async (req, res) => {
 
   const errores = [...validarCampos({ nombre, precio }), ...validarCatalogo(req.body)];
   if (errores.length) return res.status(400).json({ errores });
+  if (req.body.tipo === 'serializado' && !(await Funciones.estaActiva('VEN-SERIE')))
+    return res.status(409).json({ error: 'El tipo "serializado" necesita la función VEN-SERIE.', codigo: 'FUNCION_DESACTIVADA', funcion: 'VEN-SERIE' });
 
   if (stock !== undefined && (!Number.isInteger(stock) || stock < 0)) {
     return res.status(400).json({ errores: ['El campo "stock" debe ser un entero mayor o igual a cero.'] });
@@ -145,6 +148,8 @@ const update = async (req, res) => {
 
   const errores = [...validarCampos({ nombre, precio }), ...validarCatalogo(req.body)];
   if (errores.length) return res.status(400).json({ errores });
+  if (req.body.tipo === 'serializado' && !(await Funciones.estaActiva('VEN-SERIE')))
+    return res.status(409).json({ error: 'El tipo "serializado" necesita la función VEN-SERIE.', codigo: 'FUNCION_DESACTIVADA', funcion: 'VEN-SERIE' });
 
   try {
     const afectados = await Producto.update(id, {

@@ -1,6 +1,6 @@
 {
   "name": "sistema-chepola",
-  "version": "42.0.0",
+  "version": "43.0.0",
   "description": "Sistema Chepola - API REST con Express",
   "main": "src/server.js",
   "scripts": {
