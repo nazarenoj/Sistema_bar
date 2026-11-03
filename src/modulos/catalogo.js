@@ -19,7 +19,7 @@ const MODULOS = {
   ventas: {
     nombre: 'Ventas', capa: 1, dependeDe: ['usuarios'],
     archivos: [
-      /^(controllers|routes)\/(estructura|factura|mesa|pedido|producto|catalogo|salon|silla|ticket|venta|formaPago|devolucion|registroVentas|precio|comanda|padron|modificador|ventaAlergeno|promocion|cocina|franja|movil|reserva)/,
+      /^(controllers|routes)\/(estructura|factura|mesa|pedido|producto|catalogo|salon|silla|ticket|venta|formaPago|devolucion|registroVentas|precio|comanda|padron|modificador|ventaAlergeno|promocion|cocina|franja|movil|reserva|comision)/,
       /^models\/(estructura|factura|mesa|pedido|producto|salon|silla)/,
       /^afip\//, /^services\//,
     ],
