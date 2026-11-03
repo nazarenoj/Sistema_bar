@@ -105,11 +105,12 @@ const socio = async (clienteId) => {
   if (!c) throw invalida('Cliente no encontrado.', 404);
   const [[s]] = await pool.query('SELECT * FROM fid_socios WHERE cliente_id = ?', [c.id]);
   const p = await programa();
-  const [mov] = await pool.query("SELECT tipo, regla_id, SUM(cantidad) AS c FROM fid_movimientos WHERE cliente_id = ? GROUP BY tipo, regla_id", [c.id]);
+  const ids = await Clientes.idsDe(c.id);
+  const [mov] = await pool.query("SELECT tipo, regla_id, SUM(cantidad) AS c FROM fid_movimientos WHERE cliente_id IN (?) GROUP BY tipo, regla_id", [ids]);
   const puntos = num(mov.filter((m) => m.tipo === 'puntos').reduce((a, m) => a + Number(m.c), 0));
   const rs = await reglas();
   const sellos = mov.filter((m) => m.tipo === 'sellos').map((m) => { const r = rs.find((x) => x.id === m.regla_id); return { regla_id: m.regla_id, regla: r?.nombre, sellos: num(m.c), para_premio: r?.sellos_para_premio, premios_disponibles: r ? Math.max(Math.floor(Number(m.c) / r.sellos_para_premio), 0) : 0 }; });
-  const [instr] = await pool.query("SELECT i.id, i.codigo, i.tipo, i.estado, i.vence_en FROM fid_instrumentos i WHERE i.cliente_id = ? AND i.estado IN ('vigente', 'vencido')", [c.id]);
+  const [instr] = await pool.query("SELECT i.id, i.codigo, i.tipo, i.estado, i.vence_en FROM fid_instrumentos i WHERE i.cliente_id IN (?) AND i.estado IN ('vigente', 'vencido')", [ids]);
   const instrumentos = [];
   for (const i of instr) instrumentos.push({ ...i, vence_en: iso(i.vence_en), saldo: await saldoDe(i.id) });
   return { cliente_id: c.id, razon_social: c.razon_social, socio: s?.estado === 'activo', estado: s?.estado ?? 'no_adherido', consentimiento_en: s?.consentimiento_en ?? null, puntos, valor_puntos: num(puntos * Number(p.valor_punto)), sellos, instrumentos };
@@ -166,8 +167,8 @@ const revertir = async (conn, { ventaId, idOperacion }) => {
   }
   return { revertidos: acum.length, canjes_restituidos: canjes.length };
 };
-const saldoPuntos = async (clienteId, conn = pool) => num((await conn.query("SELECT COALESCE(SUM(cantidad), 0) AS s FROM fid_movimientos WHERE cliente_id = ? AND tipo = 'puntos'", [clienteId]))[0][0].s);
-const saldoSellos = async (clienteId, reglaId, conn = pool) => num((await conn.query("SELECT COALESCE(SUM(cantidad), 0) AS s FROM fid_movimientos WHERE cliente_id = ? AND tipo = 'sellos' AND regla_id = ?", [clienteId, reglaId]))[0][0].s);
+const saldoPuntos = async (clienteId, conn = pool) => num((await conn.query("SELECT COALESCE(SUM(cantidad), 0) AS s FROM fid_movimientos WHERE cliente_id IN (?) AND tipo = 'puntos'", [await Clientes.idsDe(clienteId, conn)]))[0][0].s);
+const saldoSellos = async (clienteId, reglaId, conn = pool) => num((await conn.query("SELECT COALESCE(SUM(cantidad), 0) AS s FROM fid_movimientos WHERE cliente_id IN (?) AND tipo = 'sellos' AND regla_id = ?", [await Clientes.idsDe(clienteId, conn), reglaId]))[0][0].s);
 
 // Premio de sellos alcanzado (RF24): Ventas lo aplica en el cobro como regla aprobada del programa, sin el permiso de descuentos.
 const premio = async (clienteId, reglaId) => {

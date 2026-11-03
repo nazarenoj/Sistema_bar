@@ -119,7 +119,7 @@ const movimientos = async (cuentaId, { desde, hasta, limite = 100, pagina = 1 } 
   if (hasta) { donde.push('fecha <= ?'); p.push(hasta); }
   const lim = Math.min(Number(limite) || 100, 500);
   const [filas] = await pool.query(`SELECT * FROM movimientos_cc WHERE ${donde.join(' AND ')} ORDER BY fecha DESC, id DESC LIMIT ? OFFSET ?`, [...p, lim, (Math.max(Number(pagina) || 1, 1) - 1) * lim]);
-  return filas.map((m) => ({ ...m, importe: num(m.importe), saldo_pendiente: num(m.saldo_pendiente), comprobante_fiscal: m.comprobante_fiscal ? JSON.parse(m.comprobante_fiscal) : null }));
+  return filas.map((m) => ({ ...m, importe: num(m.importe), importe_pesos: m.importe_pesos === null ? null : num(m.importe_pesos), cotizacion: m.cotizacion === null ? null : Number(m.cotizacion), saldo_pendiente: num(m.saldo_pendiente), comprobante_fiscal: m.comprobante_fiscal ? JSON.parse(m.comprobante_fiscal) : null }));
 };
 const pendientes = async (cuentaId) => (await pool.query("SELECT id, tipo, comprobante_ref, fecha, fecha_vencimiento, importe, saldo_pendiente FROM movimientos_cc WHERE cuenta_id = ? AND naturaleza = 'debito' AND estado = 'pendiente' AND saldo_pendiente > 0 ORDER BY fecha_vencimiento, id", [cuentaId]))[0]
   .map((m) => ({ ...m, importe: num(m.importe), saldo_pendiente: num(m.saldo_pendiente) }));
@@ -128,7 +128,7 @@ const pendientes = async (cuentaId) => (await pool.query("SELECT id, tipo, compr
 
 // Débito de una venta o de un remito. Un error de negocio rechaza el mensaje, sin reintento (RN37): cuenta inexistente o cerrada en la moneda, cliente
 // inexistente o importe no válido. La venta ya existe: si la cuenta está bloqueada o el crédito excedido se registra igual (contingencia/E3).
-const registrarDebito = async (conn, { tipo, clienteId, moneda = 'ARS', importe, ref, fecha, idOperacion, reservaId = null, contingencia = false, detalle = null, cotizacion = null, importeMonedaCuenta = null }) => {
+const registrarDebito = async (conn, { tipo, clienteId, moneda = 'ARS', importe, importePesos = null, ref, fecha, idOperacion, reservaId = null, contingencia = false, detalle = null, cotizacion = null, importeMonedaCuenta = null }) => {
   const imp = num(importe);
   if (!(imp > 0) || !Number.isFinite(imp)) throw new M.RechazoNegocio('El importe del débito no es válido.');
   const cli = await Clientes.resolver(clienteId);
@@ -139,11 +139,37 @@ const registrarDebito = async (conn, { tipo, clienteId, moneda = 'ARS', importe,
   if (cuenta.estado === 'cerrada') throw new M.RechazoNegocio('La cuenta corriente está cerrada.');
   const f = fecha || hoy();
   const [r] = await conn.query(
-    `INSERT INTO movimientos_cc (id_global, cuenta_id, tipo, naturaleza, comprobante_ref, id_operacion, id_reserva_credito, en_contingencia, detalle, fecha, fecha_vencimiento, importe, importe_moneda_cuenta, cotizacion, saldo_pendiente)
-     VALUES (?, ?, ?, 'debito', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [await idGlobal(), cuenta.id, tipo, ref, idOperacion, reservaId, contingencia ? 1 : 0, detalle, f, sumarDias(f, cuenta.plazo_dias), imp, importeMonedaCuenta, cotizacion, imp]);
+    `INSERT INTO movimientos_cc (id_global, cuenta_id, tipo, naturaleza, comprobante_ref, id_operacion, id_reserva_credito, en_contingencia, detalle, fecha, fecha_vencimiento, importe, importe_moneda_cuenta, cotizacion, importe_pesos, saldo_pendiente)
+     VALUES (?, ?, ?, 'debito', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [await idGlobal(), cuenta.id, tipo, ref, idOperacion, reservaId, contingencia ? 1 : 0, detalle, f, sumarDias(f, cuenta.plazo_dias), imp, importeMonedaCuenta, cotizacion, importePesos, imp]);
   if (postDebito) await postDebito(conn, { cuenta, movimientoId: r.insertId, importe: imp, reservaId, contingencia, ref });
   return { cuenta, movimientoId: r.insertId };
+};
+
+// Cotización con la que se mide una cuenta en moneda extranjera (RF11): la vendedora vigente. Con la cotización vencida «advertir» usa la última con aviso y «bloquear» frena la operación (EX07).
+const cotizacionDe = async (moneda) => {
+  const Monedas = require('../servicios/monedaService');
+  const c = await Monedas.vigente(moneda).catch(() => null);
+  if (!c) throw invalida(`No hay una cotización cargada de ${moneda}.`, 409, { codigo: 'SIN_COTIZACION' });
+  const modo = (await pool.query("SELECT valor FROM parametros WHERE clave = 'cc_cotizacion_vencida'"))[0][0]?.valor ?? 'advertir';
+  if (c.vencida && modo === 'bloquear') throw invalida(`La cotización de ${moneda} está vencida (${c.antiguedad_horas} h): cargá una nueva.`, 409, { codigo: 'SIN_COTIZACION' });
+  return { valor: c.vendedor, vencida: c.vencida, aviso: c.vencida ? `Se usó la última cotización de ${moneda}, con ${c.antiguedad_horas} h de antigüedad.` : null };
+};
+
+// Diferencia de cambio (RN11): una nota en pesos que se asienta en la cuenta en pesos del cliente (la de moneda extranjera ya quedó saldada en su moneda).
+const notaDeCambio = async (p, importe, { userId = null, fiscal = false } = {}) => {
+  const [[cu]] = await pool.query('SELECT cliente_id FROM cuentas_corrientes WHERE id = ?', [p.cuenta_id]);
+  const [[pesos]] = await pool.query("SELECT * FROM cuentas_corrientes WHERE cliente_id = ? AND moneda = 'ARS' AND estado <> 'cerrada'", [cu.cliente_id]);
+  if (!pesos) throw invalida('La diferencia de cambio se documenta en la cuenta en pesos del cliente: abrila primero.', 409);
+  const [[origen]] = await pool.query('SELECT comprobante_ref FROM movimientos_cc WHERE id = ?', [p.movimiento_ref]);
+  const tipo = p.naturaleza === 'debito' ? 'nd' : 'nc';
+  const f = hoy();
+  const [r] = await pool.query(
+    `INSERT INTO movimientos_cc (id_global, cuenta_id, tipo, naturaleza, comprobante_ref, id_operacion, motivo, detalle, fecha, fecha_vencimiento, importe, saldo_pendiente, estado, fiscal, user_id)
+     VALUES (?, ?, ?, ?, ?, ?, 'diferencia_cambio', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [await idGlobal(), pesos.id, tipo, tipo === 'nd' ? 'debito' : 'credito', origen.comprobante_ref, `cambio:${p.id}`, `Diferencia de cambio: ${p.detalle}`.slice(0, 255), f, tipo === 'nd' ? sumarDias(f, pesos.plazo_dias) : null, importe, importe, fiscal ? 'pendiente_emision' : 'pendiente', fiscal ? 1 : 0, userId]);
+  if (fiscal) await emitirFiscal(r.insertId).catch(() => null);
+  return unMovimiento(r.insertId);
 };
 
 // Anular un débito: contramovimiento que lo cancela (RN06); la venta original no se borra.
@@ -324,4 +350,4 @@ const devolverDebito = async (conn, { ref, importe, idOperacion }) => {
   return { movimiento_id: r.insertId };
 };
 
-module.exports = { facturarAgrupado, facturarRemitos, remitosPendientes, devolverDebito, usarPostDebito, CuentaInvalida, MOTIVOS_NOTA, abrir, obtener, deCliente, actualizar, cerrar, movimientos, pendientes, saldoDe, cuentaDe, vista, registrarDebito, anularDebito, nota, emitirFiscal, usarEmisor, hoy, sumarDias, num, parametro };
+module.exports = { cotizacionDe, notaDeCambio, facturarAgrupado, facturarRemitos, remitosPendientes, devolverDebito, usarPostDebito, CuentaInvalida, MOTIVOS_NOTA, abrir, obtener, deCliente, actualizar, cerrar, movimientos, pendientes, saldoDe, cuentaDe, vista, registrarDebito, anularDebito, nota, emitirFiscal, usarEmisor, hoy, sumarDias, num, parametro };

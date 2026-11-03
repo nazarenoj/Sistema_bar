@@ -58,6 +58,11 @@ router.get('/cobranzas', VER, manejar(async (req, res) => {
   await exportar(req, res, c, { titulo: 'Cobranzas', resumen: [{ label: 'Total cobrado', valor: c.total, tipo: 'moneda' }],
     hojas: [{ nombre: 'Por forma de pago', columnas: [col('forma', 'Forma de pago'), col('recibos', 'Recibos', 'numero'), col('importe', 'Importe', 'moneda')], filas: c.por_forma }, { nombre: 'Por día', columnas: [col('fecha', 'Fecha', 'fecha'), col('importe', 'Importe', 'moneda')], filas: c.por_dia }] });
 }));
+router.get('/retenciones', VER, manejar(async (req, res) => {
+  const r = await Informes.retenciones(req.query);
+  await exportar(req, res, r, { titulo: 'Retenciones sufridas', resumen: [{ label: 'Total retenido', valor: r.total, tipo: 'moneda' }],
+    hojas: [{ nombre: 'Retenciones', columnas: [col('fecha', 'Fecha', 'fecha'), col('cliente', 'Cliente', 'texto', 28), col('impuesto', 'Impuesto'), col('regimen', 'Régimen'), col('jurisdiccion', 'Jurisdicción'), col('nro_certificado', 'Certificado', 'texto', 20), col('recibo', 'Recibo', 'texto', 18), col('importe', 'Importe', 'moneda')], filas: r.retenciones }] });
+}));
 router.get('/proyeccion', VER, manejar(async (req, res) => {
   const p = await Informes.proyeccion(req.query);
   await exportar(req, res, p, { titulo: 'Proyección de cobros', resumen: [{ label: 'Total a cobrar', valor: p.total, tipo: 'moneda' }],

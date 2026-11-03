@@ -122,8 +122,15 @@ const comprometerStock = async (items, { idSolicitud, userId, autorizar }) => {
 // Clientes no responde en 3 s, la venta no se cierra salvo autorización de un supervisor con motivo (contingencia).
 const importeACuenta = (pagos) => redondear2((pagos ?? []).filter((p) => p.forma === 'cuenta_corriente').reduce((a, p) => a + Number(p.importe), 0));
 const reservarCredito = async (pagos, { clienteId, idSolicitud, userId, autorizar, moneda = 'ARS', motivoContingencia }) => {
-  const importe = importeACuenta(pagos);
-  if (!importe) return null;
+  const importePesos = importeACuenta(pagos);
+  if (!importePesos) return null;
+  // Cuenta en moneda extranjera: el importe ya convertido a la moneda de la cuenta con la cotización vendedora vigente (Ventas RN87, Clientes RF11).
+  let importe = importePesos, cotizacion = null;
+  if (moneda !== 'ARS') {
+    const c = await Monedas.vigente(moneda).catch(() => null);
+    if (!c) throw falla(409, 'COTIZACION_NO_DISPONIBLE', `No hay una cotización cargada de ${moneda}: vendé a la cuenta en pesos.`);
+    cotizacion = c.vendedor; importe = redondear2(importePesos / cotizacion);
+  }
   if (!(await Funciones.estaActiva('VEN-CC'))) throw new PagoInvalido('La forma de pago "Cuenta Corriente" necesita la función VEN-CC.');
   const falla = (status, codigo, error, detalle) => Object.assign(new Error(error), { status, codigo, detalle });
   if (!clienteId) throw falla(400, 'CLIENTE_NO_IDENTIFICADO', 'Para vender a cuenta corriente identificá al cliente.');
@@ -136,7 +143,7 @@ const reservarCredito = async (pagos, { clienteId, idSolicitud, userId, autoriza
     // Clientes no responde (EX20): contingencia solo con la autorización de un supervisor y un motivo; no se reserva.
     const a = autorizar ? await autorizar() : null;
     if (!a?.ok || !String(motivoContingencia ?? '').trim()) throw falla(409, 'CREDITO_NO_RESPONDE', 'Clientes no respondió: la venta a cuenta necesita la autorización de un supervisor y el motivo de la contingencia.');
-    return { clienteId, importe, moneda, reservaId: null, contingencia: true, supervisorId: a.supervisor.id, motivo: motivoContingencia.trim() };
+    return { clienteId, importe, importePesos, cotizacion, moneda, reservaId: null, contingencia: true, supervisorId: a.supervisor.id, motivo: motivoContingencia.trim() };
   }
   let v = r.valor;
   if (v.veredicto === 'bloqueada') throw falla(409, 'CREDITO_BLOQUEADO', v.motivos.join(' '), v);
@@ -146,7 +153,7 @@ const reservarCredito = async (pagos, { clienteId, idSolicitud, userId, autoriza
     v = (await pedir({ autorizado: true, supervisorId: a.supervisor.id })).valor;
     if (!v.id_reserva) throw falla(409, 'CREDITO_BLOQUEADO', (v.motivos ?? []).join(' '), v);
   }
-  return { clienteId, importe, moneda, reservaId: v.id_reserva, contingencia: false, aviso: v.aviso ?? null };
+  return { clienteId, importe, importePesos, cotizacion, moneda, reservaId: v.id_reserva, contingencia: false, aviso: v.aviso ?? null };
 };
 const falla = (status, codigo, error, detalle) => Object.assign(new Error(error), { status, codigo, detalle });
 
@@ -268,7 +275,7 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
   }
   // El débito a la cuenta viaja por el protocolo de integración, en esta misma transacción; la reserva de crédito se convierte en deuda en el mismo registro (Clientes RF04).
   if (credito) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'debito_venta', docTipo: 'venta', docIdGlobal: id_global, userId, solicitud: idSolicitud,
-    contenido: { cliente_id: credito.clienteId, moneda: credito.moneda, importe: credito.importe, venta_id_global: id_global, fecha: new Date().toISOString().slice(0, 10), reserva_id: credito.reservaId, contingencia: credito.contingencia, concepto: credito.contingencia ? `Contingencia: ${credito.motivo}` : null } });
+    contenido: { cliente_id: credito.clienteId, moneda: credito.moneda, importe: credito.importe, importe_pesos: credito.importePesos ?? credito.importe, cotizacion: credito.cotizacion ?? null, venta_id_global: id_global, fecha: new Date().toISOString().slice(0, 10), reserva_id: credito.reservaId, contingencia: credito.contingencia, concepto: credito.contingencia ? `Contingencia: ${credito.motivo}` : null } });
   return { id: r.insertId, id_global, numero_no_fiscal: numeroNoFiscal };
 };
 

@@ -197,6 +197,14 @@ const unificar = async ({ absorbido_id: absorbidoId, resultante_id: resultanteId
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+    // El historial completo queda bajo la ficha resultante (RF18): sus cuentas pasan a ella. Con cuentas en distintas monedas siguen separadas (EX11); si las dos fichas
+    // tienen cuenta en la misma moneda no se puede juntar sin perder la trazabilidad: se salda y se cierra una antes. La condición de socio también pasa.
+    const [cuentasA] = await conn.query('SELECT moneda FROM cuentas_corrientes WHERE cliente_id = ?', [a.id]);
+    const [cuentasR] = await conn.query('SELECT moneda FROM cuentas_corrientes WHERE cliente_id = ?', [r.id]);
+    const choque = cuentasA.find((c) => cuentasR.some((x) => x.moneda === c.moneda));
+    if (choque) throw invalida(`Las dos fichas tienen cuenta corriente en ${choque.moneda}: saldá y cerrá una antes de unificar.`, 409);
+    await conn.query('UPDATE cuentas_corrientes SET cliente_id = ? WHERE cliente_id = ?', [r.id, a.id]);
+    await conn.query("UPDATE fid_socios SET cliente_id = ? WHERE cliente_id = ? AND NOT EXISTS (SELECT 1 FROM (SELECT cliente_id FROM fid_socios WHERE cliente_id = ?) x)", [r.id, a.id, r.id]);
     await conn.query("UPDATE clientes SET estado = 'unificado', id_cliente_resultante = ? WHERE id = ?", [r.id, a.id]);
     await conn.query("UPDATE clientes SET id_cliente_resultante = ? WHERE estado = 'unificado' AND id_cliente_resultante = ?", [r.id, a.id]); // los alias de la absorbida pasan a la final
     await conn.query('INSERT INTO cliente_unificaciones (absorbido_id, resultante_id, motivo, user_id) VALUES (?, ?, ?, ?)', [a.id, r.id, motivo.trim().slice(0, 255), userId]);
@@ -222,4 +230,7 @@ const publicarActualizado = async (id) => {
   M.despertar();
 };
 
-module.exports = { ClienteInvalido, cuitValido, resolver, obtener, buscar, crear, actualizar, cambiarEstado, verificarArca, domicilio, quitarDomicilio, unificar, fila, invalida };
+// La ficha resultante y todos sus alias: sus saldos de fidelización y vales se suman (RF18).
+const idsDe = async (id, conn = pool) => { const c = await resolver(id); return c ? [c.id, ...(await conn.query("SELECT id FROM clientes WHERE estado = 'unificado' AND id_cliente_resultante = ?", [c.id]))[0].map((x) => x.id)] : []; };
+
+module.exports = { idsDe, ClienteInvalido, cuitValido, resolver, obtener, buscar, crear, actualizar, cambiarEstado, verificarArca, domicilio, quitarDomicilio, unificar, fila, invalida };

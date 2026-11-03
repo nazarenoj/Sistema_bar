@@ -62,6 +62,8 @@ const PERMISOS = [
   { id: 'ventas.remitos.facturar', modulo: 'ventas', descripcion: 'Facturar remitos (individual o agrupada)' },
   { id: 'clientes.fidelizacion.configurar', modulo: 'clientes', funcion: 'CLI-FIDEL', descripcion: 'Definir el programa de fidelización y sus reglas de sellos' },
   { id: 'clientes.fidelizacion.gestionar', modulo: 'clientes', funcion: 'CLI-FIDEL', descripcion: 'Ajustar saldos, cargar saldo a favor, anular y reactivar instrumentos' },
+  { id: 'clientes.ajustes.gestionar', modulo: 'clientes', descripcion: 'Calcular y confirmar intereses por mora y diferencias de cambio' },
+  { id: 'clientes.ajustes.condonar', modulo: 'clientes', descripcion: 'Condonar intereses o diferencias de cambio (descartar la propuesta con motivo)' },
   { id: 'clientes.unificar', modulo: 'clientes', descripcion: 'Unificar fichas de clientes duplicadas' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

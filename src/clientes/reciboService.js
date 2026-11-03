@@ -3,6 +3,7 @@ const PDFDocument = require('pdfkit');
 const pool = require('../config/db');
 const Funciones = require('../funciones/servicio');
 const Notificacion = require('../models/notificacionModel');
+const Mensajeria = require('../mensajeria/servicio');
 const Clientes = require('./clienteService');
 const Cuentas = require('./cuentaService');
 const { idGlobal } = require('../utils/idGlobal');
@@ -21,7 +22,7 @@ const canonico = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' 
 const FORMAS_PROPIAS = ['cheque', 'echeq'];
 
 const normalizarValores = async (valores, conn) => {
-  if (!Array.isArray(valores) || !valores.length) throw invalida('Indicá al menos una forma de pago en el recibo.');
+  if (!Array.isArray(valores) || !valores.length) return [];
   const [formas] = await conn.query('SELECT codigo, admite_vuelto FROM formas_pago WHERE activa = 1');
   const porCodigo = new Map(formas.map((f) => [f.codigo, f]));
   return valores.map((v) => {
@@ -45,7 +46,23 @@ const normalizarValores = async (valores, conn) => {
       vuelto = num(recibido - importe);
       if (vuelto > 0 && !(f?.admite_vuelto)) throw invalida(`La forma "${v.forma}" no admite vuelto.`);
     }
-    return { forma: v.forma, importe, recibido, vuelto, referencia: v.referencia ? String(v.referencia).slice(0, 100) : null, cheque };
+    return { forma: v.forma, importe, recibido, vuelto, moneda: String(v.moneda ?? 'ARS').toUpperCase(), referencia: v.referencia ? String(v.referencia).slice(0, 100) : null, cheque };
+  });
+};
+
+// Retenciones sufridas (RF08, RN13; función CLI-RETENCIONES): cancelan deuda como un pago y exigen número de certificado.
+const IMPUESTOS = ['iva', 'ganancias', 'iibb', 'suss'];
+const normalizarRetenciones = async (retenciones, conn) => {
+  if (!Array.isArray(retenciones) || !retenciones.length) return [];
+  if (!(await Funciones.estaActiva('CLI-RETENCIONES', conn))) throw invalida('Las retenciones sufridas necesitan la función CLI-RETENCIONES.', 409);
+  return retenciones.map((x) => {
+    if (!IMPUESTOS.includes(x.impuesto)) throw invalida(`El impuesto de la retención es uno de: ${IMPUESTOS.join(', ')}.`);
+    if (!String(x.nro_certificado ?? '').trim()) throw invalida('Una retención exige el número de certificado.');
+    if (x.impuesto === 'iibb' && !String(x.jurisdiccion ?? '').trim()) throw invalida('La retención de Ingresos Brutos lleva la jurisdicción.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(x.fecha ?? '')) throw invalida('La fecha de la retención va como AAAA-MM-DD.');
+    const importe = num(x.importe);
+    if (!(importe > 0) || !Number.isFinite(importe)) throw invalida('El importe de la retención es mayor que cero.');
+    return { impuesto: x.impuesto, regimen: x.regimen ? String(x.regimen).slice(0, 60) : null, jurisdiccion: x.jurisdiccion ? String(x.jurisdiccion).slice(0, 60) : null, nro_certificado: String(x.nro_certificado).trim().slice(0, 40), fecha: x.fecha, importe };
   });
 };
 
@@ -84,6 +101,16 @@ const imputarEn = async (conn, { cuentaId, credito, modo = 'automatica', items =
   }
   const aplicado = num(creadas.reduce((a, c) => a + c.importe, 0));
   await conn.query('UPDATE movimientos_cc SET saldo_pendiente = saldo_pendiente - ? WHERE id = ?', [aplicado, cred.id]);
+  // Diferencia de cambio (CLI-MONEDA-EXT, RN11): lo cobrado a una cotización distinta de la de emisión se documenta con una nota; el sistema la propone y un usuario la confirma.
+  if (cred.cotizacion && (await Funciones.estaActiva('CLI-MONEDA-EXT', conn))) {
+    const [[cu]] = await conn.query('SELECT moneda FROM cuentas_corrientes WHERE id = ?', [cuentaId]);
+    if (cu.moneda !== 'ARS') for (const [d, x] of aplicar) {
+      if (!d.cotizacion) continue;
+      const dif = num(x * (Number(cred.cotizacion) - Number(d.cotizacion)));
+      if (Math.abs(dif) >= 0.01) await conn.query("INSERT INTO propuestas_ajuste_cc (cuenta_id, tipo, naturaleza, movimiento_ref, base_calculo, importe, detalle) VALUES (?, 'diferencia_cambio', ?, ?, ?, ?, ?)",
+        [cuentaId, dif > 0 ? 'debito' : 'credito', d.id, x, Math.abs(dif), `${x} ${cu.moneda} cobrados a ${num(cred.cotizacion)} contra ${num(d.cotizacion)} de la emisión`]);
+    }
+  }
   return { aplicado, restante: num(cred.saldo_pendiente - aplicado), imputaciones: creadas };
 };
 
@@ -100,9 +127,11 @@ const registrar = async (d, { userId = null, idOperacion } = {}) => {
   const conn = await pool.getConnection();
   try {
     const valores = await normalizarValores(d.valores, conn);
+    const retenciones = await normalizarRetenciones(d.retenciones, conn);
+    if (!valores.length && !retenciones.length) throw invalida('Indicá al menos una forma de pago o una retención en el recibo.');
     const imputacion = d.imputacion ?? 'automatica';
     if (!['automatica', 'manual', 'ninguna'].includes(imputacion)) throw invalida('La imputación es automatica, manual o ninguna.');
-    const huella = huellaDe(d.cuenta_id ?? `${d.cliente_id}:${d.moneda ?? 'ARS'}`, valores, imputacion, d.imputaciones ?? []);
+    const huella = huellaDe(d.cuenta_id ?? `${d.cliente_id}:${d.moneda ?? 'ARS'}`, { valores, retenciones }, imputacion, d.imputaciones ?? []);
     const [[previo]] = await conn.query('SELECT id, huella FROM recibos WHERE id_operacion = ?', [idOperacion]);
     if (previo) { // un reintento devuelve el recibo original sin repetir nada (RN36, EX28); la misma clave con otro contenido es un conflicto
       if (previo.huella !== huella) {
@@ -115,8 +144,22 @@ const registrar = async (d, { userId = null, idOperacion } = {}) => {
     const cuenta = await cuentaDe(conn, d);
     if (!cuenta) throw invalida('La cuenta corriente no existe.', 404);
     if (cuenta.estado === 'cerrada') throw invalida('La cuenta está cerrada: no admite recibos.', 409);
-    const total = num(valores.reduce((a, v) => a + v.importe, 0));
+    // Cuenta en moneda extranjera: cada cobro en pesos se convierte a la cotización del día del cobro y queda su importe original (RF11).
+    let cot = null, avisoCotizacion = null;
+    if (cuenta.moneda !== 'ARS') {
+      if (!(await Funciones.estaActiva('CLI-MONEDA-EXT', conn))) throw invalida('Las cuentas en moneda extranjera necesitan la función CLI-MONEDA-EXT.', 409);
+      const c = await Cuentas.cotizacionDe(cuenta.moneda);
+      cot = c.valor; avisoCotizacion = c.aviso;
+      for (const x of [...valores, ...retenciones]) {
+        x.importe_original = x.importe;
+        if (x.moneda === cuenta.moneda) { x.cotizacion = null; } else { x.importe = num(x.importe / cot); x.cotizacion = cot; x.moneda = 'ARS'; }
+      }
+    }
+    for (const v of valores) v.importe_original = v.importe_original ?? v.importe;
+    const total = num(valores.reduce((a, v) => a + v.importe, 0) + retenciones.reduce((a, x) => a + x.importe, 0));
+    if (retenciones.length && imputacion === 'ninguna') throw invalida('Una retención cancela deuda: el recibo con retenciones se imputa a los comprobantes.');
     const [[{ deuda }]] = await conn.query("SELECT COALESCE(SUM(saldo_pendiente), 0) AS deuda FROM movimientos_cc WHERE cuenta_id = ? AND naturaleza = 'debito' AND estado = 'pendiente'", [cuenta.id]);
+    if (retenciones.length && num(retenciones.reduce((a, x) => a + x.importe, 0)) > num(deuda)) throw invalida('Las retenciones no pueden superar la deuda de los comprobantes a los que se imputan (RN13).');
     if (imputacion !== 'ninguna' && total > num(deuda) && !d.confirmar_excedente)
       throw invalida(`El recibo (${total}) supera la deuda pendiente (${num(deuda)}): confirmá que el excedente queda como saldo a favor.`, 409, { codigo: 'EXCEDENTE', excedente: num(total - num(deuda)) }); // EX05
     if (imputacion === 'manual' && num((d.imputaciones ?? []).reduce((a, i) => a + num(i.importe), 0)) > total) throw invalida('Lo imputado supera el total del recibo.');
@@ -129,18 +172,23 @@ const registrar = async (d, { userId = null, idOperacion } = {}) => {
     const fecha = Cuentas.hoy();
     const ref = `REC-${String(punto).padStart(4, '0')}-${String(numero).padStart(8, '0')}`;
     const [mov] = await conn.query(
-      `INSERT INTO movimientos_cc (id_global, cuenta_id, tipo, naturaleza, comprobante_ref, id_operacion, fecha, importe, saldo_pendiente, estado, user_id)
-       VALUES (?, ?, 'recibo', 'credito', ?, ?, ?, ?, ?, 'pendiente', ?)`, [await idGlobal(), cuenta.id, ref, `recibo:${idOperacion}`, fecha, total, total, userId]);
+      `INSERT INTO movimientos_cc (id_global, cuenta_id, tipo, naturaleza, comprobante_ref, id_operacion, fecha, importe, saldo_pendiente, estado, user_id, cotizacion, importe_pesos)
+       VALUES (?, ?, 'recibo', 'credito', ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?)`, [await idGlobal(), cuenta.id, ref, `recibo:${idOperacion}`, fecha, total, total, userId, cot, cot ? num([...valores, ...retenciones].filter((x) => x.cotizacion).reduce((a, x) => a + x.importe_original, 0)) : null]);
     const [r] = await conn.query(
       `INSERT INTO recibos (id_global, id_operacion, huella, punto_emision, numero, cliente_id, cuenta_id, movimiento_id, fecha, total, user_id, config_version, instantanea)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [await idGlobal(), idOperacion, huella, punto, numero, cuenta.cliente_id, cuenta.id, mov.insertId, fecha, total, userId, cfg.version, JSON.stringify(cfg.funciones.filter((f) => f.activa).map((f) => f.id))]);
     for (const v of valores)
-      await conn.query('INSERT INTO recibo_valores (recibo_id, forma, importe, recibido, vuelto, referencia, cheque_banco, cheque_numero, cheque_fecha_pago, cheque_cuit_librador) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [r.insertId, v.forma, v.importe, v.recibido, v.vuelto, v.referencia, v.cheque.banco ?? null, v.cheque.numero ?? null, v.cheque.fecha_pago ?? null, v.cheque.cuit_librador ?? null]);
+      await conn.query('INSERT INTO recibo_valores (recibo_id, forma, importe, recibido, vuelto, moneda, cotizacion, importe_original, referencia, cheque_banco, cheque_numero, cheque_fecha_pago, cheque_cuit_librador) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [r.insertId, v.forma, v.importe, v.recibido, v.vuelto, v.moneda, v.cotizacion ?? null, v.importe_original ?? null, v.referencia, v.cheque.banco ?? null, v.cheque.numero ?? null, v.cheque.fecha_pago ?? null, v.cheque.cuit_librador ?? null]);
+    for (const x of retenciones) {
+      await conn.query('INSERT INTO recibo_retenciones (recibo_id, impuesto, regimen, jurisdiccion, nro_certificado, fecha, importe) VALUES (?, ?, ?, ?, ?, ?, ?)', [r.insertId, x.impuesto, x.regimen, x.jurisdiccion, x.nro_certificado, x.fecha, x.importe_original ?? x.importe]);
+      await Mensajeria.publicar(conn, { origen: 'clientes', destino: 'contable', tipo: 'retencion_sufrida', docTipo: 'recibo', docIdGlobal: ref, docVersion: x.nro_certificado.length * 1000 + retenciones.indexOf(x), userId, contenido: { recibo: ref, cliente_id: cuenta.cliente_id, ...x } }); // lo recibe Contable si está instalado (RN38)
+    }
     if (imputacion !== 'ninguna') await imputarEn(conn, { cuentaId: cuenta.id, credito: mov.insertId, modo: imputacion, items: d.imputaciones ?? [], userId });
     await conn.commit();
-    return obtener(r.insertId);
+    if (retenciones.length) Mensajeria.despertar();
+    return { ...(await obtener(r.insertId)), ...(avisoCotizacion && { aviso: avisoCotizacion }) };
   } catch (err) {
     await conn.rollback().catch(() => {});
     if (err.code === 'ER_DUP_ENTRY' && /uq_recibo_operacion/.test(err.message)) { // dos envíos simultáneos con la misma clave: gana el primero
@@ -155,10 +203,11 @@ const formato = (r) => `${String(r.punto_emision).padStart(4, '0')}-${String(r.n
 const obtener = async (id) => {
   const [[r]] = await pool.query('SELECT * FROM recibos WHERE id = ?', [id]);
   if (!r) throw invalida('Recibo no encontrado.', 404);
-  const [valores] = await pool.query('SELECT forma, importe, recibido, vuelto, referencia, cheque_banco, cheque_numero, cheque_fecha_pago, cheque_cuit_librador FROM recibo_valores WHERE recibo_id = ? ORDER BY id', [id]);
+  const [valores] = await pool.query('SELECT forma, importe, recibido, vuelto, moneda, cotizacion, importe_original, referencia, cheque_banco, cheque_numero, cheque_fecha_pago, cheque_cuit_librador FROM recibo_valores WHERE recibo_id = ? ORDER BY id', [id]);
+  const [retenciones] = await pool.query('SELECT impuesto, regimen, jurisdiccion, nro_certificado, fecha, importe FROM recibo_retenciones WHERE recibo_id = ? ORDER BY id', [id]);
   const [imps] = await pool.query("SELECT i.id, i.debito_mov_id AS debito_id, i.importe, i.estado, m.comprobante_ref FROM imputaciones i JOIN movimientos_cc m ON m.id = i.debito_mov_id WHERE i.credito_mov_id = ? ORDER BY i.id", [r.movimiento_id]);
   const [[mov]] = await pool.query('SELECT saldo_pendiente FROM movimientos_cc WHERE id = ?', [r.movimiento_id]);
-  return { ...r, numero_completo: formato(r), total: num(r.total), instantanea: r.instantanea ? JSON.parse(r.instantanea) : [], valores: valores.map((v) => ({ ...v, importe: num(v.importe), vuelto: num(v.vuelto) })),
+  return { ...r, numero_completo: formato(r), total: num(r.total), instantanea: r.instantanea ? JSON.parse(r.instantanea) : [], valores: valores.map((v) => ({ ...v, importe: num(v.importe), vuelto: num(v.vuelto), importe_original: v.importe_original === null ? null : num(v.importe_original), cotizacion: v.cotizacion === null ? null : Number(v.cotizacion) })), retenciones: retenciones.map((x) => ({ ...x, importe: num(x.importe) })),
     imputaciones: imps.map((i) => ({ ...i, importe: num(i.importe) })), saldo_a_favor: r.estado === 'vigente' ? num(mov.saldo_pendiente) : 0 };
 };
 const listar = async ({ cuenta_id: cuentaId, estado } = {}) => (await pool.query(`SELECT id, punto_emision, numero, cliente_id, cuenta_id, fecha, total, estado FROM recibos ${cuentaId ? 'WHERE cuenta_id = ?' : ''} ${estado ? (cuentaId ? 'AND' : 'WHERE') + ' estado = ?' : ''} ORDER BY id DESC LIMIT 200`, [cuentaId, estado].filter((x) => x !== undefined)))[0]

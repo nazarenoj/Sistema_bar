@@ -173,6 +173,20 @@ const recordatorios = async () => {
   return hechos;
 };
 
+// ---------- Informe de retenciones sufridas (RF08) ----------
+const retenciones = async (q = {}) => {
+  for (const f of [q.desde, q.hasta]) if (f && !esFecha(f)) throw invalida('Las fechas van como AAAA-MM-DD.');
+  const donde = ["r.estado = 'vigente'"], p = [];
+  if (q.desde) { donde.push('x.fecha >= ?'); p.push(q.desde); }
+  if (q.hasta) { donde.push('x.fecha <= ?'); p.push(q.hasta); }
+  if (q.cliente_id) { donde.push('r.cliente_id = ?'); p.push(Number(q.cliente_id)); }
+  if (q.impuesto) { donde.push('x.impuesto = ?'); p.push(q.impuesto); }
+  const [filas] = await pool.query(`SELECT x.fecha, cl.razon_social AS cliente, x.impuesto, x.regimen, x.jurisdiccion, x.nro_certificado, x.importe, r.punto_emision, r.numero FROM recibo_retenciones x JOIN recibos r ON r.id = x.recibo_id JOIN clientes cl ON cl.id = r.cliente_id WHERE ${donde.join(' AND ')} ORDER BY x.fecha, x.id`, p);
+  const porImpuesto = {};
+  for (const f of filas) porImpuesto[f.impuesto] = num((porImpuesto[f.impuesto] ?? 0) + Number(f.importe));
+  return { retenciones: filas.map((f) => ({ ...f, fecha: iso(f.fecha), importe: num(f.importe), recibo: `${String(f.punto_emision).padStart(4, '0')}-${String(f.numero).padStart(8, '0')}` })), por_impuesto: porImpuesto, total: num(filas.reduce((a, f) => a + Number(f.importe), 0)) };
+};
+
 // ---------- Ciclo de facturación del mayorista (RF21) ----------
 // Con CLI-FACT-AGRUPADA, al llegar la fecha del ciclo del cliente (semanal, quincenal, mensual) con remitos pendientes de facturar, alerta interna con
 // la lista de trabajo. «A demanda» no genera alerta.
@@ -195,10 +209,20 @@ const alertasCiclo = async () => {
 
 // ---------- Indicador de deuda para el tablero (RF25) ----------
 const indicadorDeuda = async () => {
-  const [[t]] = await pool.query(`SELECT COALESCE(SUM(m.saldo_pendiente), 0) AS total, COALESCE(SUM(IF(m.fecha_vencimiento < CURDATE(), m.saldo_pendiente, 0)), 0) AS vencida ${BASE_DEUDA} AND cc.moneda = 'ARS'`);
-  const [top] = await pool.query(`SELECT cl.razon_social AS clave, SUM(m.saldo_pendiente) AS valor ${BASE_DEUDA} AND cc.moneda = 'ARS' GROUP BY cl.id, cl.razon_social ORDER BY valor DESC LIMIT 5`);
-  const total = num(t.total), vencida = num(t.vencida);
+  const Monedas = require('../servicios/monedaService');
+  const [filas] = await pool.query(`SELECT cl.id, cl.razon_social, cc.moneda, SUM(m.saldo_pendiente) AS total, SUM(IF(m.fecha_vencimiento < CURDATE(), m.saldo_pendiente, 0)) AS vencida ${BASE_DEUDA} GROUP BY cl.id, cl.razon_social, cc.moneda`);
+  const tasa = new Map();
+  for (const m of new Set(filas.map((f) => f.moneda))) tasa.set(m, m === 'ARS' ? 1 : (await Monedas.vigente(m).catch(() => null))?.vendedor ?? 0);
+  const porCliente = new Map();
+  let total = 0, vencida = 0;
+  for (const f of filas) {
+    const k = tasa.get(f.moneda);
+    total += Number(f.total) * k; vencida += Number(f.vencida) * k;
+    porCliente.set(f.razon_social, (porCliente.get(f.razon_social) ?? 0) + Number(f.total) * k);
+  }
+  const top = [...porCliente].map(([clave, valor]) => ({ clave, valor })).sort((a, b) => b.valor - a.valor).slice(0, 5);
+  total = num(total); vencida = num(vencida);
   return { valor: total, detalle: { deuda_vencida: vencida, porcentaje_vencido: total ? num(vencida / total * 100) : 0 }, serie: top.map((x) => ({ clave: x.clave, valor: num(x.valor) })) };
 };
 
-module.exports = { alertasCiclo, InformeInvalido, estadoDeCuenta, antiguedad, tramos, configurarTramos, deudores, cobranzas, proyeccion, enviarEstado, envios, recordatorios, indicadorDeuda };
+module.exports = { retenciones, alertasCiclo, InformeInvalido, estadoDeCuenta, antiguedad, tramos, configurarTramos, deudores, cobranzas, proyeccion, enviarEstado, envios, recordatorios, indicadorDeuda };

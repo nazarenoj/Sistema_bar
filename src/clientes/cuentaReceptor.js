@@ -9,7 +9,7 @@ const debito = (tipo) => async (conn, c, ctx) => {
   const r = await Cuentas.registrarDebito(conn, {
     tipo, clienteId: c.cliente_id, moneda: c.moneda ?? 'ARS', importe: c.importe, ref: c.venta_id_global ?? c.remito_id_global, fecha: c.fecha,
     idOperacion: ctx.idOperacion, reservaId: c.reserva_id ?? null, contingencia: !!c.contingencia, detalle: c.concepto ?? null,
-    cotizacion: c.cotizacion ?? null, importeMonedaCuenta: c.importe_moneda_cuenta ?? null,
+    cotizacion: c.cotizacion ?? null, importePesos: c.importe_pesos ?? null, importeMonedaCuenta: c.importe_moneda_cuenta ?? null,
   });
   return { movimiento_id: r.movimientoId };
 };

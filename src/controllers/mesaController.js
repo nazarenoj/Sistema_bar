@@ -137,7 +137,7 @@ const cerrarCuenta = async (req, res) => {
     const pagos = await Venta.validarPagos(conn, Array.isArray(req.body.pagos) ? req.body.pagos : [{ forma: metodo_pago, importe: totalAcumulado }], totalAcumulado);
     // Venta a cuenta corriente: veredicto y reserva de crédito de Clientes antes de cerrar (Ventas RF16, Clientes RF12, RF26); el débito viaja con la venta.
     credito = await Venta.reservarCredito(pagos, { clienteId: req.body.cliente_id, idSolicitud: req.get('X-ID-Solicitud') ?? `cuenta:${id}:${pedidosActivos[0].sesion_apertura}`, userId: req.usuario?.sub ?? null,
-      autorizar: () => validarAutorizacion(req, 'ventas.credito.autorizar'), motivoContingencia: req.body.motivo_contingencia });
+      autorizar: () => validarAutorizacion(req, 'ventas.credito.autorizar'), motivoContingencia: req.body.motivo_contingencia, moneda: String(req.body.cuenta_moneda ?? 'ARS').toUpperCase() });
     canjes = await Venta.retenerCanjes(pagos, { clienteId: req.body.cliente_id, idSolicitud: req.get('X-ID-Solicitud') ?? `cuenta:${id}:${pedidosActivos[0].sesion_apertura}` }); // retención de saldo de vales, gift cards y puntos
     metodoPago = Venta.metodoResumen(pagos);
     await Pedido.setMetodoPago(id, pedidosActivos[0].sesion_apertura, metodoPago, conn);
@@ -183,7 +183,7 @@ const cerrarCuenta = async (req, res) => {
     await Venta.liberarCanjes(canjes); // la venta no se confirmó: el saldo retenido vuelve // la venta no se confirmó: la reserva de crédito se libera
     await Venta.liberarSeries(req.get('X-ID-Solicitud')); // la venta no se confirmó: lo comprometido se libera
     if (['SIN_DISPONIBLE', 'STOCK_NO_RESPONDE', 'LOTE_NO_DISPONIBLE', 'SERIE_NO_DISPONIBLE'].includes(err.codigo)) return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
-    if (['CREDITO_BLOQUEADO', 'CREDITO_REQUIERE_AUTORIZACION', 'CREDITO_NO_RESPONDE', 'CLIENTE_NO_IDENTIFICADO', 'CUENTA_CORRIENTE_NO_DISPONIBLE', 'CANJE_NO_DISPONIBLE', 'SALDO_INSUFICIENTE', 'INSTRUMENTO_RECHAZADO', 'PREMIO_NO_DISPONIBLE'].includes(err.codigo)) return res.status(err.status ?? 409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
+    if (['CREDITO_BLOQUEADO', 'CREDITO_REQUIERE_AUTORIZACION', 'CREDITO_NO_RESPONDE', 'CLIENTE_NO_IDENTIFICADO', 'CUENTA_CORRIENTE_NO_DISPONIBLE', 'CANJE_NO_DISPONIBLE', 'SALDO_INSUFICIENTE', 'INSTRUMENTO_RECHAZADO', 'PREMIO_NO_DISPONIBLE', 'COTIZACION_NO_DISPONIBLE'].includes(err.codigo)) return res.status(err.status ?? 409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
     if (err instanceof Venta.PagoInvalido) return res.status(400).json({ error: err.message, codigo: err.codigo ?? 'PAGO_INVALIDO' });
     if (err.codigo === 'SIN_CAEA') return res.status(409).json({ error: err.message, codigo: 'SIN_CAEA' });
     if (err.status === 400) return res.status(400).json({ error: err.message, codigo: 'RECEPTOR_INVALIDO' });
