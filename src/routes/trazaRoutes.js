@@ -3,7 +3,7 @@ const Traza = require('../stock/trazaService');
 const { requierePermiso } = require('../middleware/requierePermiso');
 const requiereFuncion = require('../middleware/requiereFuncion');
 const { auditar } = require('../utils/auditar');
-const { enviarReporte, FORMATOS_VALIDOS } = require('../services/reporteService');
+const { enviarReporte, FORMATOS_VALIDOS } = require('../servicios/reporteService');
 
 // Trazabilidad y retiro de lote (Stock RF21, RF42, RN83), con la función STK-TRAZA. Clientes y CC llama hacia abajo a
 // GET /retiros/:id (el "alcance de un retiro") y marca el aviso por POST /retiros/lineas/:id/avisar.

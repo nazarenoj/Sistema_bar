@@ -4,7 +4,7 @@ const Registro = require('../services/registroVentasService');
 const Parametro = require('../models/parametroModel');
 const pool = require('../config/db');
 const { auditar } = require('../utils/auditar');
-const { enviarReporte, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
+const { enviarReporte, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../servicios/reporteService');
 const { TIPO_COMPROBANTE_LABEL, METODO_PAGO_LABEL, etiqueta } = require('../utils/etiquetas');
 const { requierePermiso } = require('../middleware/requierePermiso');
 

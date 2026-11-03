@@ -16,7 +16,7 @@ const AlergenosVenta = require('../services/alergenoVentaService');
 const Listas = require('../services/listaPrecioService');
 const Promociones = require('../services/promocionService');
 const Modulos = require('../modulos/registro');
-const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
+const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../servicios/reporteService');
 const { esFechaISO } = require('../utils/validaciones');
 const {
   TIPO_COMPROBANTE_LABEL, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL, etiqueta,

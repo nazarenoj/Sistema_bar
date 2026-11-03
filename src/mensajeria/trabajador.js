@@ -37,6 +37,11 @@ const revisarDisco = async (statfs = fs.promises.statfs) => {
 
 const mantenimiento = async () => {
   await revisarDisco();
+  if (await require('../funciones/servicio').estaActiva('USU-CONSOL')) {
+    const C = require('../servicios/consolidacionService');
+    await C.enviarPendientes().catch((e) => logger.error(`[consolidacion] ${e.message}`));
+    await C.control({ alertar: true }).catch((e) => logger.error(`[consolidacion] ${e.message}`));
+  }
   await require('../servicios/monedaService').actualizarAutomaticas().catch((e) => logger.error(`[cotizaciones] ${e.message}`));
   await require('../servicios/copiaService').mantenimiento().catch((e) => logger.error(`[copias] ${e.message}`));
   await Mensajeria.escalarVencidos();

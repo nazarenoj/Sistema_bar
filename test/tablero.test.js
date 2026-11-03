@@ -63,7 +63,7 @@ test('Usuarios.RN36: la comparación usa un período anterior de igual duración
   assert.deepEqual(rangos('semana', new Date(2026, 10, 4, 15, 30)).actual[0], '2026-11-02 00:00:00'); // lunes
   assert.deepEqual(rangos('mes', new Date(2026, 2, 31, 10, 0)).anterior, ['2026-02-01 00:00:00', '2026-02-28 10:00:00']); // recorta al largo del mes anterior
   // Una venta de hace 7 días da base de comparación.
-  const hace7 = new Date(Date.now() - 7 * 86400000);
+  const hace7 = new Date(Date.now() - 7 * 86400000 - 60000);
   await pool.query("INSERT INTO ventas (id_global, mesa_id, sesion_apertura, total, detalle, created_at) SELECT CONCAT('ANT-', UUID()), mesa_id, DATE_SUB(sesion_apertura, INTERVAL 7 DAY), 500, detalle, ? FROM ventas LIMIT 1", [hace7]);
   Tablero.limpiarCache();
   const t = await tablero(token, '?periodo=dia');

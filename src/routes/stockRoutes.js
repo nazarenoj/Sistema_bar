@@ -9,7 +9,7 @@ const Parametro = require('../models/parametroModel');
 const soloAdministrador = require('../middleware/soloAdministrador');
 const { requierePermiso, validarAutorizacion } = require('../middleware/requierePermiso');
 const { auditar } = require('../utils/auditar');
-const { enviarReporte, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
+const { enviarReporte, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../servicios/reporteService');
 
 // Movimientos, kardex y consultas de Stock (RF04, RF12, RF13, RF18, RN02). El stock solo cambia por acá.
 const router = Router();

@@ -43,6 +43,8 @@ const PERMISOS = [
   { id: 'stock.insumos.editar', modulo: 'stock', descripcion: 'Crear y modificar insumos' },
   { id: 'usuarios.cotizaciones.cargar', modulo: 'usuarios', descripcion: 'Cargar cotizaciones de monedas extranjeras a mano' },
   { id: 'usuarios.cotizaciones.fuentes', modulo: 'usuarios', funcion: 'USU-COTIZ-AUTO', descripcion: 'Configurar la fuente de la actualización automática de cotizaciones' },
+  { id: 'usuarios.consolidacion.gestionar', modulo: 'usuarios', funcion: 'USU-CONSOL', descripcion: 'Consolidación: marcar la instancia, publicar, importar paquetes y registrar sucursales' },
+  { id: 'usuarios.consolidacion.ver', modulo: 'usuarios', funcion: 'USU-CONSOL', descripcion: 'Consolidación: ver el control de paquetes y los informes consolidados' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },
   { id: 'usuarios.roles.gestionar', modulo: 'usuarios', descripcion: 'Roles, permisos, excepciones y alcances' },

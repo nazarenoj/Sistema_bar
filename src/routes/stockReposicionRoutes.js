@@ -2,7 +2,7 @@ const { Router } = require('express');
 const Repo = require('../stock/reposicionAutoService');
 const { requierePermiso } = require('../middleware/requierePermiso');
 const requiereFuncion = require('../middleware/requiereFuncion');
-const { enviarReporte, FORMATOS_VALIDOS } = require('../services/reporteService');
+const { enviarReporte, FORMATOS_VALIDOS } = require('../servicios/reporteService');
 
 // Reposición automática sugerida (Stock RF29), con la función STK-REPO-AUTO. Solo arma la lista: nunca compra.
 const router = Router();

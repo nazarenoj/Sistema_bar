@@ -39,6 +39,7 @@ const comisionRoutes = require('./routes/comisionRoutes');
 const monedaRoutes = require('./routes/monedaRoutes');
 const copiaRoutes = require('./routes/copiaRoutes');
 const tableroRoutes = require('./routes/tableroRoutes');
+const consolidacionRoutes = require('./routes/consolidacionRoutes');
 const mantenimientoVentas = require('./services/mantenimientoVentas');
 const stockReposicionRoutes = require('./routes/stockReposicionRoutes');
 const mantenimientoStock = require('./stock/mantenimientoStock');
@@ -66,7 +67,9 @@ const requireAuth      = require('./middleware/authMiddleware');
 const instancia        = require('./middleware/instancia');
 const idempotencia     = require('./middleware/idempotencia');
 const horaCliente      = require('./middleware/horaCliente');
-require('./services/indicadoresVentas'); // Ventas registra sus indicadores del tablero (F3)
+require('./services/indicadoresVentas');
+require('./services/paqueteVentas'); // y publican su paquete de consolidación (F4)
+require('./stock/paqueteStock'); // Ventas registra sus indicadores del tablero (F3)
 require('./stock/indicadoresStock'); // y Stock los suyos
 require('./models/insumoPuerto'); // Stock registra lo que implementa de los puertos de Ventas
 require('./services/disponibilidadReceptor'); // Ventas aplica la marca de agotado automático que informa Stock
@@ -149,6 +152,7 @@ app.use('/api/auth', authRoutes);
 // El latido de la pantalla va antes del requireAuth general porque no debe contar como actividad
 // del usuario (si no, una terminal abandonada nunca vencería por inactividad).
 app.post('/api/terminales/ping', requireAuth.pasivo, ping);
+app.post('/api/consolidacion/recibir', consolidacionRoutes.recibir); // firmado por la sucursal, sin sesión
 app.use('/api', requireAuth);
 // Las terminales se enteran de un cambio de funciones por la versión que viaja en cada respuesta (RN46).
 app.use('/api', async (req, res, next) => {
@@ -195,6 +199,7 @@ app.use('/api/comisiones', comisionRoutes);
 app.use('/api/monedas', monedaRoutes);
 app.use('/api/copias', copiaRoutes);
 app.use('/api/tablero', tableroRoutes);
+app.use('/api/consolidacion', consolidacionRoutes);
 app.use('/api/reposicion-auto', stockReposicionRoutes);
 app.use('/api/categorias',  catalogoRoutes.categorias);
 app.use('/api/sectores',    catalogoRoutes.sectores);

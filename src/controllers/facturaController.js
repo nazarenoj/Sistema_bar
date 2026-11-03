@@ -9,7 +9,7 @@ const afipService = require('../services/afipService');
 const afipConfig = require('../config/afipConfig');
 const { generarFacturaPDF } = require('../services/facturaPdfService');
 const logger = require('../utils/logger');
-const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../services/reporteService');
+const { enviarReporte, desglose, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../servicios/reporteService');
 const { TIPO_COMPROBANTE_LABEL, METODO_PAGO_LABEL, etiqueta } = require('../utils/etiquetas');
 const { esFechaISO } = require('../utils/validaciones');
 

@@ -5,7 +5,7 @@ const Diferencias = require('../stock/diferenciasService');
 const Alertas = require('../stock/alertasService');
 const { requierePermiso, validarAutorizacion } = require('../middleware/requierePermiso');
 const { auditar } = require('../utils/auditar');
-const { enviarReporte, FORMATOS_VALIDOS } = require('../services/reporteService');
+const { enviarReporte, FORMATOS_VALIDOS } = require('../servicios/reporteService');
 
 // Toma de inventario, diferencias de integración y alertas de Stock (RF14, RF16, RF35).
 const router = Router();

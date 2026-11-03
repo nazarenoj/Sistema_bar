@@ -2,7 +2,7 @@ const { Router } = require('express');
 const Comisiones = require('../services/comisionService');
 const { requierePermiso } = require('../middleware/requierePermiso');
 const requiereFuncion = require('../middleware/requiereFuncion');
-const { enviarReporte, FORMATOS_VALIDOS } = require('../services/reporteService');
+const { enviarReporte, FORMATOS_VALIDOS } = require('../servicios/reporteService');
 const { auditar } = require('../utils/auditar');
 
 // Comisiones de vendedores y su liquidación (Ventas RF40, RF41), con la función VEN-COMISIONES. Liquidar exige el permiso (RN18).
