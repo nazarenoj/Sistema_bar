@@ -50,6 +50,8 @@ const PERMISOS = [
   { id: 'usuarios.correo.gestionar', modulo: 'usuarios', funcion: 'USU-CORREO', descripcion: 'Notificaciones por correo: servidor, roles destinatarios y cola' },
   { id: 'clientes.ver', modulo: 'clientes', descripcion: 'Ver clientes y sus datos personales' },
   { id: 'clientes.editar', modulo: 'clientes', descripcion: 'Crear y modificar clientes' },
+  { id: 'clientes.cuentas.gestionar', modulo: 'clientes', descripcion: 'Abrir cuentas corrientes y cambiar límites, plazos y umbrales de mora' },
+  { id: 'clientes.notas.emitir', modulo: 'clientes', descripcion: 'Emitir notas de débito y de crédito sobre la cuenta' },
   { id: 'clientes.unificar', modulo: 'clientes', descripcion: 'Unificar fichas de clientes duplicadas' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },
