@@ -39,6 +39,7 @@ const comisionRoutes = require('./routes/comisionRoutes');
 const monedaRoutes = require('./routes/monedaRoutes');
 const copiaRoutes = require('./routes/copiaRoutes');
 const tableroRoutes = require('./routes/tableroRoutes');
+const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
 const comprobanteTerceroRoutes = require('./routes/comprobanteTerceroRoutes');
 const segundoFactorRoutes = require('./routes/segundoFactorRoutes');
 const consolidacionRoutes = require('./routes/consolidacionRoutes');
@@ -72,7 +73,9 @@ const horaCliente      = require('./middleware/horaCliente');
 require('./services/indicadoresVentas');
 require('./services/paqueteVentas'); // y publican su paquete de consolidación (F4)
 require('./stock/paqueteStock'); // Ventas registra sus indicadores del tablero (F3)
-require('./stock/indicadoresStock'); // y Stock los suyos
+require('./stock/indicadoresStock');
+require('./stock/destinoEquivalencia'); // destinos del diccionario de equivalencias (F7)
+require('./services/destinoEquivalencia'); // y Stock los suyos
 require('./models/insumoPuerto'); // Stock registra lo que implementa de los puertos de Ventas
 require('./services/disponibilidadReceptor'); // Ventas aplica la marca de agotado automático que informa Stock
 require('./services/costoVentaReceptor'); // Ventas guarda el costo que Stock informa al confirmar el descuento
@@ -201,6 +204,8 @@ app.use('/api/comisiones', comisionRoutes);
 app.use('/api/monedas', monedaRoutes);
 app.use('/api/copias', copiaRoutes);
 app.use('/api/tablero', tableroRoutes);
+app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
+app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);
 app.use('/api/comprobantes-terceros', comprobanteTerceroRoutes);
 app.use('/api/2fa', segundoFactorRoutes);
 app.use('/api/consolidacion', consolidacionRoutes);

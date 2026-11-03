@@ -32,6 +32,7 @@ router.get('/fotos/:id/imagen', VER, manejar(async (req, res) => {
   const f = await Fotos.imagen(Number(req.params.id));
   res.type(f.tipo).send(f.imagen);
 }));
+router.post('/fotos/:id/releer', REGISTRAR, manejar(async (req, res) => res.json(await Fotos.releer(Number(req.params.id)))));
 router.put('/fotos/:id/lectura', REGISTRAR, manejar(async (req, res) => res.json(await Fotos.cargarLectura(Number(req.params.id), req.body))));
 router.put('/fotos/:id/lineas/:n', REGISTRAR, manejar(async (req, res) => res.json(await Fotos.asociar(Number(req.params.id), Number(req.params.n), req.body))));
 router.post('/fotos/:id/confirmar', REGISTRAR, manejar(async (req, res) => {

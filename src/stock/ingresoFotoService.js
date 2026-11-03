@@ -2,6 +2,8 @@ const pool = require('../config/db');
 const Mov = require('./movimientoService');
 const Presentacion = require('../models/presentacionModel');
 const { idGlobal } = require('../utils/idGlobal');
+const Lectura = require('../servicios/lecturaComprobanteService');
+const Equiv = require('../servicios/equivalenciaTerceroService');
 
 // Ingreso por foto (Stock RF05, EX03): la imagen o el PDF de una factura o remito se guarda y se lee con el servicio de Lectura de
 // Comprobantes de la plataforma (Usuarios RF15). El resultado es un borrador para revisar: no toca el stock hasta que un usuario lo confirma.
@@ -10,7 +12,8 @@ class BorradorInvalido extends Error {}
 const invalido = (m, status = 400) => Object.assign(new BorradorInvalido(m), { status });
 
 const TIPOS = ['image/jpeg', 'image/png', 'application/pdf'];
-let lector = async () => null; // shortcut: sin servicio de lectura de la plataforma; `usarLector` lo conecta cuando exista
+// Por defecto lee con el servicio de la plataforma (USU-FOTO); si no está activo o no responde, el borrador queda pendiente de lectura (EX03, Usuarios EX11).
+let lector = async ({ imagen, tipo }) => { const r = await Lectura.leer({ imagen, tipo }); return r.estado === 'ok' ? { encabezado: r.encabezado, lineas: r.lineas } : null; };
 const usarLector = (fn) => { lector = fn; };
 
 const normalizar = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -32,6 +35,11 @@ const proponer = async (encabezado, lineas) => {
   const cuit = encabezado?.cuit ?? null;
   const salida = [];
   for (const l of lineas) {
+    // Primero el diccionario de equivalencias de terceros de la plataforma (Usuarios RF16); si no, lo que Stock recordó de ese proveedor.
+    let dic = null;
+    if (cuit && l.descripcion && !l.item) dic = await Equiv.resolver({ cuit, descripcion: l.descripcion }).catch(() => null);
+    if (dic?.tipo_destino === 'item_stock' && dic.estado === 'vigente') { salida.push({ ...l, item: { tipo: 'insumo', id: dic.id_destino }, presentacion_id: dic.presentacion_id, reconocida: true }); continue; }
+    if (dic?.estado === 'revisar') { salida.push({ ...l, revisar_equivalencia: true }); continue; }
     const [[eq]] = await pool.query('SELECT item_tipo, item_id, presentacion_id FROM equivalencias_stock WHERE clave = ?', [claveEq(cuit, l.descripcion)]);
     salida.push(eq && !l.item ? { ...l, item: { tipo: eq.item_tipo, id: eq.item_id }, presentacion_id: eq.presentacion_id ?? l.presentacion_id ?? null, reconocida: true } : l);
   }
@@ -87,7 +95,18 @@ const asociar = async (id, n, { item, presentacion_id }) => {
       `INSERT INTO equivalencias_stock (clave, proveedor_cuit, descripcion, item_tipo, item_id, presentacion_id) VALUES (?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE item_tipo = VALUES(item_tipo), item_id = VALUES(item_id), presentacion_id = VALUES(presentacion_id)`,
       [claveEq(b.encabezado?.cuit, linea.descripcion), b.encabezado?.cuit ?? null, String(linea.descripcion).slice(0, 200), item.tipo, item.id, presentacion_id ?? null]);
+  if (linea.descripcion && b.encabezado?.cuit && item.tipo === 'insumo' && presentacion_id)
+    await Equiv.guardar({ cuit: b.encabezado.cuit, descripcion: linea.descripcion, tipo_destino: 'item_stock', id_destino: item.id, presentacion_id }).catch(() => {}); // ver Usuarios RF16
   return obtener(id);
+};
+
+// Vuelve a pedir la lectura de un borrador que quedó pendiente (el servicio no respondía, EX11).
+const releer = async (id) => {
+  const f = await cargar(id);
+  if (f.estado !== 'pendiente_lectura') throw invalido('El borrador no está pendiente de lectura.', 409);
+  const lectura = await lector({ imagen: f.imagen, tipo: f.imagen_tipo }).catch(() => null);
+  if (!lectura) return { ...(await obtener(id)), lectura: 'pendiente' };
+  return cargarLectura(id, { encabezado: lectura.encabezado ?? {}, lineas: lectura.lineas ?? [] });
 };
 
 // Recién acá se mueve el stock: todas las líneas con ítem, un solo ingreso, la imagen queda adjunta.
@@ -118,4 +137,4 @@ const descartar = async (id) => {
   return obtener(id);
 };
 
-module.exports = { BorradorInvalido, usarLector, crear, obtener, imagen, listar, cargarLectura, asociar, confirmar, descartar };
+module.exports = { BorradorInvalido, usarLector, releer, crear, obtener, imagen, listar, cargarLectura, asociar, confirmar, descartar };
