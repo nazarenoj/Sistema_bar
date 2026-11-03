@@ -146,6 +146,14 @@ const controlArca = async (req, res, next) => {
 };
 
 // Compara la numeración local con la de ARCA (RN51); si difieren la clave queda "Resolviendo".
+const sincronizarNumeracion = async (req, res, next) => {
+  try {
+    const r = await Resolucion.sincronizarTrasRestauracion();
+    await auditar(req, { modulo: 'facturacion', accion: 'sincronizar_numeracion', entidad: 'instancia', entidad_id: '1', detalle: r.ok ? 'validada' : 'pendiente' });
+    res.json(r);
+  } catch (err) { next(err); }
+};
+
 const validarNumeracion = async (req, res, next) => {
   const tipo = Number(req.body.tipo_comprobante);
   if (!afipService.TIPOS_VALIDOS_POR_CONDICION[afipConfig.condicionIvaEmisor].includes(tipo))
@@ -293,4 +301,4 @@ const getEstadoAfip = async (req, res) => {
   }
 };
 
-module.exports = { getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion, getCaeaVigente, solicitarCaea, informarCaea, getLibroIva, controlArca };
+module.exports = { getConfig, getHistorial, getOne, getPdf, reintentar, getEstadoAfip, getReporte, getClaves, liberarClave, validarNumeracion, sincronizarNumeracion, getCaeaVigente, solicitarCaea, informarCaea, getLibroIva, controlArca };

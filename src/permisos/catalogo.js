@@ -42,6 +42,7 @@ const PERMISOS = [
   { id: 'stock.insumos.ver', modulo: 'stock', descripcion: 'Ver insumos' },
   { id: 'stock.insumos.editar', modulo: 'stock', descripcion: 'Crear y modificar insumos' },
   { id: 'usuarios.cotizaciones.cargar', modulo: 'usuarios', descripcion: 'Cargar cotizaciones de monedas extranjeras a mano' },
+  { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },
   { id: 'usuarios.roles.gestionar', modulo: 'usuarios', descripcion: 'Roles, permisos, excepciones y alcances' },
   { id: 'auditoria.ver', modulo: 'usuarios', descripcion: 'Consultar la auditoría y verificar su integridad' },

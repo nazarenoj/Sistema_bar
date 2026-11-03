@@ -16,6 +16,12 @@ const claveDe = ({ puntoVenta, tipo, modalidad = 'CAE' }) => `${puntoVenta}:${ti
 
 const conClave = async (k, trabajo, { esperaMs = ESPERA_MS, arrendamientoMs = ARRENDAMIENTO_MS, renovarMs = RENOVAR_MS } = {}) => {
   const clave = claveDe(k);
+  const [[bloqueo]] = await pool.query("SELECT valor FROM parametros WHERE clave = 'sincronizacion_fiscal_pendiente'");
+  if (bloqueo?.valor === '1') {
+    const err = new Error('Se restauró una copia: la emisión fiscal está bloqueada hasta validar la numeración con ARCA.');
+    err.codigo = 'CLAVE_RESOLVIENDO';
+    throw err;
+  }
   const yo = crypto.randomUUID();
   await pool.query("INSERT IGNORE INTO secuenciador_claves (clave, estado, vence_ms) VALUES (?, 'libre', 0)", [clave]);
 

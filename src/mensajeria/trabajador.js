@@ -37,6 +37,7 @@ const revisarDisco = async (statfs = fs.promises.statfs) => {
 
 const mantenimiento = async () => {
   await revisarDisco();
+  await require('../servicios/copiaService').mantenimiento().catch((e) => logger.error(`[copias] ${e.message}`));
   await Mensajeria.escalarVencidos();
   await Mensajeria.archivarConfirmados();
   await purgarVencidas();

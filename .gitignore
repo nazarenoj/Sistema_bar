@@ -17,3 +17,4 @@ frontend/dist.zip
 *.key
 cert_prod.crt
 .env.*instancias.json
+copias/

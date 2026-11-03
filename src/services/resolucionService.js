@@ -141,6 +141,23 @@ const validarNumeracion = async (puntoVenta, tipo) => {
   return { ok: false, local: Number(local), arca };
 };
 
+// Tras restaurar una copia (Usuarios RN14) ninguna clave emite hasta validar la numeración con ARCA. Valida cada punto de venta y tipo con
+// comprobantes locales; si todos coinciden y no quedan intentos indeterminados, libera las claves y levanta el bloqueo.
+const sincronizarTrasRestauracion = async () => {
+  const [[p]] = await pool.query("SELECT valor FROM parametros WHERE clave = 'sincronizacion_fiscal_pendiente'");
+  if (!p || p.valor !== '1') return { pendiente: false };
+  const [[{ n }]] = await pool.query("SELECT COUNT(*) AS n FROM intento_emision WHERE estado = 'indeterminado'");
+  if (n) return { pendiente: true, ok: false, motivo: `Hay ${n} intento(s) de emisión indeterminados que se resuelven consultando a ARCA.` };
+  const [pares] = await pool.query("SELECT DISTINCT punto_venta, tipo_comprobante FROM facturas WHERE estado = 'aprobada'");
+  const resultados = [];
+  for (const f of pares) resultados.push({ clave: `${f.punto_venta}:${f.tipo_comprobante}:CAE`, ...(await validarNumeracion(f.punto_venta, f.tipo_comprobante)) });
+  if (resultados.some((r) => !r.ok)) return { pendiente: true, ok: false, resultados };
+  await pool.query("UPDATE secuenciador_claves SET estado = 'libre', propietario = NULL, vence_ms = 0 WHERE estado = 'resolviendo'");
+  await pool.query("UPDATE parametros SET valor = '0' WHERE clave = 'sincronizacion_fiscal_pendiente'");
+  await Notificacion.resolverPorClave('restauracion-fiscal', 'Numeración validada con ARCA');
+  return { pendiente: false, ok: true, resultados };
+};
+
 // Trabajador propio de Ventas (la mensajería es de la capa de Usuarios y no puede llamar hacia arriba).
 const hoy = new Map(); // instancia -> fecha ya validada
 const vuelta = async () => {
@@ -172,4 +189,4 @@ const iniciar = () => {
   return () => clearInterval(timer);
 };
 
-module.exports = { abrir, procesarIndeterminados, liberarClave, claves, validarNumeracion, iniciar, vuelta, CONSULTAS_MS };
+module.exports = { abrir, procesarIndeterminados, liberarClave, claves, validarNumeracion, sincronizarTrasRestauracion, iniciar, vuelta, CONSULTAS_MS };
