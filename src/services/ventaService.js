@@ -1,4 +1,5 @@
 const SerieVenta = require('./serieVentaService');
+const Monedas = require('../servicios/monedaService');
 const pool = require('../config/db');
 const Mensajeria = require('../mensajeria/servicio');
 const llamar = require('../modulos/llamar');
@@ -26,24 +27,59 @@ const centavos = (n) => Math.round(Number(n) * 100);
 // Valida los pagos de una cuenta contra las formas de pago configuradas (RF09, RN16): forma activa,
 // referencia si la forma la pide, vuelto solo donde se admite, y la suma de lo aplicado igual al total.
 // `pagos`: [{ forma, importe, referencia?, recibido? }]. Devuelve los pagos normalizados con su vuelto.
+const redondear2 = (x) => Math.round(Number(x) * 100) / 100;
+
+// Cotización con la que se cobra en una divisa (RN44, EX32): la que el cajero fijó al iniciar el cobro (`cotizacion_id`) o la vigente, siempre
+// dentro de la antigüedad permitida; si no hay una, la forma no se puede usar y se ofrece cobrar en pesos. Ventas usa la compradora: el comercio
+// compra la divisa que recibe.
+const cotizacionDeCobro = async (moneda, cotizacionId) => {
+  const c = cotizacionId ? await Monedas.porId(cotizacionId) : await Monedas.vigente(moneda);
+  if (cotizacionId && (!c || c.moneda !== moneda)) throw new PagoInvalido(`La cotización indicada no es de ${moneda}.`);
+  if (!c || c.vencida) throw Object.assign(new PagoInvalido(`No hay una cotización de ${moneda} dentro de la antigüedad permitida: cobrá en pesos.`), { codigo: 'SIN_COTIZACION' });
+  return c;
+};
+
+// Valida los pagos de una cuenta contra las formas de pago configuradas (RF09, RN16): forma activa,
+// importe positivo, referencia si la forma la exige, vuelto solo si la admite, y suma igual al total.
+// `pagos`: [{ forma, importe, referencia?, recibido? }]. Una forma en divisa (VEN-DIVISA) se paga con `importe_divisa` (o con `importe` en pesos) y
+// `recibido_divisa`; el total, el comprobante y el vuelto quedan en pesos y el pago guarda la moneda y la cotización fijadas (RN44).
 const validarPagos = async (conn, pagos, total) => {
   if (!Array.isArray(pagos) || !pagos.length) throw new PagoInvalido('Indicá al menos una forma de pago.');
   const [formas] = await conn.query('SELECT * FROM formas_pago WHERE activa = 1');
   const porCodigo = new Map(formas.map((f) => [f.codigo, f]));
-  const normalizados = pagos.map((p) => {
+  const normalizados = [];
+  for (const p of pagos) {
     const f = porCodigo.get(p.forma);
     if (!f) throw new PagoInvalido(`La forma de pago "${p.forma}" no existe o está desactivada.`);
-    if (!(Number(p.importe) > 0)) throw new PagoInvalido(`El importe de "${f.nombre}" debe ser mayor a cero.`);
+    let importe = Number(p.importe);
+    let divisa = {};
+    let vuelto = 0;
+    if (f.moneda && f.moneda !== 'ARS') {
+      if (!(await Funciones.estaActiva('VEN-DIVISA', conn))) throw new PagoInvalido(`"${f.nombre}" es en moneda extranjera y VEN-DIVISA está inactiva.`);
+      const cot = await cotizacionDeCobro(f.moneda, p.cotizacion_id);
+      if (p.importe_divisa !== undefined && p.importe_divisa !== null) {
+        if (!(Number(p.importe_divisa) > 0)) throw new PagoInvalido(`El importe en ${f.moneda} de "${f.nombre}" debe ser mayor a cero.`);
+        importe = redondear2(Number(p.importe_divisa) * cot.comprador);
+      }
+      if (!(importe > 0)) throw new PagoInvalido(`El importe de "${f.nombre}" debe ser mayor a cero.`);
+      const importeDivisa = p.importe_divisa !== undefined && p.importe_divisa !== null ? Number(p.importe_divisa) : redondear2(importe / cot.comprador);
+      divisa = { moneda: f.moneda, importe_divisa: importeDivisa, cotizacion: cot.comprador, cotizacion_id: cot.id };
+      if (p.recibido_divisa !== undefined && p.recibido_divisa !== null) {
+        if (!f.admite_vuelto) throw new PagoInvalido(`"${f.nombre}" no admite vuelto.`);
+        if (Number(p.recibido_divisa) < importeDivisa) throw new PagoInvalido(`Lo recibido en ${f.moneda} es menor que el importe.`);
+        vuelto = redondear2((Number(p.recibido_divisa) - importeDivisa) * cot.comprador); // el vuelto siempre se entrega en pesos
+      }
+    }
+    if (!(importe > 0)) throw new PagoInvalido(`El importe de "${f.nombre}" debe ser mayor a cero.`);
     const referencia = typeof p.referencia === 'string' ? p.referencia.trim() || null : null;
     if (f.requiere_referencia && !referencia) throw new PagoInvalido(`"${f.nombre}" requiere una referencia.`);
-    let vuelto = 0;
-    if (p.recibido !== undefined && p.recibido !== null) {
+    if (!divisa.moneda && p.recibido !== undefined && p.recibido !== null) {
       if (!f.admite_vuelto) throw new PagoInvalido(`"${f.nombre}" no admite vuelto.`);
-      if (centavos(p.recibido) < centavos(p.importe)) throw new PagoInvalido(`Lo recibido en "${f.nombre}" es menor que el importe.`);
-      vuelto = (centavos(p.recibido) - centavos(p.importe)) / 100;
+      if (centavos(p.recibido) < centavos(importe)) throw new PagoInvalido(`Lo recibido en "${f.nombre}" es menor que el importe.`);
+      vuelto = (centavos(p.recibido) - centavos(importe)) / 100;
     }
-    return { forma: f.codigo, importe: Number(p.importe), referencia, recibido: p.recibido ?? null, vuelto };
-  });
+    normalizados.push({ forma: f.codigo, importe, referencia, recibido: p.recibido ?? null, vuelto, ...divisa });
+  }
   const suma = normalizados.reduce((a, p) => a + centavos(p.importe), 0);
   if (suma !== centavos(total)) throw new PagoInvalido(`La suma de los pagos (${suma / 100}) no coincide con el total de la cuenta (${Number(total)}).`);
   return normalizados;
@@ -99,8 +135,8 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
     [id_global, mesa_id, sesion_apertura, total, JSON.stringify(detalle), idSolicitud ?? null, snap.version, userId ?? null, tipoNoFiscal ? 'no_fiscal' : 'fiscal', tipoNoFiscal, numeroNoFiscal, modalidad, mozoId]
   );
   for (const p of pagos) {
-    await conn.query('INSERT INTO pago_venta (venta_id, metodo_pago, importe, referencia, recibido, vuelto) VALUES (?, ?, ?, ?, ?, ?)',
-      [r.insertId, p.forma, p.importe, p.referencia, p.recibido, p.vuelto]);
+    await conn.query('INSERT INTO pago_venta (venta_id, metodo_pago, importe, referencia, recibido, vuelto, moneda, importe_divisa, cotizacion, cotizacion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [r.insertId, p.forma, p.importe, p.referencia, p.recibido, p.vuelto, p.moneda ?? null, p.importe_divisa ?? null, p.cotizacion ?? null, p.cotizacion_id ?? null]);
   }
   for (const e of EFECTOS) {
     if (tipoNoFiscal && e.destino === 'contable') continue; // una venta no fiscal no se informa a Contable (RN84)
@@ -117,7 +153,7 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
 const obtener = async (id_global) => {
   const [[venta]] = await pool.query('SELECT * FROM ventas WHERE id_global = ?', [id_global]);
   if (!venta) return null;
-  const [pagos] = await pool.query('SELECT metodo_pago, importe, referencia, recibido, vuelto FROM pago_venta WHERE venta_id = ?', [venta.id]);
+  const [pagos] = await pool.query('SELECT metodo_pago, importe, referencia, recibido, vuelto, moneda, importe_divisa, cotizacion, cotizacion_id FROM pago_venta WHERE venta_id = ?', [venta.id]);
   // La venta no cambia (RN19): su estado sale de lo devuelto.
   const [[{ devuelto }]] = await pool.query('SELECT COALESCE(SUM(total), 0) AS devuelto FROM devoluciones WHERE venta_id = ?', [venta.id]);
   const estado = Number(devuelto) === 0 ? 'cerrada' : Math.round(Number(devuelto) * 100) >= Math.round(Number(venta.total) * 100) ? 'anulada' : 'devuelta_parcial';
@@ -130,6 +166,13 @@ const obtener = async (id_global) => {
   const [reimpresiones] = await pool.query('SELECT username, formato, motivo, created_at FROM reimpresiones WHERE venta_id = ? ORDER BY id', [venta.id]);
   return { ...venta, detalle: detalleVenta, pendiente_de_costo: pendienteDeCosto, pagos, devuelto: Number(devuelto), estado, reimpresiones, integracion: await Mensajeria.estadoIntegracion(id_global) };
 };
+
+// Cobros en divisa discriminados por moneda, importe cobrado y cotización (Ventas RF28): sin Financiero son el único registro de lo cobrado en divisa.
+const porMoneda = async ({ desde, hasta } = {}) => (await pool.query(
+  `SELECT pv.moneda, COUNT(*) AS cobros, SUM(pv.importe_divisa) AS total_divisa, SUM(pv.importe) AS total_pesos, ROUND(AVG(pv.cotizacion), 4) AS cotizacion_promedio
+   FROM pago_venta pv JOIN ventas v ON v.id = pv.venta_id WHERE pv.moneda IS NOT NULL
+   AND (? IS NULL OR v.created_at >= ?) AND (? IS NULL OR v.created_at < DATE_ADD(?, INTERVAL 1 DAY)) GROUP BY pv.moneda ORDER BY pv.moneda`, [desde ?? null, desde ?? null, hasta ?? null, hasta ?? null]))[0]
+  .map((r) => ({ ...r, cobros: Number(r.cobros), total_divisa: Number(r.total_divisa), total_pesos: Number(r.total_pesos), cotizacion_promedio: Number(r.cotizacion_promedio) }));
 
 // Total cobrado por forma de pago en un rango de fechas (cierre de caja y reportes, RF09).
 const porFormaPago = async ({ desde, hasta } = {}) => {
@@ -217,4 +260,4 @@ const margen = async ({ desde, hasta } = {}) => {
   }).sort((a, b) => b.margen - a.margen);
 };
 
-module.exports = { comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+module.exports = { porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };

@@ -82,6 +82,9 @@ router.get('/margen', requierePermiso('ventas.historial.ver'), async (req, res, 
 });
 
 // Total cobrado por forma de pago (?desde=YYYY-MM-DD&hasta=YYYY-MM-DD); va antes de /:idGlobal.
+router.get('/por-moneda', requierePermiso('ventas.historial.ver'), async (req, res, next) => {
+  try { res.json(await Venta.porMoneda(req.query)); } catch (err) { next(err); }
+});
 router.get('/por-forma-pago', requierePermiso('ventas.historial.ver'), async (req, res, next) => {
   try {
     res.json(await Venta.porFormaPago(req.query));
