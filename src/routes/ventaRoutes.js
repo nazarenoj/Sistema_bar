@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const Venta = require('../services/ventaService');
+const puertos = require('../modulos/puertos');
 const Registro = require('../services/registroVentasService');
 const Parametro = require('../models/parametroModel');
 const pool = require('../config/db');
@@ -12,6 +13,11 @@ const router = Router();
 
 // Registro de ventas (RF19 a RF21): filtros combinables, orden, paginación (50 por página) y totales que
 // excluyen las anuladas y restan las devoluciones (RN24). Un filtro sin resultados no es un error (EX18).
+// Búsqueda de clientes por el puerto de crédito y maestro de clientes (Clientes RF19): sin Clientes instalado el puerto es nulo y no hay resultados.
+router.get('/clientes/buscar', requierePermiso('ventas.cuenta.cobrar'), async (req, res, next) => {
+  try { res.json(await (await puertos.obtener('credito')).buscarCliente(req.query.q)); } catch (err) { next(err); }
+});
+
 router.get('/', requierePermiso('ventas.historial.ver'), async (req, res, next) => {
   try {
     res.json(await Registro.listar(req.query));

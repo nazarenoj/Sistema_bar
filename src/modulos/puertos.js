@@ -5,7 +5,7 @@ const PUERTOS = {
   // Ventas define; Clientes y CC implementa.
   credito: {
     define: 'ventas', implementa: 'clientes',
-    nula: { disponible: false, veredicto: async () => ({ ofrecido: false }), retenerSaldo: async () => ({ ofrecido: false }) },
+    nula: { disponible: false, veredicto: async () => ({ ofrecido: false }), retenerSaldo: async () => ({ ofrecido: false }), buscarCliente: async () => [], resolverCliente: async (id) => ({ id }) },
   },
   // Ventas define; Compras implementa. Sin Compras los precios son manuales.
   costoReposicion: { define: 'ventas', implementa: 'compras', nula: { costo: async () => null } },
