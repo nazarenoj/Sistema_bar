@@ -33,4 +33,13 @@ router.post('/cotizaciones', requierePermiso('usuarios.cotizaciones.cargar'), ma
   res.status(201).json(c);
 }));
 
+// Fuente de la actualización automática (RF22): se configura con permiso y se puede disparar a mano.
+router.get('/fuentes', requierePermiso('usuarios.cotizaciones.fuentes'), manejar(async (req, res) => res.json(await Monedas.fuentes())));
+router.put('/fuentes', requierePermiso('usuarios.cotizaciones.fuentes'), manejar(async (req, res) => {
+  const f = await Monedas.configurarFuente(req.body);
+  await auditar(req, { modulo: 'monedas', accion: 'fuente_configurar', entidad: 'moneda', entidad_id: f.moneda, detalle: f.url });
+  res.json(f);
+}));
+router.post('/fuentes/actualizar', requierePermiso('usuarios.cotizaciones.fuentes'), manejar(async (req, res) => res.json(await Monedas.actualizarAutomaticas({ forzar: true }))));
+
 module.exports = router;

@@ -1,4 +1,6 @@
 const pool = require('../config/db');
+const Funciones = require('../funciones/servicio');
+const Notificacion = require('../models/notificacionModel');
 
 // Monedas y cotizaciones (Usuarios RF14, RN17, EX12): servicio de plataforma que usan Ventas (cobro en divisa) y los módulos de arriba.
 // La moneda local es una; las extranjeras se agregan. Las cotizaciones (comprador y vendedor, con fecha y hora) son de solo agregar y la
@@ -65,4 +67,51 @@ const historial = async (moneda, limite = 100) => {
   return (await pool.query('SELECT *, TIMESTAMPDIFF(MINUTE, fecha_hora, NOW()) / 60 AS horas FROM cotizaciones WHERE moneda = ? ORDER BY fecha_hora DESC, id DESC LIMIT ?', [String(moneda).toUpperCase(), Math.min(Number(limite) || 100, 500)]))[0].map((c) => dar(c, max));
 };
 
-module.exports = { MonedaInvalida, LOCAL, listar, obtener, crear, activar, cargar, vigente, historial, porId };
+// ---- Actualización automática (RF22, EX12) ----
+// La fuente devuelve JSON; `ruta` es el camino con puntos hasta el número ("compra", "data.venta"). `traer` se puede reemplazar en las pruebas.
+let traer = async (url) => { const r = await fetch(url, { signal: AbortSignal.timeout(10000) }); if (!r.ok) throw new Error(`la fuente respondió ${r.status}`); return r.json(); };
+const usarFuente = (fn) => { traer = fn; };
+const leerRuta = (obj, ruta) => ruta.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+
+const configurarFuente = async ({ moneda, url, ruta_comprador, ruta_vendedor, activa = true }) => {
+  const m = await obtener(moneda);
+  if (!m || m.es_local) throw invalida('La moneda no existe o es la local.', 404);
+  if (!/^https?:\/\//.test(url ?? '')) throw invalida('La dirección de la fuente tiene que empezar con http:// o https://.');
+  for (const r of [ruta_comprador, ruta_vendedor]) if (typeof r !== 'string' || !/^[\w.]{1,60}$/.test(r)) throw invalida('Las rutas del comprador y el vendedor van con letras, números y puntos.');
+  await pool.query('INSERT INTO cotizacion_fuentes (moneda, url, ruta_comprador, ruta_vendedor, activa) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE url = VALUES(url), ruta_comprador = VALUES(ruta_comprador), ruta_vendedor = VALUES(ruta_vendedor), activa = VALUES(activa)',
+    [m.codigo, url, ruta_comprador, ruta_vendedor, activa ? 1 : 0]);
+  return (await pool.query('SELECT * FROM cotizacion_fuentes WHERE moneda = ?', [m.codigo]))[0][0];
+};
+const fuentes = async () => (await pool.query('SELECT * FROM cotizacion_fuentes ORDER BY moneda'))[0];
+
+// Consulta cada fuente activa. Si falla, mantiene la última cotización y alerta cuando supera la antigüedad permitida (EX12).
+const actualizarAutomaticas = async ({ ahora = new Date(), forzar = false } = {}) => {
+  if (!(await Funciones.estaActiva('USU-COTIZ-AUTO'))) return [];
+  const dia = ahora.getDay();
+  if (!forzar && (dia === 0 || dia === 6)) return []; // día hábil
+  const cada = Number((await pool.query("SELECT valor FROM parametros WHERE clave = 'cotizacion_auto_horas'"))[0][0]?.valor ?? 24);
+  const resultados = [];
+  for (const f of (await pool.query('SELECT * FROM cotizacion_fuentes WHERE activa = 1'))[0]) {
+    const ult = (await pool.query("SELECT MAX(fecha_hora) AS f FROM cotizaciones WHERE moneda = ? AND origen = 'automatica'", [f.moneda]))[0][0].f;
+    if (!forzar && ult && (ahora - new Date(ult)) / 3600000 < cada) continue;
+    const clave = `cotizacion-auto-${f.moneda}`;
+    try {
+      const json = await traer(f.url);
+      const comprador = Number(leerRuta(json, f.ruta_comprador)), vendedor = Number(leerRuta(json, f.ruta_vendedor));
+      if (!(comprador > 0) || !(vendedor >= comprador)) throw new Error('la respuesta no trae una cotización válida');
+      await pool.query("INSERT INTO cotizaciones (moneda, comprador, vendedor, fecha_hora, origen) VALUES (?, ?, ?, NOW(), 'automatica')", [f.moneda, comprador, vendedor]);
+      await pool.query('UPDATE cotizacion_fuentes SET ultimo_intento = NOW(), ultimo_error = NULL WHERE moneda = ?', [f.moneda]);
+      await Notificacion.resolverPorClave(clave, 'La fuente volvió a responder');
+      resultados.push({ moneda: f.moneda, ok: true, comprador, vendedor });
+    } catch (err) {
+      await pool.query('UPDATE cotizacion_fuentes SET ultimo_intento = NOW(), ultimo_error = ? WHERE moneda = ?', [String(err.message).slice(0, 255), f.moneda]);
+      const v = await vigente(f.moneda);
+      if (!v || v.vencida)
+        await Notificacion.crear({ modulo: 'usuarios', tipo: 'cotizacion_vencida', severidad: 'alta', roles: ['administrador', 'gerente'], clave, mensaje: `La fuente de cotización de ${f.moneda} no responde (${err.message}) y la última cotización superó la antigüedad permitida: cargala a mano.` });
+      resultados.push({ moneda: f.moneda, ok: false, error: err.message, ultima_vigente: v });
+    }
+  }
+  return resultados;
+};
+
+module.exports = { usarFuente, configurarFuente, fuentes, actualizarAutomaticas, MonedaInvalida, LOCAL, listar, obtener, crear, activar, cargar, vigente, historial, porId };
