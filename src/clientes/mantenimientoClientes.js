@@ -3,6 +3,7 @@ const Modulos = require('../modulos/registro');
 const Funciones = require('../funciones/servicio');
 const Credito = require('./creditoService');
 const Informes = require('./informesService');
+const Fidelizacion = require('./fidelizacionService');
 const logger = require('../utils/logger');
 
 // Trabajo periódico de Clientes (por instancia): una vez por día evalúa el bloqueo automático por mora (RF13) y genera los recordatorios de vencimiento (RF16). Tolera cualquier falla.
@@ -16,6 +17,7 @@ const vuelta = async () => {
         if (hecho.get(inst.codigo) === hoy) return;
         hecho.set(inst.codigo, hoy);
         if (await Funciones.estaActiva('VEN-CC')) await Credito.revisarDiario();
+        if (await Funciones.estaActiva('CLI-FIDEL')) await Fidelizacion.vencer(); // vencimientos y avisos de saldos (RN27)
         await Informes.alertasCiclo(); // fecha de facturación de los mayoristas (RF21)
         await Informes.recordatorios(); // alertas y avisos de vencimientos próximos o vencidos (RF16)
       } catch (err) {

@@ -60,6 +60,8 @@ const PERMISOS = [
   { id: 'clientes.recibos.desimputar', modulo: 'clientes', descripcion: 'Desimputar cobros de los comprobantes' },
   { id: 'ventas.remitos.emitir', modulo: 'ventas', descripcion: 'Emitir y anular remitos de entrega' },
   { id: 'ventas.remitos.facturar', modulo: 'ventas', descripcion: 'Facturar remitos (individual o agrupada)' },
+  { id: 'clientes.fidelizacion.configurar', modulo: 'clientes', funcion: 'CLI-FIDEL', descripcion: 'Definir el programa de fidelización y sus reglas de sellos' },
+  { id: 'clientes.fidelizacion.gestionar', modulo: 'clientes', funcion: 'CLI-FIDEL', descripcion: 'Ajustar saldos, cargar saldo a favor, anular y reactivar instrumentos' },
   { id: 'clientes.unificar', modulo: 'clientes', descripcion: 'Unificar fichas de clientes duplicadas' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

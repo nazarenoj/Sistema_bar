@@ -15,7 +15,7 @@ const sinStock = async (conn, productoId, umbral) => {
   for (const [k, q] of await hojasDeLinea(conn, { producto_id: productoId, cantidad: 1 })) {
     const [tipo, id] = k.split(':');
     const [[f]] = await conn.query(`SELECT stock, controla_stock, permite_negativo${tipo === 'producto' ? ', tipo' : ''} FROM ${tipo === 'insumo' ? 'insumos' : 'productos'} WHERE id = ?`, [id]);
-    if (!f || !f.controla_stock || f.permite_negativo || f.tipo === 'servicio') continue;
+    if (!f || !f.controla_stock || f.permite_negativo || f.tipo === 'servicio' || f.tipo === 'gift_card') continue;
     if (Number(f.stock) <= umbral || Number(f.stock) < q) return true;
   }
   return false;

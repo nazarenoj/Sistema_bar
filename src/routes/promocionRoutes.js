@@ -50,4 +50,6 @@ router.put('/:id/pausa', ...GESTIONAR, manejar(async (req, res) => {
   res.json(p);
 }));
 
+router.put('/:id/solo-socios', ...GESTIONAR, manejar(async (req, res) => res.json(await Promos.soloSocios(Number(req.params.id), !!req.body.solo_socios))));
+
 module.exports = router;

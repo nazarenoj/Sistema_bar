@@ -21,7 +21,7 @@ router.post('/', requierePermiso('ventas.devoluciones.crear'), async (req, res, 
       if (!a.ok) return res.status(a.status).json({ error: 'Devolver con otra forma de pago exige la autorización de un supervisor.', codigo: a.codigo });
       autorizadoPor = a.supervisor.id;
     }
-    const r = await Devolucion.devolver(id, { items, todo: todo === true, motivo, reingreso, reintegro, series },
+    const r = await Devolucion.devolver(id, { items, todo: todo === true, motivo, reingreso, reintegro, series, cliente_id: req.body.cliente_id },
       { idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub, autorizadoPor });
     res.status(201).json(r);
   } catch (err) {

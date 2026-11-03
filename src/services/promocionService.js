@@ -103,6 +103,14 @@ const guardar = async (id, d, { userId } = {}) => {
   return obtener(id);
 };
 
+// Promoción solo para socios del programa de fidelización (necesita CLI-FIDEL).
+const soloSocios = async (id, valor) => {
+  if (valor && !(await Funciones.estaActiva('CLI-FIDEL'))) throw invalida('Las promociones para socios necesitan la función CLI-FIDEL.', 409);
+  const [r] = await pool.query('UPDATE promociones SET solo_socios = ? WHERE id = ?', [valor ? 1 : 0, id]);
+  if (!r.affectedRows) throw invalida('Promoción no encontrada.', 404);
+  return obtener(id);
+};
+
 const pausar = async (id, pausada) => {
   const [r] = await pool.query('UPDATE promociones SET estado = ? WHERE id = ?', [pausada ? 'pausada' : 'activa', id]);
   if (!r.affectedRows) throw invalida('Promoción no encontrada.', 404);
@@ -139,7 +147,7 @@ const prorratear = (lineas, pesos, total) => {
 };
 
 // Calcula las promociones sobre las líneas de los pedidos (sin guardar): { lineas: [{ id, descuento }], aplicadas: [{ promocion_id, nombre, importe, reparto }] }.
-const calcular = async (conn, pedidoIds, { formaPago = null, ahora = new Date() } = {}) => {
+const calcular = async (conn, pedidoIds, { formaPago = null, ahora = new Date(), socio = false } = {}) => {
   const [items] = await conn.query(
     `SELECT pp.id, pp.pedido_id, pp.producto_id, pp.cantidad, pp.precio_unitario, p.categoria_id
      FROM pedido_productos pp JOIN productos p ON p.id = pp.producto_id WHERE pp.pedido_id IN (?) ORDER BY pp.id`, [pedidoIds]);
@@ -148,6 +156,7 @@ const calcular = async (conn, pedidoIds, { formaPago = null, ahora = new Date() 
   const aplicadas = [];
   for (const p of promos) {
     if (!vigenteAhora(p, ahora)) continue;
+    if (p.solo_socios && !socio) continue; // promoción para socios: la condición de socio viene de la copia local de Ventas (Clientes RN30, RN42)
     const [alcance] = await conn.query('SELECT producto_id, categoria_id, cantidad FROM promocion_items WHERE promocion_id = ?', [p.id]);
     const coincide = (l) => !alcance.length || alcance.some((a) => (a.producto_id && a.producto_id === l.producto_id) || (a.categoria_id && a.categoria_id === l.categoria_id));
     // Una línea ya descontada solo admite otra promoción si ambas son acumulables.
@@ -198,11 +207,11 @@ const calcular = async (conn, pedidoIds, { formaPago = null, ahora = new Date() 
 };
 
 // Aplica las promociones al cobrar: deja el descuento en cada línea (Importe_Descuento) y registra lo aplicado. Se puede repetir (recalcula).
-const aplicar = async (conn, pedidoIds, { formaPago = null, ahora = new Date(), clave } = {}) => {
+const aplicar = async (conn, pedidoIds, { formaPago = null, ahora = new Date(), clave, socio = false } = {}) => {
   await conn.query('UPDATE pedido_productos SET importe_descuento = 0 WHERE pedido_id IN (?)', [pedidoIds]);
   await conn.query('DELETE FROM promociones_aplicadas WHERE pedido_id IN (?)', [pedidoIds]);
   if (!(await Funciones.estaActiva('VEN-PROMOS', conn))) return { aplicadas: [], total_descuento: 0 };
-  const r = await calcular(conn, pedidoIds, { formaPago, ahora });
+  const r = await calcular(conn, pedidoIds, { formaPago, ahora, socio });
   for (const l of r.lineas) if (l.descuento > 0) await conn.query('UPDATE pedido_productos SET importe_descuento = ? WHERE id = ?', [l.descuento, l.id]);
   for (const a of r.aplicadas)
     for (const x of a.reparto) await conn.query('INSERT INTO promociones_aplicadas (clave, promocion_id, nombre, pedido_id, item_id, importe) VALUES (?, ?, ?, ?, ?, ?)', [clave, a.promocion_id, a.nombre, x.pedido_id, x.item_id, x.importe]);
@@ -210,9 +219,9 @@ const aplicar = async (conn, pedidoIds, { formaPago = null, ahora = new Date(), 
 };
 
 // Vista previa para mostrar la diferencia antes de confirmar el cobro (EX24): calcula y no guarda.
-const simular = async (pedidoIds, { formaPago = null } = {}) => {
+const simular = async (pedidoIds, { formaPago = null, socio = false } = {}) => {
   if (!pedidoIds.length) return { bruto: 0, descuento: 0, total: 0, aplicadas: [] };
-  const r = await calcular(pool, pedidoIds, { formaPago });
+  const r = await calcular(pool, pedidoIds, { formaPago, socio });
   const bruto = r.lineas.reduce((a, l) => a + l.bruto, 0);
   return { bruto, descuento: r.total_descuento, total: Math.round((bruto - r.total_descuento) * 100) / 100, aplicadas: r.aplicadas.map(({ reparto, ...a }) => a) };
 };
@@ -223,4 +232,4 @@ const informe = async ({ desde, hasta } = {}) => (await pool.query(
    WHERE created_at >= ? AND created_at <= ? GROUP BY promocion_id, nombre ORDER BY importe_descontado DESC`,
   [desde ? `${desde} 00:00:00` : '1970-01-01', hasta ? `${hasta} 23:59:59` : '2999-12-31']))[0].map((r) => ({ ...r, veces: Number(r.veces), importe_descontado: Number(r.importe_descontado) }));
 
-module.exports = { PromocionInvalida, listar, obtener, guardar, pausar, bajoCosto, calcular, aplicar, simular, informe };
+module.exports = { PromocionInvalida, soloSocios, listar, obtener, guardar, pausar, bajoCosto, calcular, aplicar, simular, informe };

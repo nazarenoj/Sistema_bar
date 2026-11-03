@@ -5,7 +5,7 @@ const puertos = require('../modulos/puertos');
 const logger = require('../utils/logger');
 const Funciones = require('../funciones/servicio');
 
-const TIPOS = ['estandar', 'variante', 'pesable', 'fraccionable', 'combo', 'elaborado', 'servicio', 'serializado'];
+const TIPOS = ['estandar', 'variante', 'pesable', 'fraccionable', 'combo', 'elaborado', 'servicio', 'serializado', 'gift_card'];
 const IVA = [0, 2.5, 5, 10.5, 21, 27]; // alícuotas vigentes de ARCA
 const CAMPOS_TEXTO = ['sku', 'codigo_barras'];
 const CAMPOS_ENTEROS = ['categoria_id', 'sector_id', 'producto_base_id', 'plazo_garantia_dias'];

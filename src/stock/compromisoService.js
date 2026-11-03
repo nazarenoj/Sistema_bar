@@ -43,7 +43,7 @@ const requerimientos = async (conn, lineas) => {
 // Solo se comprometen los ítems que controlan stock y no admiten negativo; los servicios no controlan stock (RN04).
 const bloqueante = async (conn, e) => {
   const [[f]] = await conn.query(`SELECT nombre, controla_stock, permite_negativo${e.tipo === 'producto' ? ', tipo' : ''} FROM ${e.tipo === 'insumo' ? 'insumos' : 'productos'} WHERE id = ?`, [e.id]);
-  if (!f || !f.controla_stock || f.permite_negativo || f.tipo === 'servicio') return null;
+  if (!f || !f.controla_stock || f.permite_negativo || f.tipo === 'servicio' || f.tipo === 'gift_card') return null;
   return { ...e, nombre: f.nombre };
 };
 

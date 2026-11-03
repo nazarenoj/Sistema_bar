@@ -76,7 +76,8 @@ M.registrarReceptor('stock', 'descuento_stock', async (conn, c, ctx) => {
   // El descuento consume el compromiso vigente de la venta (RN59): el mismo hueco no se cuenta dos veces.
   if (c.id_compromiso) await Compromiso.consumir(conn, c.id_compromiso);
   for (const it of c.items) {
-    const [[p]] = await conn.query('SELECT sector_id FROM productos WHERE id = ?', [it.producto_id]);
+    const [[p]] = await conn.query('SELECT sector_id, tipo FROM productos WHERE id = ?', [it.producto_id]);
+    if (p?.tipo === 'gift_card') { lineasCosto.push({ linea: it.linea, costo_unitario: null, origen_costo: 'sin_costo', provisorio: false, detalle: [] }); continue; } // una gift card no es mercadería (Ventas RN77)
     // Una serie se vende como unidad (Disponible → Comprometida → Vendida) con el costo de esa unidad y su garantía (RN05, RN79).
     if (it.serie && (await Series.controla(conn, it.producto_id))) {
       const r = await Series.venderEnDescuento(conn, { producto_id: it.producto_id, serie: it.serie, documento: ctx.docIdGlobal, fecha_fin_garantia: it.fecha_fin_garantia }, { userId: c.user_id });

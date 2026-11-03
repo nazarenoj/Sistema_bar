@@ -1,11 +1,17 @@
 const puertos = require('../modulos/puertos');
 const Clientes = require('./clienteService');
 const Credito = require('./creditoService');
+const Fid = require('./fidelizacionService');
 
 // Clientes implementa el puerto "Control de crédito y maestro de clientes" que define Ventas (Clientes RF19): búsqueda por documento, nombre,
 // teléfono o QR. El veredicto y la reserva de crédito se suman en E3. Sin Clientes instalado el puerto es nulo y Ventas no ofrece cuenta corriente.
 const impl = {
   disponible: true,
+  fidelizacion: true,
+  esSocio: (id) => Fid.esSocio(id),
+  retenerSaldo: (d) => Fid.retener(d),
+  liberarRetencion: (id) => Fid.liberar(id),
+  premio: (clienteId, reglaId) => Fid.premio(clienteId, reglaId),
   buscarCliente: (q) => Clientes.buscar(q),
   veredicto: (d) => Credito.veredicto(d),
   reservar: (d) => Credito.reservar(d),

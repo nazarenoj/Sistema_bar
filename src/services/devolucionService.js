@@ -5,6 +5,7 @@ const Mensajeria = require('../mensajeria/servicio');
 const Parametro = require('../models/parametroModel');
 const Factura = require('../models/facturaModel');
 const puertos = require('../modulos/puertos');
+const Funciones = require('../funciones/servicio');
 const afipService = require('./afipService');
 const Venta = require('./ventaService');
 const { idGlobal } = require('../utils/idGlobal');
@@ -45,7 +46,7 @@ const yaDevuelto = async (conn, ventaId) => {
 };
 
 // items: [{ linea, cantidad }] o `todo: true` para anular lo que quede.
-const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reingreso', reintegro, series = [] }, { idSolicitud, userId, autorizadoPor } = {}) => {
+const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reingreso', reintegro, series = [], cliente_id: clienteVale = null }, { idSolicitud, userId, autorizadoPor } = {}) => {
   if (typeof motivo !== 'string' || !motivo.trim()) throw new DevolucionInvalida('El motivo es obligatorio.');
   if (!['reingreso', 'merma'].includes(reingreso)) throw new DevolucionInvalida('"reingreso" debe ser reingreso o merma.');
   const venta = await Venta.obtener(idGlobalVenta);
@@ -128,6 +129,18 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
       await Mensajeria.publicar(conn, tipo === 'total' || total >= Number(venta.total)
         ? { origen: 'ventas', destino: 'clientes', tipo: 'anulacion_debito', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud, contenido: { venta_id_global: idGlobalVenta } }
         : { origen: 'ventas', destino: 'clientes', tipo: 'devolucion_debito', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud, contenido: { venta_id_global: idGlobalVenta, importe: Math.min(total, aCuenta) } });
+    }
+
+    // Fidelización: la devolución revierte lo acumulado y los canjes de la venta; devolver la venta de una gift card anula el instrumento (o se rechaza si tiene canjes);
+    // el reintegro «vale» emite un vale por el importe elegido (no puede ser mayor al devuelto). Todo viaja como mensaje inverso con secuencia posterior.
+    if (await Funciones.estaActiva('CLI-FIDEL', conn)) {
+      const dev = { origen: 'ventas', destino: 'clientes', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud };
+      const [[acum]] = await conn.query("SELECT 1 AS si FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'acumulacion_fidelizacion' LIMIT 1", [idGlobalVenta]);
+      if (acum) await Mensajeria.publicar(conn, { ...dev, tipo: 'reversion_fidelizacion', contenido: { venta_id_global: idGlobalVenta } });
+      const [[gift]] = await conn.query("SELECT 1 AS si FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'emision_gift_card' LIMIT 1", [idGlobalVenta]);
+      if (gift) await Mensajeria.publicar(conn, { ...dev, tipo: 'reversion_emision', contenido: { venta_id_global: idGlobalVenta } });
+      for (const x of reintegros.filter((v) => v.forma === 'vale'))
+        await Mensajeria.publicar(conn, { ...dev, tipo: 'emision_vale', docVersion: r.insertId * 100 + 1, contenido: { cliente_id: clienteVale ?? null, importe: x.importe, venta_id_global: idGlobalVenta, devolucion_id: id_global, importe_devuelto: total } });
     }
 
     // Nota de crédito: solo si la venta tenía una factura aprobada que corregir.

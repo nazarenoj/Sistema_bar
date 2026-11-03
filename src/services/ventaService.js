@@ -51,6 +51,7 @@ const validarPagos = async (conn, pagos, total) => {
   for (const p of pagos) {
     const f = porCodigo.get(p.forma);
     if (!f) throw new PagoInvalido(`La forma de pago "${p.forma}" no existe o está desactivada.`);
+    if (p.forma === 'vale' && !(await Funciones.estaActiva('CLI-FIDEL', conn))) throw new PagoInvalido('La forma de pago "Vale / Gift card / Puntos" necesita la función CLI-FIDEL.');
     if (p.forma === 'cuenta_corriente' && !(await Funciones.estaActiva('VEN-CC', conn))) throw new PagoInvalido('La forma de pago "Cuenta Corriente" necesita la función VEN-CC.');
     let importe = Number(p.importe);
     let divisa = {};
@@ -79,7 +80,7 @@ const validarPagos = async (conn, pagos, total) => {
       if (centavos(p.recibido) < centavos(importe)) throw new PagoInvalido(`Lo recibido en "${f.nombre}" es menor que el importe.`);
       vuelto = (centavos(p.recibido) - centavos(importe)) / 100;
     }
-    normalizados.push({ forma: f.codigo, importe, referencia, recibido: p.recibido ?? null, vuelto, ...divisa });
+    normalizados.push({ forma: f.codigo, importe, referencia, recibido: p.recibido ?? null, vuelto, ...divisa, ...(f.codigo === 'vale' && { instrumento: p.instrumento ?? null, puntos: !!p.puntos }) });
   }
   const suma = normalizados.reduce((a, p) => a + centavos(p.importe), 0);
   if (suma !== centavos(total)) throw new PagoInvalido(`La suma de los pagos (${suma / 100}) no coincide con el total de la cuenta (${Number(total)}).`);
@@ -147,6 +148,68 @@ const reservarCredito = async (pagos, { clienteId, idSolicitud, userId, autoriza
   }
   return { clienteId, importe, moneda, reservaId: v.id_reserva, contingencia: false, aviso: v.aviso ?? null };
 };
+const falla = (status, codigo, error, detalle) => Object.assign(new Error(error), { status, codigo, detalle });
+
+// Canje con vale, gift card, saldo a favor o puntos (Clientes RF31, Ventas RN25): antes de cerrar retiene el saldo por el importe (llamada n.º 2, política «cerrar» y sin
+// contingencia: si Clientes no responde la forma de pago no se ofrece, para no permitir un doble gasto). Con saldo insuficiente informa el saldo actual para cobrar el resto con otra forma.
+const retenerCanjes = async (pagos, { clienteId, idSolicitud }) => {
+  const canjes = (pagos ?? []).filter((p) => p.forma === 'vale');
+  if (!canjes.length) return [];
+  const puerto = await puertos.obtener('credito');
+  if (!puerto.fidelizacion) throw falla(409, 'CANJE_NO_DISPONIBLE', 'El canje con vales, gift cards o puntos necesita el módulo Clientes con la fidelización activa.');
+  const hechas = [];
+  try {
+    for (const [i, p] of canjes.entries()) {
+      if (!p.instrumento && !p.puntos) throw new PagoInvalido('Indicá el código del instrumento o los puntos a canjear.');
+      let r;
+      try { r = await llamar(2, 'ventas', async () => puerto.retenerSaldo({ codigo: p.instrumento ?? undefined, cliente_id: p.puntos ? clienteId : undefined, importe: p.importe, idSolicitud: `${idSolicitud}:canje${i}` })); } catch (err) {
+        if (err.codigo === 'LLAMADA_CERRADA') throw falla(409, 'CANJE_NO_DISPONIBLE', 'Clientes no respondió: la forma de pago de canje no se ofrece en este momento. Cobrá con otra forma.');
+        throw err;
+      }
+      const v = r.valor;
+      if (r.fallo || !v) throw falla(409, 'CANJE_NO_DISPONIBLE', 'La forma de pago de canje no está disponible. Cobrá con otra forma.');
+      if (v.estado === 'saldo_insuficiente') throw falla(409, 'SALDO_INSUFICIENTE', `El saldo disponible es ${v.saldo_actual}: usá ese importe y cobrá el resto con otra forma de pago.`, v); // EX13, EX16
+      if (v.estado === 'rechazada') throw falla(409, 'INSTRUMENTO_RECHAZADO', v.motivo, v); // EX14
+      p.retencion_id = v.id_retencion;
+      hechas.push(v.id_retencion);
+    }
+  } catch (err) { for (const id of hechas) await puerto.liberarRetencion(id).catch(() => {}); throw err; }
+  return hechas;
+};
+const liberarCanjes = async (ids) => { if (ids?.length) { const puerto = await puertos.obtener('credito'); for (const id of ids) await puerto.liberarRetencion?.(id)?.catch?.(() => {}); } };
+
+// Premio de sellos alcanzado: se aplica en el cobro como regla aprobada del programa (sin el permiso de descuentos), sobre las líneas de la cuenta (Clientes RF24).
+const aplicarPremio = async (conn, pedidoIds, { clienteId, premio }) => {
+  if (!premio) return null;
+  const puerto = await puertos.obtener('credito');
+  if (!clienteId || !puerto.fidelizacion) throw falla(409, 'PREMIO_NO_DISPONIBLE', 'El premio de sellos necesita un socio identificado y la fidelización activa.');
+  let p;
+  try { p = (await llamar(2, 'ventas', async () => puerto.premio(clienteId, premio.regla_id))).valor; } catch (err) { throw falla(409, 'PREMIO_NO_DISPONIBLE', err.causa?.message ?? err.message); }
+  if (!p) throw falla(409, 'PREMIO_NO_DISPONIBLE', 'Clientes no respondió: no se puede aplicar el premio ahora.');
+  const [lineas] = await conn.query('SELECT id, producto_id, cantidad, precio_unitario, importe_descuento FROM pedido_productos WHERE pedido_id IN (?) ORDER BY id', [pedidoIds]);
+  const libre = (l) => redondear2(Number(l.cantidad) * Number(l.precio_unitario) - Number(l.importe_descuento));
+  let linea, monto;
+  if (p.tipo === 'producto_gratis') {
+    linea = lineas.find((l) => l.producto_id === p.producto_id && libre(l) >= Number(l.precio_unitario));
+    if (!linea) throw falla(409, 'PREMIO_NO_DISPONIBLE', 'El premio es un producto gratis y no está en la cuenta.');
+    monto = Number(linea.precio_unitario);
+  } else {
+    linea = [...lineas].sort((a, b) => libre(b) - libre(a))[0];
+    monto = Math.min(Number(p.importe), linea ? libre(linea) : 0);
+    if (!linea || monto <= 0) throw falla(409, 'PREMIO_NO_DISPONIBLE', 'No hay importe sobre el cual aplicar el descuento del premio.');
+  }
+  await conn.query('UPDATE pedido_productos SET importe_descuento = importe_descuento + ? WHERE id = ?', [monto, linea.id]);
+  return { ...p, monto, producto_id: p.producto_id ?? null };
+};
+
+// Condición de socio de un cliente según la copia local de Ventas (Clientes RN42): se resuelve el alias de una ficha unificada.
+const esSocioLocal = async (clienteId, conn = pool) => {
+  if (!clienteId) return false;
+  const [[a]] = await conn.query('SELECT resultante_id FROM ventas_cliente_alias WHERE alias_id = ?', [clienteId]);
+  const [[c]] = await conn.query('SELECT socio FROM ventas_clientes_copia WHERE cliente_id = ?', [a?.resultante_id ?? clienteId]);
+  return !!c?.socio;
+};
+
 const liberarCredito = async (credito) => { if (credito?.reservaId) await (await puertos.obtener('credito')).liberarReserva(credito.reservaId).catch(() => {}); };
 
 const liberarCompromiso = async (id) => { if (id) await (await puertos.obtener('stock')).liberarCompromiso(id).catch(() => {}); };
@@ -155,7 +218,7 @@ const liberarSeries = async (idSolicitud) => { if (idSolicitud) await (await pue
 
 // Registra la venta de una cuenta cerrada. Va con la `conn` de la transacción del cierre: si el cierre
 // se revierte, no queda ni la venta ni sus mensajes. Un efecto que falle después nunca revierte la venta.
-const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null, credito = null }) => {
+const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null, credito = null, fid = null }) => {
   const id_global = await idGlobal();
   // Un no fiscal tiene numeración propia, diferenciada de la fiscal, y queda "pendiente de facturación" (RF12, RN84).
   const numeroNoFiscal = tipoNoFiscal ? await Caea.siguienteNumero(`NF:${tipoNoFiscal}`, conn) : null;
@@ -169,8 +232,8 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
     [id_global, mesa_id, sesion_apertura, total, JSON.stringify(detalle), idSolicitud ?? null, snap.version, userId ?? null, tipoNoFiscal ? 'no_fiscal' : 'fiscal', tipoNoFiscal, numeroNoFiscal, modalidad, mozoId]
   );
   for (const p of pagos) {
-    await conn.query('INSERT INTO pago_venta (venta_id, metodo_pago, importe, referencia, recibido, vuelto, moneda, importe_divisa, cotizacion, cotizacion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [r.insertId, p.forma, p.importe, p.referencia, p.recibido, p.vuelto, p.moneda ?? null, p.importe_divisa ?? null, p.cotizacion ?? null, p.cotizacion_id ?? null]);
+    await conn.query('INSERT INTO pago_venta (venta_id, metodo_pago, importe, referencia, recibido, vuelto, moneda, importe_divisa, cotizacion, cotizacion_id, instrumento, retencion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [r.insertId, p.forma, p.importe, p.referencia, p.recibido, p.vuelto, p.moneda ?? null, p.importe_divisa ?? null, p.cotizacion ?? null, p.cotizacion_id ?? null, p.instrumento ?? null, p.retencion_id ?? null]);
   }
   for (const e of EFECTOS) {
     if (tipoNoFiscal && e.destino === 'contable') continue; // una venta no fiscal no se informa a Contable (RN84)
@@ -180,6 +243,29 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
     });
   }
   await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso, modalidad, seriesRegistradas: true });
+  // Fidelización (Clientes RF22, RF29): canjes de vale o puntos, acumulación del socio, premio de sellos y emisión de las gift cards vendidas. Cada efecto es un mensaje
+  // independiente en esta misma transacción; el canje no es ingreso de dinero y la gift card vendida no es venta (Ventas RN77).
+  const fidActiva = await Funciones.estaActiva('CLI-FIDEL', conn);
+  const [tiposProd] = items.length ? await conn.query('SELECT id, tipo, categoria_id FROM productos WHERE id IN (?)', [[...new Set(items.map((i) => i.producto_id))]]) : [[]];
+  const prod = new Map(tiposProd.map((t) => [t.id, t]));
+  const giftCards = items.filter((i) => prod.get(i.producto_id)?.tipo === 'gift_card');
+  if (fidActiva) {
+    for (const [i, p] of pagos.filter((x) => x.retencion_id).entries())
+      await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'canje_instrumento', docTipo: 'venta', docIdGlobal: id_global, docVersion: i + 1, userId, solicitud: idSolicitud, contenido: { id_retencion: p.retencion_id, venta_id_global: id_global } });
+    if (fid?.clienteId) {
+      const valeados = pagos.filter((p) => p.forma === 'vale').reduce((a, p) => a + Number(p.importe), 0);
+      const enGiftCard = giftCards.reduce((a, i) => a + Number(i.cantidad) * Number(i.precio_unitario), 0);
+      const lineasFid = items.filter((i) => prod.get(i.producto_id)?.tipo !== 'gift_card').map((i) => ({ producto_id: i.producto_id, categoria_id: prod.get(i.producto_id)?.categoria_id ?? null, cantidad: Number(i.cantidad) - (fid.premio?.producto_id === i.producto_id ? 1 : 0) })).filter((l) => l.cantidad > 0);
+      await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'acumulacion_fidelizacion', docTipo: 'venta', docIdGlobal: id_global, userId, solicitud: idSolicitud,
+        contenido: { cliente_id: fid.clienteId, venta_id_global: id_global, lineas: lineasFid, importe_pagado: Math.max(redondear2(total - valeados - enGiftCard), 0) } });
+      if (fid.premio) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'canje_sellos', docTipo: 'venta', docIdGlobal: id_global, userId, solicitud: idSolicitud, contenido: { cliente_id: fid.clienteId, regla_id: fid.premio.regla_id, venta_id_global: id_global } });
+    }
+    const [[inst]] = giftCards.length ? await conn.query('SELECT codigo_instancia AS c FROM configuracion_instancia WHERE id = 1') : [[null]];
+    let n = 0;
+    for (const g of giftCards) for (let u = 0; u < Number(g.cantidad); u++)
+      await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'emision_gift_card', docTipo: 'venta', docIdGlobal: id_global, docVersion: ++n, userId, solicitud: idSolicitud,
+        contenido: { codigo: `${inst?.c ?? 'LOCAL'}-GC-${require('crypto').randomBytes(5).toString('hex').toUpperCase()}`, importe: Number(g.precio_unitario), cliente_id: fid?.clienteId ?? null, venta_id_global: id_global, linea: items.indexOf(g) } });
+  }
   // El débito a la cuenta viaja por el protocolo de integración, en esta misma transacción; la reserva de crédito se convierte en deuda en el mismo registro (Clientes RF04).
   if (credito) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'debito_venta', docTipo: 'venta', docIdGlobal: id_global, userId, solicitud: idSolicitud,
     contenido: { cliente_id: credito.clienteId, moneda: credito.moneda, importe: credito.importe, venta_id_global: id_global, fecha: new Date().toISOString().slice(0, 10), reserva_id: credito.reservaId, contingencia: credito.contingencia, concepto: credito.contingencia ? `Contingencia: ${credito.motivo}` : null } });
@@ -297,4 +383,4 @@ const margen = async ({ desde, hasta } = {}) => {
   }).sort((a, b) => b.margen - a.margen);
 };
 
-module.exports = { reservarCredito, liberarCredito, importeACuenta, porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+module.exports = { retenerCanjes, liberarCanjes, aplicarPremio, esSocioLocal, reservarCredito, liberarCredito, importeACuenta, porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
