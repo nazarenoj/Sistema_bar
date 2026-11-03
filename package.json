@@ -1,6 +1,6 @@
 {
   "name": "sistema-chepola",
-  "version": "56.0.0",
+  "version": "57.0.0",
   "description": "Sistema Chepola - API REST con Express",
   "main": "src/server.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "dev": "nodemon src/server.js",
     "migrar": "node scripts/migrar.js",
     "alta": "node scripts/alta-instancia.js",
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node --test --test-concurrency=4 \"test/**/*.test.js\"",
     "dev:all": "concurrently -n API,WEB -c cyan,magenta \"npm run dev\" \"npm run dev --prefix frontend\""
   },
   "engines": {

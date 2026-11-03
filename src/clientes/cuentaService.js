@@ -177,7 +177,7 @@ const receptorDe = (cli) => ({
 // Aplica una nota de crédito al comprobante que corrige: baja su saldo pendiente; lo que no entra queda como saldo a favor de la nota.
 const aplicarNC = async (conn, nota, ref) => {
   const aplicado = Math.min(num(ref.saldo_pendiente), num(nota.importe));
-  if (aplicado > 0) await conn.query("UPDATE movimientos_cc SET saldo_pendiente = saldo_pendiente - ?, estado = IF(saldo_pendiente - ? <= 0, 'cancelado', estado) WHERE id = ?", [aplicado, aplicado, ref.id]);
+  if (aplicado > 0) await conn.query("UPDATE movimientos_cc SET estado = IF(saldo_pendiente - ? <= 0, 'cancelado', estado), saldo_pendiente = saldo_pendiente - ? WHERE id = ?", [aplicado, aplicado, ref.id]); // el estado va primero: MySQL asigna de izquierda a derecha
   await conn.query('UPDATE movimientos_cc SET saldo_pendiente = ? WHERE id = ?', [num(nota.importe - aplicado), nota.id]);
 };
 
