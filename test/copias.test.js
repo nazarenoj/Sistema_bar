@@ -80,10 +80,11 @@ test('Usuarios.RF12/RN14/RN15: restaurar vuelve la instancia completa, cierra se
   // EX09: clave equivocada → no toca nada. EX08: copia de una versión más nueva → bloquea.
   assert.equal((await api('POST', ruta, { token, body: { clave: 'otra-clave-distinta', confirmacion: 'RESTAURAR' } })).json.codigo, 'CLAVE_INCORRECTA');
   assert.ok((await productos()).includes('Después de la copia'));
-  await pool.query("DELETE FROM schema_migrations WHERE version = (SELECT v FROM (SELECT MAX(version) v FROM schema_migrations) x)");
+  const [[ultima]] = await pool.query('SELECT * FROM schema_migrations ORDER BY version DESC LIMIT 1');
+  await pool.query('DELETE FROM schema_migrations WHERE version = ?', [ultima.version]);
   const nueva = await api('POST', ruta, { token, body: { clave: CLAVE, confirmacion: 'RESTAURAR' } });
   assert.equal(nueva.json.codigo, 'VERSION_INCOMPATIBLE');
-  await pool.query("INSERT INTO schema_migrations (version, archivo, huella) VALUES ('053', '053_copias.sql', ?)", [require('crypto').createHash('sha256').update(fs.readFileSync(path.join(__dirname, '..', 'database', 'migraciones', '053_copias.sql'), 'utf8').replace(/\r\n/g, '\n')).digest('hex')]);
+  await pool.query('INSERT INTO schema_migrations (version, archivo, huella) VALUES (?, ?, ?)', [ultima.version, ultima.archivo, ultima.huella]);
   assert.ok((await productos()).includes('Después de la copia'));
 
   const [[{ v: vAntes }]] = await pool.query('SELECT version_configuracion AS v FROM configuracion_instancia WHERE id = 1');

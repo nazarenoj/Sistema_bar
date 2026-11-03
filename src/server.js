@@ -38,6 +38,7 @@ const reservaRoutes = require('./routes/reservaRoutes');
 const comisionRoutes = require('./routes/comisionRoutes');
 const monedaRoutes = require('./routes/monedaRoutes');
 const copiaRoutes = require('./routes/copiaRoutes');
+const tableroRoutes = require('./routes/tableroRoutes');
 const mantenimientoVentas = require('./services/mantenimientoVentas');
 const stockReposicionRoutes = require('./routes/stockReposicionRoutes');
 const mantenimientoStock = require('./stock/mantenimientoStock');
@@ -65,6 +66,8 @@ const requireAuth      = require('./middleware/authMiddleware');
 const instancia        = require('./middleware/instancia');
 const idempotencia     = require('./middleware/idempotencia');
 const horaCliente      = require('./middleware/horaCliente');
+require('./services/indicadoresVentas'); // Ventas registra sus indicadores del tablero (F3)
+require('./stock/indicadoresStock'); // y Stock los suyos
 require('./models/insumoPuerto'); // Stock registra lo que implementa de los puertos de Ventas
 require('./services/disponibilidadReceptor'); // Ventas aplica la marca de agotado automático que informa Stock
 require('./services/costoVentaReceptor'); // Ventas guarda el costo que Stock informa al confirmar el descuento
@@ -191,6 +194,7 @@ app.use('/api/reservas', reservaRoutes);
 app.use('/api/comisiones', comisionRoutes);
 app.use('/api/monedas', monedaRoutes);
 app.use('/api/copias', copiaRoutes);
+app.use('/api/tablero', tableroRoutes);
 app.use('/api/reposicion-auto', stockReposicionRoutes);
 app.use('/api/categorias',  catalogoRoutes.categorias);
 app.use('/api/sectores',    catalogoRoutes.sectores);
