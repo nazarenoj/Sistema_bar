@@ -21,6 +21,7 @@ const crear = async ({ modulo, tipo, severidad, mensaje, roles, clave = null }) 
     'INSERT INTO notificaciones (ts_ms, modulo, tipo, severidad, mensaje, roles_destinatarios, clave) VALUES (?, ?, ?, ?, ?, ?, ?)',
     [Date.now(), modulo, tipo, severidad, mensaje.slice(0, 500), destinatarios(roles), clave]
   );
+  require('../servicios/correoService').alEmitir({ id: r.insertId, modulo, severidad, mensaje, roles }).catch(() => {}); // USU-CORREO (RF24): si está activo, también por correo
   return r.insertId;
 };
 

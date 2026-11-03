@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const mysql = require('mysql2/promise');
 const pool = require('../config/db');
+const Funciones = require('../funciones/servicio');
 const registro = require('../instancias/registro');
 const Notificacion = require('../models/notificacionModel');
 const { version: VERSION } = require('../../package.json');
@@ -125,6 +126,53 @@ const ruta = (c) => path.join(carpeta(), c.nombre);
 const porId = async (id) => (await pool.query('SELECT * FROM copias_seguridad WHERE id = ?', [id]))[0][0] ?? null;
 const sellos = (d = new Date()) => { const p = (x) => String(x).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
 
+// ---- Copia adicional en un destino externo (RF23, EX06; función USU-NUBE) ----
+// La copia ya está cifrada: viaja y se guarda así. Si el destino no responde, se conserva en la plataforma, queda en cola, se alerta y se reintenta.
+let transporteExterno = async (destino, c, buf) => {
+  if (destino.tipo === 'carpeta') {
+    fs.mkdirSync(destino.ruta, { recursive: true });
+    const hacia = path.join(destino.ruta, c.nombre);
+    fs.writeFileSync(hacia, buf);
+    if (fs.statSync(hacia).size !== buf.length) throw new Error('el archivo copiado no tiene el mismo tamaño');
+    return;
+  }
+  const r = await fetch(`${destino.ruta.replace(/\/$/, '')}/${encodeURIComponent(c.nombre)}`, { method: 'PUT', body: buf, signal: AbortSignal.timeout(60000),
+    headers: { 'Content-Type': 'application/octet-stream', ...(process.env.COPIAS_NUBE_TOKEN && { Authorization: `Bearer ${process.env.COPIAS_NUBE_TOKEN}` }) } });
+  if (!r.ok) throw new Error(`el destino respondió ${r.status}`);
+};
+const usarTransporteExterno = (fn) => { transporteExterno = fn; };
+const destinoExterno = async () => (await pool.query('SELECT tipo, ruta, activo FROM copias_destino WHERE id = 1'))[0][0];
+const configurarDestino = async ({ tipo, ruta, activo = true }) => {
+  if (!['carpeta', 'http'].includes(tipo)) throw invalida('El tipo de destino es carpeta o http.');
+  if (typeof ruta !== 'string' || !ruta.trim()) throw invalida('Falta la ruta o la dirección del destino.');
+  if (tipo === 'http' && !/^https:\/\//.test(ruta) && !/^http:\/\/(localhost|127\.0\.0\.1)/.test(ruta)) throw invalida('El destino por dirección tiene que ser https.');
+  await pool.query('UPDATE copias_destino SET tipo = ?, ruta = ?, activo = ? WHERE id = 1', [tipo, ruta.trim(), activo ? 1 : 0]);
+  return destinoExterno();
+};
+const enviarExterna = async (id) => {
+  if (!(await Funciones.estaActiva('USU-NUBE'))) return { enviada: false, motivo: 'La función USU-NUBE está desactivada.' };
+  const d = await destinoExterno();
+  if (!d.activo || !d.ruta) return { enviada: false, motivo: 'No hay un destino externo configurado.' };
+  const c = await porId(id);
+  await pool.query("UPDATE copias_seguridad SET externa_estado = 'pendiente' WHERE id = ? AND externa_estado = 'no_aplica'", [id]);
+  try {
+    await transporteExterno(d, c, fs.readFileSync(ruta(c)));
+    await pool.query("UPDATE copias_seguridad SET externa_estado = 'enviada', externa_enviada_en = NOW(), externa_intentos = externa_intentos + 1, externa_error = NULL WHERE id = ?", [id]);
+    return { enviada: true };
+  } catch (err) {
+    await pool.query('UPDATE copias_seguridad SET externa_intentos = externa_intentos + 1, externa_error = ? WHERE id = ?', [String(err.message).slice(0, 255), id]);
+    await Notificacion.crear({ modulo: 'usuarios', tipo: 'copia_externa', severidad: 'alta', roles: ['administrador'], clave: 'copia-externa-pendiente', mensaje: `No se pudo enviar la copia ${c.nombre} al destino externo (${err.message}). Queda en cola y se reintenta; sigue guardada en la plataforma.` });
+    return { enviada: false, motivo: err.message };
+  }
+};
+const enviarExternas = async () => {
+  const pend = (await pool.query("SELECT id FROM copias_seguridad WHERE externa_estado = 'pendiente' AND estado = 'valida' ORDER BY id"))[0];
+  const res = [];
+  for (const p of pend) res.push({ id: p.id, ...(await enviarExterna(p.id)) });
+  if (pend.length && res.every((r) => r.enviada)) await Notificacion.resolverPorClave('copia-externa-pendiente', 'Las copias pendientes llegaron al destino externo');
+  return res;
+};
+
 // Verifica una copia ya escrita (RF11): el archivo coincide con su huella, se descifra y trae las mismas tablas y filas.
 // Si falla queda "inválida", se alerta y (si es automática) se hace una nueva (EX07).
 const verificar = async (id, clave) => {
@@ -154,6 +202,7 @@ const generar = async ({ tipo = 'manual', clave, userId = null, reintento = true
   const [r] = await pool.query('INSERT INTO copias_seguridad (nombre, tipo, version_sistema, modulos, tablas, filas, bytes, huella, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [nombre, tipo, VERSION, modulos, Object.keys(tablas).length, filas, buf.length, crypto.createHash('sha256').update(buf).digest('hex'), userId]);
   const v = await verificar(r.insertId, k);
+  if (v.valida && tipo !== 'previa') await enviarExterna(r.insertId).catch(() => {}); // USU-NUBE: copia adicional, con cola si no llega
   if (!v.valida && tipo === 'automatica' && reintento) return generar({ tipo, clave, userId, reintento: false }); // EX07: genera una nueva
   if (!v.valida) throw invalida(`La copia se generó pero no pasó la verificación: ${v.detalle}.`, 500);
   return porId(r.insertId);
@@ -198,6 +247,7 @@ const aplicarRetencion = async () => {
 
 // Tarea periódica (a la hora configurada genera la copia automática) y alerta si pasaron más de 24 h sin una válida (RN16).
 const mantenimiento = async ({ ahora = new Date() } = {}) => {
+  await enviarExternas().catch(() => {});
   const [[ult]] = await pool.query("SELECT MAX(creada_en) AS f FROM copias_seguridad WHERE tipo = 'automatica' AND estado = 'valida'");
   const horas = ult.f ? (ahora - new Date(ult.f)) / 3600000 : Infinity;
   const frecuencia = await parametro('copia_frecuencia_horas', 24), hora = await parametro('copia_hora', 2);
@@ -263,4 +313,4 @@ const restaurar = async ({ id, clave, confirmacion, actor = {} }) => {
   return { restaurada: c.nombre, fecha_copia: cabecera.fecha, version_copia: cabecera.version_sistema, copia_previa: previa.nombre, operaciones_posteriores_perdidas: perdidas, reingresar: true, emision_fiscal_bloqueada: true };
 };
 
-module.exports = { CopiaInvalida, configurarClave, claveConfigurada, generar, verificar, listar, detalle, archivo, retener, aplicarRetencion, mantenimiento, restaurar };
+module.exports = { usarTransporteExterno, configurarDestino, destinoExterno, enviarExterna, enviarExternas, CopiaInvalida, configurarClave, claveConfigurada, generar, verificar, listar, detalle, archivo, retener, aplicarRetencion, mantenimiento, restaurar };

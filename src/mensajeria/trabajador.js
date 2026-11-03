@@ -37,6 +37,7 @@ const revisarDisco = async (statfs = fs.promises.statfs) => {
 
 const mantenimiento = async () => {
   await revisarDisco();
+  await require('../servicios/correoService').enviarCola().catch((e) => logger.error(`[correo] ${e.message}`));
   if (await require('../funciones/servicio').estaActiva('USU-CONSOL')) {
     const C = require('../servicios/consolidacionService');
     await C.enviarPendientes().catch((e) => logger.error(`[consolidacion] ${e.message}`));

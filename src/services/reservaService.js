@@ -175,7 +175,8 @@ const vencer = async () => {
 };
 
 // Recordatorios por correo: requieren internet y el servicio de correo (USU-CORREO); sin él quedan listados para avisar a mano.
-let correo = null;
+const Correo = require('../servicios/correoService');
+let correo = (r) => Correo.enviarDirecto({ para: r.cliente_email, asunto: 'Recordatorio de tu reserva', cuerpo: `Hola ${r.cliente_nombre}, te recordamos tu reserva para el ${new Date(r.fecha_hora).toLocaleString('es-AR')}. Si no podés venir, avisanos para liberar la mesa.` });
 const usarCorreo = (fn) => { correo = fn; };
 const recordatoriosDebidos = async () => {
   const horas = await param('reserva_recordatorio_horas', 24);

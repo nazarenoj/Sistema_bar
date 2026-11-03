@@ -47,6 +47,7 @@ const PERMISOS = [
   { id: 'usuarios.consolidacion.ver', modulo: 'usuarios', funcion: 'USU-CONSOL', descripcion: 'Consolidación: ver el control de paquetes y los informes consolidados' },
   { id: 'usuarios.comprobantes.confirmar_casi_duplicado', modulo: 'usuarios', descripcion: 'Continuar la carga de un comprobante de tercero marcado como casi duplicado' },
   { id: 'usuarios.equivalencias.gestionar', modulo: 'usuarios', descripcion: 'Diccionario de equivalencias de terceros: crear, cambiar y borrar' },
+  { id: 'usuarios.correo.gestionar', modulo: 'usuarios', funcion: 'USU-CORREO', descripcion: 'Notificaciones por correo: servidor, roles destinatarios y cola' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },
   { id: 'usuarios.roles.gestionar', modulo: 'usuarios', descripcion: 'Roles, permisos, excepciones y alcances' },
