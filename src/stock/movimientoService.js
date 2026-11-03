@@ -6,6 +6,8 @@ const Compromiso = require('./compromisoService');
 const Lotes = require('./loteService');
 const { exigirLibre } = require('./tomaAlcance');
 const { idGlobal } = require('../utils/idGlobal');
+const Claves = require('../servicios/comprobanteTerceroService');
+const M = require('../mensajeria/servicio');
 
 // Movimientos y kardex (Stock RF04, RF12, RF13, RF18, RN02). Todo cambio de existencias es un movimiento de solo
 // agregar; el saldo sale de sumarlos y un error se corrige con un movimiento inverso que referencia al original.
@@ -101,8 +103,42 @@ const lineaABase = async (conn, l, uso) => {
 
 const claveComprobante = (c) => (c?.numero ? [c.cuit, c.clase, c.tipo, c.punto_venta, c.numero].map((x) => String(x ?? '').trim().toUpperCase()).join('-') : null);
 
-const ingresar = async ({ deposito_id, motivo, proveedor, comprobante, lineas, observacion }, { userId } = {}) => {
+// Identificación del comprobante de un tercero (Usuarios RF27): reserva la clave antes de confirmar el ingreso. Si no queda reservada, el ingreso no se hace.
+const ESTADOS_CLAVE = {
+  duplicado_exacto: [409, 'Ese comprobante ya fue cargado (duplicado exacto): un comprobante se registra una sola vez.'],
+  en_proceso: [409, 'Otra carga de este comprobante está en proceso.'],
+  casi_duplicado: [409, 'Hay un comprobante muy parecido ya cargado: revisalo y, si es distinto, confirmá con el motivo.'],
+  bloqueado_cae: [409, 'Ese CAE ya pertenece a otro comprobante: corregí los datos.'],
+};
+const reservarClave = async (comprobante, proveedor, { userId, idSolicitud, autorizanteId }) => {
+  if (!comprobante?.numero) return null;
+  let r;
+  try {
+    r = await Claves.reservar({ ...comprobante, razon_social: comprobante.razon_social ?? proveedor }, { modulo: 'stock', userId, idSolicitud, idClave: comprobante.id_clave,
+      confirmar: comprobante.confirmar_casi_duplicado ? { motivo: comprobante.confirmar_casi_duplicado.motivo, autorizante_id: autorizanteId } : null });
+  } catch (err) {
+    if (err instanceof Claves.ClaveInvalida) throw Object.assign(invalido(err.message, err.status), { campo: err.campo });
+    throw err;
+  }
+  if (ESTADOS_CLAVE[r.estado]) throw Object.assign(invalido(ESTADOS_CLAVE[r.estado][1], ESTADOS_CLAVE[r.estado][0]), { clave: r });
+  return r;
+};
+
+const ingresar = async ({ deposito_id, motivo, proveedor, comprobante, lineas, observacion }, { userId, idSolicitud, autorizanteId } = {}) => {
   if (!Array.isArray(lineas) || !lineas.length) throw invalido('Indicá al menos una línea.');
+  const reserva = await reservarClave(comprobante, proveedor, { userId, idSolicitud, autorizanteId });
+  try {
+    const r = await ingresarConClave({ deposito_id, motivo, proveedor, comprobante, lineas, observacion }, { userId }, reserva);
+    if (reserva) M.despertar();
+    if (reserva?.estado === 'vinculable') await Claves.vincular({ id_clave: reserva.id_clave, modulo: 'stock', id_documento: r.id_global, rol: 'registro_fisico', userId });
+    return r;
+  } catch (err) {
+    if (reserva?.id_reserva) await Claves.cancelar(reserva.id_reserva); // el ingreso no se hizo: la clave queda libre sin esperar el vencimiento
+    throw err;
+  }
+};
+
+const ingresarConClave = async ({ deposito_id, motivo, proveedor, comprobante, lineas, observacion }, { userId } = {}, reserva = null) => {
   return conTransaccion(async (conn) => {
     const m = await motivoDe(conn, motivo, 'ingreso');
     if (m.requiere_observacion && !String(observacion ?? '').trim()) throw invalido(`El motivo "${m.nombre}" exige una observación.`);
@@ -114,7 +150,7 @@ const ingresar = async ({ deposito_id, motivo, proveedor, comprobante, lineas, o
       await conn.query(
         `INSERT INTO stock_ingresos (id_global, deposito_id, motivo, proveedor, comprobante_cuit, comprobante_clase, comprobante_tipo, comprobante_pto, comprobante_numero, comprobante_cae, clave_comprobante, user_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id_global, dep.id, m.codigo, proveedor ?? null, comprobante?.cuit ?? null, comprobante?.clase ?? null, comprobante?.tipo ?? null, comprobante?.punto_venta ?? null, comprobante?.numero ?? null, comprobante?.cae ?? null, clave, userId ?? null]);
+        [id_global, dep.id, m.codigo, proveedor ?? null, comprobante?.cuit ?? null, comprobante?.clase ?? null, comprobante?.tipo ?? null, comprobante?.punto_venta ?? null, comprobante?.numero ?? null, comprobante?.cae ?? null, reserva ? null : clave, userId ?? null]); // con la identificación de F6 la unicidad es de la clave de plataforma, que permite volver a cargar uno anulado
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY') throw invalido('Ese comprobante de origen ya fue registrado: un ingreso físico se registra una sola vez.', 409);
       throw err;
@@ -129,6 +165,7 @@ const ingresar = async ({ deposito_id, motivo, proveedor, comprobante, lineas, o
       movs.push(await registrar(conn, { item: l.item, deposito_id: dep.id, tipo: 'ingreso', motivo: m.codigo, cantidad: base.cantidad, costo_unitario: l.costo_unitario, lote_id: lote?.id, presentacion_id: base.presentacion_id,
         factor_aplicado: base.factor_aplicado, cantidad_presentacion: base.cantidad_presentacion, documento_tipo: 'ingreso', documento: id_global, user_id: userId, observacion }));
     }
+    if (reserva?.id_reserva) await Claves.publicarConfirmacion(conn, { idReserva: reserva.id_reserva, idDocumento: id_global, modulo: 'stock', rol: 'registro_fisico', userId, docTipo: 'ingreso' });
     return { id_global, deposito_id: dep.id, motivo: m.codigo, movimientos: movs };
   });
 };

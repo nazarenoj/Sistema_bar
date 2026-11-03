@@ -18,7 +18,7 @@ const insumo = async (nombre) => (await api('POST', '/api/insumos', { token, bod
 const stockDe = async (id) => Number((await pool.query('SELECT stock FROM insumos WHERE id = ?', [id]))[0][0].stock);
 const ingreso = async (i, cantidad, costo) => (await api('POST', '/api/stock/ingresos', { token, body: { motivo: 'compra', lineas: [{ item: { tipo: 'insumo', id: i.id }, cantidad, costo_unitario: costo }] } })).json.movimientos[0].id;
 const subir = (contenido = 'imagen', tipo = 'image/png') => api('POST', '/api/stock-ingresos/fotos', { token, headers: { 'Content-Type': tipo, 'X-Nombre-Archivo': 'factura.png' }, body: contenido });
-const enc = (numero) => ({ proveedor: 'Molinos SA', cuit: '30712345678', clase: 'FA', tipo: 'A', punto_venta: 5, numero });
+const enc = (numero) => ({ proveedor: 'Molinos SA', cuit: '30712345671', clase: 'FA', tipo: 'A', punto_venta: 5, numero });
 
 test('Stock.RF05/EX03: la foto queda como borrador sin tocar el stock hasta que un usuario lo confirma, y lo asociado se recuerda', async () => {
   const harina = await insumo('Harina');
@@ -87,7 +87,7 @@ test('Stock.RF40/RN80/EX58: la devolución sale al costo del ingreso, solo de lo
   await api('POST', '/api/stock/egresos', { token, body: { motivo: 'consumo_interno', lineas: [{ item: { tipo: 'insumo', id: cafe.id }, cantidad: 15 }] } });
   assert.equal((await dev(b, 3)).json.devolvible, 1);
   // Sin Compras, la nota de crédito se carga a mano; cada una vale una sola vez (RN09).
-  const nc = { comprobante: { cuit: '30712345678', clase: 'NC', tipo: 'A', punto_venta: 5, numero: '77' }, importe: 380 };
+  const nc = { comprobante: { cuit: '30712345671', clase: 'NC', tipo: 'A', punto_venta: 5, numero: '77' }, importe: 380 };
   assert.equal((await api('POST', `/api/stock-ingresos/devoluciones-proveedor/${d.json.id}/nota-credito`, { token, body: { importe: 1 } })).status, 400);
   const ok = await api('POST', `/api/stock-ingresos/devoluciones-proveedor/${d.json.id}/nota-credito`, { token, body: nc });
   assert.equal(ok.status, 200, JSON.stringify(ok.json));

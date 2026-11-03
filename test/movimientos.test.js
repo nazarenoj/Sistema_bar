@@ -89,7 +89,7 @@ test('Stock.RF04: el ingreso manual guarda motivo, comprobante, costo y presenta
   const leche = await insumo('Leche', 'l');
   const caja = (await api('POST', '/api/presentaciones', { token, body: { insumo_id: leche.id, nombre: 'caja x12', factor: 12, usos: ['compra'] } })).json;
   const sachet = (await api('POST', '/api/presentaciones', { token, body: { insumo_id: leche.id, nombre: 'ml', factor: 0.001, usos: ['receta'] } })).json;
-  const comprobante = { cuit: '30711111118', clase: 'A', tipo: 'FACTURA', punto_venta: 3, numero: '00001234', cae: '70123456789012' };
+  const comprobante = { cuit: '30711111111', clase: 'FACTURA', tipo: 'A', punto_venta: 3, numero: '00001234', cae: '70123456789012' };
   const r = await ingreso({ motivo: 'compra', proveedor: 'Lácteos SA', comprobante, lineas: [linea(leche, 2, { presentacion_id: caja.id, costo_unitario: 900 })] });
   assert.equal(r.status, 201);
   assert.equal(await stockDe('insumo', leche.id), 24); // 2 cajas x 12
@@ -106,7 +106,7 @@ test('Stock.RF04: el ingreso manual guarda motivo, comprobante, costo y presenta
   const dup = await ingreso({ motivo: 'compra', comprobante, lineas: [linea(leche, 1)] });
   assert.equal(dup.status, 409);
   assert.equal(await stockDe('insumo', leche.id), 24);
-  assert.equal((await ingreso({ motivo: 'compra', comprobante: { ...comprobante, numero: '00001235' }, lineas: [linea(leche, 1)] })).status, 201);
+  assert.equal((await ingreso({ motivo: 'compra', comprobante: { ...comprobante, numero: '00001235', cae: '70123456789013' }, lineas: [linea(leche, 1)] })).status, 201);
 
   // Validaciones: todo o nada.
   for (const [descripcion, body] of [

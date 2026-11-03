@@ -7,7 +7,7 @@ const Costos = require('../stock/costoService');
 const Compromiso = require('../stock/compromisoService');
 const Parametro = require('../models/parametroModel');
 const soloAdministrador = require('../middleware/soloAdministrador');
-const { requierePermiso, validarAutorizacion } = require('../middleware/requierePermiso');
+const { requierePermiso, validarAutorizacion, permisosDe } = require('../middleware/requierePermiso');
 const { auditar } = require('../utils/auditar');
 const { enviarReporte, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../servicios/reporteService');
 
@@ -18,7 +18,7 @@ const REGISTRAR = requierePermiso('stock.movimientos.registrar');
 
 const manejar = (fn) => async (req, res, next) => {
   try { await fn(req, res); } catch (err) {
-    if (err instanceof Mov.MovimientoInvalido) return res.status(err.status || 400).json({ error: err.message, codigo: 'MOVIMIENTO_INVALIDO' });
+    if (err instanceof Mov.MovimientoInvalido) return res.status(err.status || 400).json({ error: err.message, codigo: err.clave ? String(err.clave.estado).toUpperCase() : 'MOVIMIENTO_INVALIDO', ...(err.clave && { clave: err.clave }), ...(err.campo && { campo: err.campo }) });
     if (err instanceof LoteInvalido) return res.status(err.status || 400).json({ error: err.message, codigo: 'LOTE_INVALIDO' });
     if (err instanceof TomaBloqueada) return res.status(err.status).json({ error: err.message, codigo: 'TOMA_EN_CURSO', detalle: err.detalle });
     next(err);
@@ -108,7 +108,18 @@ router.get('/mermas', VER, manejar(async (req, res) => res.json(await Mov.mermas
 // ---- Movimientos ----
 
 router.post('/ingresos', REGISTRAR, manejar(async (req, res) => {
-  const r = await Mov.ingresar(req.body, { userId: usuario(req) });
+  // Seguir con un casi duplicado exige el permiso de confirmarlo (Usuarios RN65); si solo requiere autorización, la da un supervisor.
+  let autorizanteId = null;
+  if (req.body.comprobante?.confirmar_casi_duplicado) {
+    const nivel = (await permisosDe(req));
+    const n = nivel.esAdmin ? 'permitido' : nivel.niveles['usuarios.comprobantes.confirmar_casi_duplicado'];
+    if (n === 'requiere_autorizacion') {
+      const a = await validarAutorizacion(req, 'usuarios.comprobantes.confirmar_casi_duplicado');
+      if (!a.ok) return res.status(a.status).json({ error: 'Confirmar un casi duplicado necesita la autorización de un supervisor.', codigo: a.codigo });
+      autorizanteId = a.supervisor.id;
+    } else if (n !== 'permitido') return res.status(403).json({ error: 'No tenés permiso para confirmar un casi duplicado.', codigo: 'PERMISO' });
+  }
+  const r = await Mov.ingresar(req.body, { userId: usuario(req), idSolicitud: req.get('X-ID-Solicitud') || undefined, autorizanteId });
   await auditar(req, { modulo: 'stock', accion: 'ingreso', entidad: 'ingreso', entidad_id: r.id_global, detalle: `${r.movimientos.length} línea(s), motivo ${r.motivo}` });
   res.status(201).json(r);
 }));
