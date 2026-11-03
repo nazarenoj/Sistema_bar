@@ -11,7 +11,13 @@ const impl = {
   reservar: (d) => Credito.reservar(d),
   liberarReserva: (id) => Credito.liberar(id),
   renovarReserva: (id) => Credito.renovar(id),
-  resolverCliente: async (id) => { const c = await Clientes.resolver(id); return c ? { id: c.id, razon_social: c.razon_social, lista_precio_id: c.lista_precio_id } : null; },
+  // Lo que Ventas necesita del cliente para facturarle: documento con el código de ARCA y condición frente al IVA.
+  resolverCliente: async (id) => {
+    const c = await Clientes.resolver(id);
+    if (!c) return null;
+    const doc = { CUIT: 80, CUIL: 86, DNI: 96, PASAPORTE: 94, CF: 99 }[c.tipo_documento];
+    return { id: c.id, razon_social: c.razon_social, lista_precio_id: c.lista_precio_id, doc_tipo: doc, nro_documento: c.nro_documento, condicion_iva_receptor_id: c.condicion_iva_receptor_id ?? 5, domicilio_fiscal: c.domicilio_fiscal };
+  },
 };
 puertos.registrar('credito', impl);
 module.exports = impl;

@@ -58,6 +58,8 @@ const PERMISOS = [
   { id: 'clientes.recibos.registrar', modulo: 'clientes', descripcion: 'Registrar recibos de cobro e imputar' },
   { id: 'clientes.recibos.anular', modulo: 'clientes', descripcion: 'Anular recibos (con motivo)' },
   { id: 'clientes.recibos.desimputar', modulo: 'clientes', descripcion: 'Desimputar cobros de los comprobantes' },
+  { id: 'ventas.remitos.emitir', modulo: 'ventas', descripcion: 'Emitir y anular remitos de entrega' },
+  { id: 'ventas.remitos.facturar', modulo: 'ventas', descripcion: 'Facturar remitos (individual o agrupada)' },
   { id: 'clientes.unificar', modulo: 'clientes', descripcion: 'Unificar fichas de clientes duplicadas' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

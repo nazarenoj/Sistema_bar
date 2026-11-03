@@ -16,6 +16,7 @@ const vuelta = async () => {
         if (hecho.get(inst.codigo) === hoy) return;
         hecho.set(inst.codigo, hoy);
         if (await Funciones.estaActiva('VEN-CC')) await Credito.revisarDiario();
+        await Informes.alertasCiclo(); // fecha de facturación de los mayoristas (RF21)
         await Informes.recordatorios(); // alertas y avisos de vencimientos próximos o vencidos (RF16)
       } catch (err) {
         logger.error(`[clientes] instancia ${inst.codigo}: ${err.message}`);

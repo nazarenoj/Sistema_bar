@@ -19,7 +19,7 @@ const LLAMADAS = [
   { n: 9, caller: ['ventas_online'], callee: 'clientes', para: 'Retención de saldo de vales', esperaMs: S3, falla: 'cerrar' },
   { n: 10, caller: ['stock', 'compras', 'financiero'], callee: 'usuarios', para: 'Reservar la clave de un comprobante', esperaMs: S3, falla: 'cerrar' },
   { n: 11, caller: ['*'], callee: 'usuarios', para: 'Validar permisos y autorización de supervisor', esperaMs: S3, falla: 'cerrar' },
-  { n: 12, caller: ['clientes'], callee: 'ventas', para: 'Notas de débito y crédito, y consulta al padrón', esperaMs: 15000, falla: 'degradar' },
+  { n: 12, caller: ['clientes'], callee: 'ventas', para: 'Notas de débito y crédito, facturación agrupada de remitos y consulta al padrón', esperaMs: 15000, falla: 'degradar' },
   { n: 13, caller: ['clientes'], callee: 'stock', para: 'Alcance de un retiro de lote', esperaMs: S3, falla: 'degradar' },
   { n: 14, caller: ['compras'], callee: 'ventas', para: 'Padrón y constatación de comprobantes en ARCA', esperaMs: 15000, falla: 'degradar' },
   { n: 15, caller: ['compras'], callee: 'stock', para: 'Presentaciones vigentes de un ítem', esperaMs: S3, falla: 'cerrar' },

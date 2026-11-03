@@ -26,4 +26,4 @@ const emitir = async ({ tipo, receptor, importe, asociado = null, idIntento }) =
   return { tipo_comprobante: tipoComprobante, punto_venta: afipConfig.puntoVenta, numero: r.numero, cae: r.cae, cae_vencimiento: r.caeVencimiento ?? null, estado: r.estado };
 };
 
-module.exports = { emitir };
+module.exports = { emitir, letraFactura };

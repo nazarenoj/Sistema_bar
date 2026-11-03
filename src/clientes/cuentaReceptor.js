@@ -26,4 +26,8 @@ M.registrarReceptor('clientes', 'recibo_registrado', async (conn, c, ctx) => {
     throw err;
   }
 });
+M.registrarReceptor('clientes', 'remitos_facturados', async (conn, c, ctx) => {
+  const r = await Cuentas.facturarRemitos(conn, { clienteId: c.cliente_id, facturaRef: c.factura_id_global, importe: c.importe, fecha: c.fecha, remitos: c.remitos, idOperacion: ctx.idOperacion });
+  return { movimiento_id: r.movimientoId, trasladado: r.trasladado };
+});
 M.registrarReceptor('clientes', 'anulacion_remito', anulacion, { revierte: 'remito_emitido' });

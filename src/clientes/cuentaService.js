@@ -189,11 +189,17 @@ const nota = async (cuentaId, { tipo, importe, motivo, referencia_id: referencia
   const cuenta = await cuentaDe(cuentaId);
   if (!cuenta) throw invalida('Cuenta no encontrada.', 404);
   if (cuenta.estado === 'cerrada') throw invalida('La cuenta está cerrada.', 409);
-  const [[ref]] = await pool.query('SELECT * FROM movimientos_cc WHERE id = ? AND cuenta_id = ?', [referenciaId ?? 0, cuentaId]);
+  let [[ref]] = await pool.query('SELECT * FROM movimientos_cc WHERE id = ? AND cuenta_id = ?', [referenciaId ?? 0, cuentaId]);
   if (!ref) throw invalida('La nota tiene que referenciar el comprobante que corrige (de esta cuenta).');
+  let remitoOrigen = null;
+  if (ref.estado === 'facturado' && ref.referencia_id) { // RN10: una nota sobre un remito facturado referencia la factura agrupada y no reabre el remito
+    remitoOrigen = ref;
+    [[ref]] = await pool.query('SELECT * FROM movimientos_cc WHERE id = ?', [ref.referencia_id]);
+  }
   if (ref.naturaleza !== 'debito' || ref.estado === 'anulado') throw invalida('Solo se corrige un comprobante de débito vigente.', 409);
   if (tipo === 'nc') { // RN09: una nota de crédito no puede superar el importe del comprobante que corrige
     const [[{ ya }]] = await pool.query("SELECT COALESCE(SUM(importe), 0) AS ya FROM movimientos_cc WHERE referencia_id = ? AND tipo = 'nc' AND estado <> 'anulado'", [ref.id]);
+    if (remitoOrigen && imp > num(ref.saldo_pendiente)) throw invalida(`La nota de crédito supera el saldo de la factura agrupada (${num(ref.saldo_pendiente)}).`, 409, { disponible: num(ref.saldo_pendiente) });
     if (imp > num(ref.importe) - num(ya)) throw invalida(`La nota de crédito supera lo que queda del comprobante (${num(ref.importe) - num(ya)}).`, 409, { disponible: num(ref.importe) - num(ya) });
   }
   const operacion = idSolicitud ? `nota:${idSolicitud}` : null;
@@ -205,7 +211,7 @@ const nota = async (cuentaId, { tipo, importe, motivo, referencia_id: referencia
   const [r] = await pool.query(
     `INSERT INTO movimientos_cc (id_global, cuenta_id, tipo, naturaleza, comprobante_ref, referencia_id, id_operacion, motivo, detalle, fecha, fecha_vencimiento, importe, saldo_pendiente, estado, fiscal, user_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [await idGlobal(), cuentaId, tipo, tipo === 'nd' ? 'debito' : 'credito', ref.comprobante_ref, ref.id, operacion, motivo, detalle, f, tipo === 'nd' ? sumarDias(f, cuenta.plazo_dias) : null, imp, tipo === 'nd' ? imp : 0,
+    [await idGlobal(), cuentaId, tipo, tipo === 'nd' ? 'debito' : 'credito', ref.comprobante_ref, ref.id, operacion, motivo, remitoOrigen ? `${detalle ?? ''} [remito de origen: ${remitoOrigen.comprobante_ref}]`.trim() : detalle, f, tipo === 'nd' ? sumarDias(f, cuenta.plazo_dias) : null, imp, tipo === 'nd' ? imp : 0,
       fiscal ? 'pendiente_emision' : 'pendiente', fiscal ? 1 : 0, userId]);
   const id = r.insertId;
   if (fiscal) {
@@ -248,6 +254,60 @@ const emitirFiscal = async (movId) => {
   return unMovimiento(m.id);
 };
 
+// La factura que agrupa remitos los reemplaza en la cuenta (RN10): los remitos pasan a «Facturado» y dejan de sumar al saldo, sus imputaciones pasan a la factura,
+// y la deuda queda con el importe de la factura (la diferencia de precios queda documentada en el detalle). Sin duplicar deuda.
+const facturarRemitos = async (conn, { clienteId, facturaRef, importe, fecha, remitos, idOperacion }) => {
+  const filas = [];
+  for (const r of remitos) {
+    const [[m]] = await conn.query("SELECT * FROM movimientos_cc WHERE comprobante_ref = ? AND tipo = 'remito' ORDER BY id LIMIT 1 FOR UPDATE", [r.remito_id_global]);
+    if (!m) throw new M.RechazoNegocio(`El remito ${r.remito_id_global} no está registrado en la cuenta.`);
+    if (m.estado === 'facturado') throw new M.RechazoNegocio(`El remito ${r.remito_id_global} ya está facturado.`);
+    if (m.estado === 'anulado') throw new M.RechazoNegocio(`El remito ${r.remito_id_global} está anulado.`);
+    filas.push({ ...m, importe_facturado: r.importe_facturado });
+  }
+  const cuentas = new Set(filas.map((f) => f.cuenta_id));
+  if (cuentas.size !== 1) throw new M.RechazoNegocio('Los remitos son de cuentas distintas.');
+  const cuentaId = filas[0].cuenta_id;
+  await conn.query("UPDATE movimientos_cc SET estado = 'facturado' WHERE id IN (?)", [filas.map((f) => f.id)]); // primero salen del saldo: así el débito de la factura no los duplica
+  const detalle = `Factura agrupada de ${filas.length} remito(s): ${remitos.map((r) => `${r.remito_id_global} (${num(r.importe_remito)} → ${num(r.importe_facturado)})`).join(', ')}`.slice(0, 255);
+  const d = await registrarDebito(conn, { tipo: 'venta', clienteId, importe, ref: facturaRef, fecha, idOperacion, detalle });
+  let disponible = num(importe), trasladado = 0;
+  for (const f of filas) {
+    const [imps] = await conn.query("SELECT * FROM imputaciones WHERE debito_mov_id = ? AND estado = 'vigente' ORDER BY id FOR UPDATE", [f.id]);
+    for (const i of imps) {
+      const x = Math.min(num(i.importe), disponible);
+      if (x > 0) { await conn.query('UPDATE imputaciones SET debito_mov_id = ?, importe = ? WHERE id = ?', [d.movimientoId, x, i.id]); disponible = num(disponible - x); trasladado = num(trasladado + x); }
+      if (x < num(i.importe)) { // lo que no entra en la factura vuelve al crédito como saldo a favor
+        const sobra = num(i.importe - Math.max(x, 0));
+        await conn.query('UPDATE movimientos_cc SET saldo_pendiente = saldo_pendiente + ? WHERE id = ?', [sobra, i.credito_mov_id]);
+        if (x <= 0) await conn.query("UPDATE imputaciones SET estado = 'desimputada', motivo_desimputacion = 'La factura agrupada es menor que lo cobrado' WHERE id = ?", [i.id]);
+      }
+    }
+    await conn.query('UPDATE movimientos_cc SET saldo_pendiente = 0, referencia_id = ? WHERE id = ?', [d.movimientoId, f.id]);
+  }
+  await conn.query("UPDATE movimientos_cc SET saldo_pendiente = ?, estado = IF(? <= 0, 'cancelado', estado) WHERE id = ?", [num(importe - trasladado), num(importe - trasladado), d.movimientoId]);
+  return { movimientoId: d.movimientoId, trasladado };
+};
+
+// Pide a Ventas el comprobante que agrupa los remitos (por defecto, todos los pendientes del cliente). Ventas devuelve siempre un resultado estructurado.
+const facturarAgrupado = async ({ cliente_id: clienteId, remitos, aceptar_diferencias: aceptar, continuar_con_validos: continuar, previa }, { userId, idSolicitud }) => {
+  const ids = Array.isArray(remitos) && remitos.length ? remitos : (await remitosPendientes(clienteId)).map((r) => r.remito);
+  if (!ids.length) throw invalida('El cliente no tiene remitos pendientes de facturar.', 409);
+  const c = await Clientes.resolver(clienteId);
+  const r = await llamar(12, 'clientes', async () => require('../services/remitoService').facturar({ cliente_id: c.id, remitos: ids, aceptar_diferencias: aceptar, continuar_con_validos: continuar, previa }, { userId, idSolicitud }));
+  if (r.fallo) throw invalida(`Ventas no respondió: ${r.motivo ?? 'sin respuesta'}. Reintentá.`, 502);
+  return r.valor;
+};
+
+// Remitos pendientes de facturar de un cliente: la lista de trabajo (RF21).
+const remitosPendientes = async (clienteId) => {
+  const c = await Clientes.resolver(clienteId);
+  if (!c) throw invalida('Cliente no encontrado.', 404);
+  return (await pool.query(
+    "SELECT m.id, m.comprobante_ref AS remito, m.fecha, m.importe, m.saldo_pendiente FROM movimientos_cc m JOIN cuentas_corrientes cc ON cc.id = m.cuenta_id WHERE cc.cliente_id = ? AND m.tipo = 'remito' AND m.estado IN ('pendiente', 'cancelado') ORDER BY m.fecha, m.id", [c.id]))[0]
+    .map((m) => ({ ...m, importe: num(m.importe), saldo_pendiente: num(m.saldo_pendiente) }));
+};
+
 // Devolución parcial de una venta a cuenta: crédito interno que baja lo pendiente del comprobante (RN06: el débito original no se toca).
 const devolverDebito = async (conn, { ref, importe, idOperacion }) => {
   const [[orig]] = await conn.query("SELECT * FROM movimientos_cc WHERE comprobante_ref = ? AND naturaleza = 'debito' AND tipo IN ('venta', 'remito') ORDER BY id LIMIT 1 FOR UPDATE", [ref]);
@@ -264,4 +324,4 @@ const devolverDebito = async (conn, { ref, importe, idOperacion }) => {
   return { movimiento_id: r.insertId };
 };
 
-module.exports = { devolverDebito, usarPostDebito, CuentaInvalida, MOTIVOS_NOTA, abrir, obtener, deCliente, actualizar, cerrar, movimientos, pendientes, saldoDe, cuentaDe, vista, registrarDebito, anularDebito, nota, emitirFiscal, usarEmisor, hoy, sumarDias, num, parametro };
+module.exports = { facturarAgrupado, facturarRemitos, remitosPendientes, devolverDebito, usarPostDebito, CuentaInvalida, MOTIVOS_NOTA, abrir, obtener, deCliente, actualizar, cerrar, movimientos, pendientes, saldoDe, cuentaDe, vista, registrarDebito, anularDebito, nota, emitirFiscal, usarEmisor, hoy, sumarDias, num, parametro };

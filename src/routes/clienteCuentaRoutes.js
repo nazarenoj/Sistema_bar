@@ -3,6 +3,7 @@ const Cuentas = require('../clientes/cuentaService');
 const requiereModulo = require('../middleware/requiereModulo');
 const { requierePermiso } = require('../middleware/requierePermiso');
 const { auditar } = require('../utils/auditar');
+const requiereFuncion = require('../middleware/requiereFuncion');
 
 // Cuentas corrientes de clientes (Clientes y CC RF03, RF09). Cambiar el límite, emitir notas y cerrar cuentas requieren permiso y quedan auditados (RN16).
 const router = Router();
@@ -16,6 +17,16 @@ const manejar = (fn) => async (req, res, next) => {
     next(err);
   }
 };
+
+// Facturación agrupada de remitos (RF05, RF21; función CLI-FACT-AGRUPADA): la lista de trabajo de un cliente y el pedido a Ventas de UN comprobante fiscal que los agrupa
+// (llamada n.º 12). La respuesta de Ventas se devuelve tal cual: diferencias a aceptar, remitos inválidos (EX36) o el comprobante emitido.
+router.get('/remitos-pendientes', VER, manejar(async (req, res) => res.json(await Cuentas.remitosPendientes(Number(req.query.cliente_id)))));
+router.post('/facturacion-agrupada', requierePermiso('ventas.remitos.facturar'), requiereFuncion('CLI-FACT-AGRUPADA'), manejar(async (req, res) => {
+  const r = await Cuentas.facturarAgrupado(req.body, { userId: req.usuario?.sub, idSolicitud: req.get('X-ID-Solicitud') || null });
+  if (r.ok && !r.previa) await auditar(req, { modulo: 'clientes', accion: 'facturacion_agrupada', entidad: 'cliente', entidad_id: String(req.body.cliente_id), detalle: `${r.remitos.length} remito(s) por ${r.total}` });
+  const { status, ...cuerpo } = r;
+  res.status(r.ok ? 200 : status ?? 400).json(cuerpo);
+}));
 
 router.get('/', VER, manejar(async (req, res) => res.json(await Cuentas.deCliente(Number(req.query.cliente_id)))));
 router.post('/', GESTIONAR, manejar(async (req, res) => {

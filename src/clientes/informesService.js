@@ -173,6 +173,26 @@ const recordatorios = async () => {
   return hechos;
 };
 
+// ---------- Ciclo de facturación del mayorista (RF21) ----------
+// Con CLI-FACT-AGRUPADA, al llegar la fecha del ciclo del cliente (semanal, quincenal, mensual) con remitos pendientes de facturar, alerta interna con
+// la lista de trabajo. «A demanda» no genera alerta.
+const DIAS_CICLO = { semanal: 7, quincenal: 15, mensual: 30 };
+const alertasCiclo = async () => {
+  if (!(await Funciones.estaActiva('CLI-FACT-AGRUPADA'))) return [];
+  const [filas] = await pool.query("SELECT id, razon_social, ciclo_facturacion FROM clientes WHERE estado = 'activo' AND ciclo_facturacion IN ('semanal', 'quincenal', 'mensual')");
+  const hechas = [];
+  for (const c of filas) {
+    const pend = await Cuentas.remitosPendientes(c.id);
+    if (!pend.length) { await Notificacion.resolverPorClave(`ciclo-facturacion-${c.id}`, 'No quedan remitos por facturar'); continue; }
+    const dias = Math.floor((Date.now() - new Date(pend[0].fecha).getTime()) / 86400000);
+    if (dias < DIAS_CICLO[c.ciclo_facturacion]) continue;
+    await Notificacion.crear({ modulo: 'clientes', tipo: 'ciclo_facturacion', severidad: 'media', roles: ['administrador', 'gerente', 'administrativo'], clave: `ciclo-facturacion-${c.id}`,
+      mensaje: `Llegó la fecha de facturación (${c.ciclo_facturacion}) de ${c.razon_social}: ${pend.length} remito(s) por ${num(pend.reduce((a, r) => a + r.importe, 0))}.` });
+    hechas.push({ cliente_id: c.id, remitos: pend.length });
+  }
+  return hechas;
+};
+
 // ---------- Indicador de deuda para el tablero (RF25) ----------
 const indicadorDeuda = async () => {
   const [[t]] = await pool.query(`SELECT COALESCE(SUM(m.saldo_pendiente), 0) AS total, COALESCE(SUM(IF(m.fecha_vencimiento < CURDATE(), m.saldo_pendiente, 0)), 0) AS vencida ${BASE_DEUDA} AND cc.moneda = 'ARS'`);
@@ -181,4 +201,4 @@ const indicadorDeuda = async () => {
   return { valor: total, detalle: { deuda_vencida: vencida, porcentaje_vencido: total ? num(vencida / total * 100) : 0 }, serie: top.map((x) => ({ clave: x.clave, valor: num(x.valor) })) };
 };
 
-module.exports = { InformeInvalido, estadoDeCuenta, antiguedad, tramos, configurarTramos, deudores, cobranzas, proyeccion, enviarEstado, envios, recordatorios, indicadorDeuda };
+module.exports = { alertasCiclo, InformeInvalido, estadoDeCuenta, antiguedad, tramos, configurarTramos, deudores, cobranzas, proyeccion, enviarEstado, envios, recordatorios, indicadorDeuda };
