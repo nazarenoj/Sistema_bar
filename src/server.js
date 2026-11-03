@@ -43,6 +43,7 @@ const clienteRoutes = require('./routes/clienteRoutes');
 const clienteCuentaRoutes = require('./routes/clienteCuentaRoutes');
 const clienteCreditoRoutes = require('./routes/clienteCreditoRoutes');
 const clienteReciboRoutes = require('./routes/clienteReciboRoutes');
+const clienteInformeRoutes = require('./routes/clienteInformeRoutes');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
 const comprobanteTerceroRoutes = require('./routes/comprobanteTerceroRoutes');
@@ -81,7 +82,8 @@ require('./stock/paqueteStock'); // Ventas registra sus indicadores del tablero 
 require('./stock/indicadoresStock');
 require('./stock/destinoEquivalencia');
 require('./clientes/creditoPuerto');
-require('./clientes/cuentaReceptor'); // débitos, remitos y anulaciones que pide Ventas (E2) // Clientes implementa el puerto de crédito (E1)
+require('./clientes/cuentaReceptor');
+require('./clientes/indicadoresClientes'); // deuda de clientes para el tablero (E5) // débitos, remitos y anulaciones que pide Ventas (E2) // Clientes implementa el puerto de crédito (E1)
 require('./services/clienteCopiaReceptor'); // Ventas guarda su copia local de los clientes
 require('./stock/documentosAbiertos'); // lo que Stock deja abierto al desinstalarse (F9) // destinos del diccionario de equivalencias (F7)
 require('./services/destinoEquivalencia'); // y Stock los suyos
@@ -217,6 +219,7 @@ app.use('/api/clientes', clienteRoutes);
 app.use('/api/cuentas-corrientes', clienteCreditoRoutes);
 app.use('/api/cuentas-corrientes', clienteCuentaRoutes);
 app.use('/api/recibos', clienteReciboRoutes);
+app.use('/api/clientes-informes', clienteInformeRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);
