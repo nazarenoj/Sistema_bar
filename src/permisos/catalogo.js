@@ -17,6 +17,7 @@ const PERMISOS = [
   { id: 'ventas.cocina.retroceder', modulo: 'ventas', funcion: 'VEN-KDS', descripcion: 'Retroceder el estado de una comanda en la pantalla de cocina' },
   { id: 'ventas.agotados.marcar', modulo: 'ventas', funcion: 'VEN-KDS', descripcion: 'Marcar y quitar artículos agotados' },
   { id: 'ventas.agotados.vender', modulo: 'ventas', funcion: 'VEN-KDS', descripcion: 'Vender un artículo agotado (con el modo "advertir")' },
+  { id: 'ventas.movil.supervisar', modulo: 'ventas', funcion: 'VEN-MOVIL', descripcion: 'Ver los conflictos de sincronización de todos los dispositivos' },
   { id: 'ventas.precios.actualizar', modulo: 'ventas', descripcion: 'Actualizar precios del catálogo (por porcentaje, monto o lista), programarlos y revertirlos' },
   { id: 'ventas.historial.ver', modulo: 'ventas', descripcion: 'Ver el historial y los gráficos de ventas', admiteAlcance: true },
   { id: 'ventas.historial.exportar', modulo: 'ventas', descripcion: 'Exportar reportes de ventas' },
