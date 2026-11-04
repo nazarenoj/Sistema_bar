@@ -29,3 +29,17 @@ Los colores con significado no se tocan: verde / rojo / ámbar para estados (lib
 - Sin conexión no se opera: el aviso rojo de la parte superior y la capa `api` ya lo resuelven; las pantallas no guardan nada en el navegador.
 - Toda operación con efecto pasa por `api/index.js` (clave `X-ID-Solicitud`, pedido de autorización a un supervisor). Una pantalla nunca llama a `fetch` directo.
 - Los textos van en español rioplatense, sin tecnicismos de la base de datos.
+
+## Pantallas hechas (por permiso)
+| Pantalla | Archivo | Permiso |
+|----------|---------|---------|
+| Inicio (indicadores por período) | `components/Inicio.jsx` | todos |
+| Panel de Mesas, Historial, Productos, Insumos, Usuarios, Notificaciones | los de antes, dentro del armazón nuevo | los de antes |
+| Registro de ventas (filtros, totales, exportar, detalle) | `ventas/RegistroVentas.jsx` | `ventas.historial.ver` |
+| Facturación (comprobantes, libro IVA, estado de ARCA) | `ventas/Facturacion.jsx` | `facturacion.ver` |
+| Cocina (tablero de comandas, se renueva cada 10 s) | `ventas/Cocina.jsx` | `ventas.pedidos.operar` |
+| Precios y pagos (formas de pago, listas, promociones, monedas) | `ventas/ConfigVentas.jsx` | `ventas.catalogo.ver` |
+| Stock (existencias, kardex, ingresos y egresos, valorizado, vencimientos, reposición, depósitos) | `stock/Existencias.jsx` | `stock.movimientos.ver` |
+| Clientes y cuentas (búsqueda, ficha, movimientos, informes de deuda) | `clientes/Clientes.jsx` | `clientes.ver` |
+
+Sin pantalla todavía: devoluciones, producción, inventario por tomas, trazabilidad y alérgenos, series, etiquetas, ingreso por foto, reservas, comisiones, recibos y fidelización de Clientes, copias, correo y padrón. Las pantallas nuevas se registran en `components/pantallas.jsx`.

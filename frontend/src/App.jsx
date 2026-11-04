@@ -19,7 +19,7 @@ import useConfirm from './hooks/useConfirm'
 import * as api from './api'
 
 export default function App() {
-  const [vista, setVista]         = useState('mesas')
+  const [vista, setVista]         = useState('inicio')
   const [productos, setProductos] = useState([])
   const [toasts, setToasts]       = useState([])
   const [usuario, setUsuario]     = useState(api.getUsuario())
@@ -84,7 +84,7 @@ export default function App() {
 
   const handleCambioDeUsuario = (nuevo) => {
     setModalUsuario(false)
-    setVista('mesas')
+    setVista('inicio')
     setUsuario(nuevo)
   }
 

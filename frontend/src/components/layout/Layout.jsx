@@ -44,7 +44,7 @@ export default function Layout({ vista, setVista, usuario, enLinea, nuevasNotif,
               <span className="text-stone-500">{info.icono}</span>{info.titulo}
             </h1>
             <nav className="text-xs text-stone-500 bg-white/70 border border-stone-200 px-3 py-1 rounded-full">
-              <button onClick={() => setVista('mesas')} className="hover:underline">Inicio</button>
+              <button onClick={() => setVista('inicio')} className="hover:underline">Inicio</button>
               {info.grupo && <> <span className="mx-1">›</span> {info.grupo}</>}
               <span className="mx-1">›</span> <span className="text-stone-400">{info.titulo}</span>
             </nav>
