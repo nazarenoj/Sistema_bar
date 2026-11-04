@@ -18,7 +18,7 @@ const PUNTO = <Ico d={<circle cx="12" cy="12" r="3" />} />
 // Una sola lista define el menú, el título de cada pantalla y sus migas de pan.
 const GRUPOS = [
   { grupo: 'Operaciones', items: [{ id: 'inicio', titulo: 'Inicio' }, { id: 'mesas', titulo: 'Panel de Mesas' }, { id: 'historial', titulo: 'Historial de Pedidos' }, { id: 'ventas', titulo: 'Registro de ventas' }, { id: 'facturacion', titulo: 'Facturación' }, { id: 'cocina', titulo: 'Cocina' }] },
-  { grupo: 'Catálogo e inventario', items: [{ id: 'productos', titulo: 'Productos' }, { id: 'insumos', titulo: 'Insumos' }, { id: 'stock', titulo: 'Stock' }, { id: 'config-ventas', titulo: 'Precios y pagos' }] },
+  { grupo: 'Catálogo e inventario', items: [{ id: 'productos', titulo: 'Productos' }, { id: 'insumos', titulo: 'Insumos' }, { id: 'stock', titulo: 'Stock' }, { id: 'inventario', titulo: 'Inventario' }, { id: 'produccion', titulo: 'Producción' }, { id: 'proveedores', titulo: 'Proveedores' }, { id: 'calidad', titulo: 'Calidad y trazabilidad' }, { id: 'config-ventas', titulo: 'Precios y pagos' }] },
   { grupo: 'Clientes', items: [{ id: 'clientes', titulo: 'Clientes y cuentas' }] },
   { grupo: 'Administración', items: [{ id: 'usuarios', titulo: 'Usuarios y accesos' }, { id: 'notificaciones', titulo: 'Notificaciones' }] },
 ]

@@ -3,6 +3,7 @@ import RegistroVentas from './ventas/RegistroVentas'
 import Facturacion from './ventas/Facturacion'
 import Existencias from './stock/Existencias'
 import Clientes from './clientes/Clientes'
+import { Produccion, Inventario, Calidad, Proveedores } from './modulos/stockOperativo'
 import Inicio from './Inicio'
 import Cocina from './ventas/Cocina'
 import ConfigVentas from './ventas/ConfigVentas'
@@ -13,6 +14,10 @@ export const PANTALLAS = {
   stock: Existencias,
   clientes: Clientes,
   inicio: Inicio,
+  produccion: Produccion,
+  inventario: Inventario,
+  calidad: Calidad,
+  proveedores: Proveedores,
   cocina: Cocina,
   'config-ventas': ConfigVentas,
 }
