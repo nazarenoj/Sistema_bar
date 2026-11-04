@@ -50,6 +50,8 @@ const construir = (q = {}) => {
   if (q.estado_arca) { donde.push('f.estado = ?'); params.push(q.estado_arca); }
   if (q.mesa) { donde.push('m.numero_mesa = ?'); params.push(q.mesa); }
   if (q.usuario) { donde.push('u.username = ?'); params.push(q.usuario); }
+  if (q.cliente_id) { donde.push('v.cliente_id = ?'); params.push(Number(q.cliente_id)); }
+  if (q.solo_usuario_id) { donde.push('v.creado_por = ?'); params.push(Number(q.solo_usuario_id)); } // alcance «propias» (RN23): lo fija la ruta, no el cliente
   for (const [c, op] of [['importe_min', '>='], ['importe_max', '<=']]) {
     if (q[c] === undefined || q[c] === '') continue;
     if (!Number.isFinite(Number(q[c]))) falla(`"${c}" debe ser un número.`);

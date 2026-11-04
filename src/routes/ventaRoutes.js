@@ -7,9 +7,17 @@ const pool = require('../config/db');
 const { auditar } = require('../utils/auditar');
 const { enviarReporte, FORMATOS_VALIDOS, FORMATO_POR_DEFECTO } = require('../servicios/reporteService');
 const { TIPO_COMPROBANTE_LABEL, METODO_PAGO_LABEL, etiqueta } = require('../utils/etiquetas');
-const { requierePermiso } = require('../middleware/requierePermiso');
+const { requierePermiso, permisosDe } = require('../middleware/requierePermiso');
+const Permiso = require('../models/permisoModel');
 
 const router = Router();
+
+// Alcance «propias» (RN23): un usuario con ese alcance solo ve las ventas que registró él. El Administrador ve todo.
+const soloPropias = async (req) => {
+  if ((await permisosDe(req)).esAdmin) return null;
+  return (await Permiso.alcancesDe(req.usuario.sub)).some((a) => a.tipo === 'propias') ? req.usuario.sub : null;
+};
+const consulta = async (req) => ({ ...req.query, solo_usuario_id: await soloPropias(req) });
 
 // Registro de ventas (RF19 a RF21): filtros combinables, orden, paginación (50 por página) y totales que
 // excluyen las anuladas y restan las devoluciones (RN24). Un filtro sin resultados no es un error (EX18).
@@ -20,7 +28,7 @@ router.get('/clientes/buscar', requierePermiso('ventas.cuenta.cobrar'), async (r
 
 router.get('/', requierePermiso('ventas.historial.ver'), async (req, res, next) => {
   try {
-    res.json(await Registro.listar(req.query));
+    res.json(await Registro.listar(await consulta(req)));
   } catch (err) {
     if (err instanceof Registro.FiltroInvalido) return res.status(400).json({ error: err.message });
     next(err);
@@ -45,7 +53,7 @@ router.get('/exportar', requierePermiso('ventas.historial.exportar'), async (req
   const formato = req.query.formato || FORMATO_POR_DEFECTO;
   if (!FORMATOS_VALIDOS.includes(formato)) return res.status(400).json({ error: `"formato" debe ser uno de: ${FORMATOS_VALIDOS.join(', ')}.` });
   try {
-    const { ventas, totales } = await Registro.paraExportar(req.query);
+    const { ventas, totales } = await Registro.paraExportar(await consulta(req));
     const filas = ventas.map((v) => ({
       fecha: v.created_at, mesa: `Mesa ${v.numero_mesa}`, estado: v.estado,
       comprobante: v.condicion_fiscal === 'no_fiscal' ? ETIQUETA_MODALIDAD.no_fiscal : v.factura_id ? etiqueta(TIPO_COMPROBANTE_LABEL, v.tipo_comprobante) : 'Sin comprobante',
@@ -111,7 +119,7 @@ router.post('/:idGlobal/regularizar', requierePermiso('ventas.cuenta.cobrar'), a
     return res.status(400).json({ error: 'Faltan tipo_comprobante, doc_tipo, doc_nro y condicion_iva_receptor_id.' });
   try {
     const factura = await Venta.regularizar(req.params.idGlobal, b, { idIntento: req.get('X-ID-Solicitud'), userId: req.usuario?.sub });
-    res.json({ message: 'Venta regularizada.', factura });
+    res.json({ message: factura.estado === 'aprobada' ? 'Venta regularizada.' : 'ARCA no aprobó la factura: reintentá desde la factura.', factura });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message, codigo: err.codigo, factura_id: err.factura_id });
     if (err.factura_id) return res.status(502).json({ error: 'No se pudo emitir la factura ante ARCA.', detail: err.message, factura_id: err.factura_id });
@@ -122,7 +130,8 @@ router.post('/:idGlobal/regularizar', requierePermiso('ventas.cuenta.cobrar'), a
 router.get('/:idGlobal', requierePermiso('ventas.historial.ver'), async (req, res, next) => {
   try {
     const venta = await Venta.obtener(req.params.idGlobal);
-    if (!venta) return res.status(404).json({ error: 'Venta no encontrada.' });
+    const propias = await soloPropias(req);
+    if (!venta || (propias && venta.creado_por !== propias)) return res.status(404).json({ error: 'Venta no encontrada.' });
     res.json(venta);
   } catch (err) { next(err); }
 });

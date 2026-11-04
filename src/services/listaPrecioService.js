@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const Funciones = require('../funciones/servicio');
 
 // Listas de precios múltiples (Ventas RF34, RF35, RN32, EX23), con VEN-LISTAS. La lista aplicable a un pedido sale de la terminal (o de
 // la elección manual con permiso) y, sin ninguna, es la Minorista (precio base del catálogo). El precio de cada ítem se fija al agregarlo
@@ -111,6 +112,23 @@ const asignarAPedido = async (pedidoId, listaId) => {
   await pool.query('UPDATE pedidos SET lista_precio_id = ? WHERE id = ?', [listaId, pedidoId]);
   return { pedido_id: pedidoId, lista_precio_id: listaId, lista: l.nombre };
 };
+// Cliente del pedido (Ventas RN81): se guarda en el pedido y, con VEN-LISTAS, si su ficha trae una lista vigente el pedido pasa a ella. Lo ya cargado conserva su precio (RN17).
+const asignarCliente = async (pedidoId, clienteId) => {
+  const [[p]] = await pool.query('SELECT estado FROM pedidos WHERE id = ?', [pedidoId]);
+  if (!p) throw invalida('Pedido no encontrado.', 404);
+  if (p.estado !== 'activo') throw invalida('El pedido ya no está abierto.', 409);
+  if (clienteId === null) { await pool.query('UPDATE pedidos SET cliente_id = NULL WHERE id = ?', [pedidoId]); return { pedido_id: pedidoId, cliente_id: null }; }
+  const [[a]] = await pool.query('SELECT resultante_id FROM ventas_cliente_alias WHERE alias_id = ?', [clienteId]);
+  const [[c]] = await pool.query('SELECT cliente_id, razon_social, lista_precio_id FROM ventas_clientes_copia WHERE cliente_id = ?', [a?.resultante_id ?? clienteId]);
+  if (!c) throw invalida('Cliente no encontrado.', 404);
+  await pool.query('UPDATE pedidos SET cliente_id = ? WHERE id = ?', [c.cliente_id, pedidoId]);
+  let lista = null;
+  if (c.lista_precio_id && (await Funciones.estaActiva('VEN-LISTAS'))) {
+    const l = await obtener(c.lista_precio_id);
+    if (l && vigente(l)) { await pool.query('UPDATE pedidos SET lista_precio_id = ? WHERE id = ?', [l.id, pedidoId]); lista = { id: l.id, nombre: l.nombre }; }
+  }
+  return { pedido_id: pedidoId, cliente_id: c.cliente_id, cliente: c.razon_social, lista };
+};
 const itemsDe = async (pedidoId) => Number((await pool.query('SELECT COUNT(*) AS n FROM pedido_productos WHERE pedido_id = ?', [pedidoId]))[0][0].n);
 
 // Precio de un artículo para un pedido: { precio, lista_precio_id, advertencia? }. Sin precio en la lista, o con la lista vencida o inactiva
@@ -126,4 +144,4 @@ const precioDe = async (conn, pedidoId, productoId, nombre, precioCatalogo) => {
   return { precio: Number(i.precio), lista_precio_id: l.id };
 };
 
-module.exports = { ListaInvalida, listar, obtener, guardar, activar, fijarPrecios, preciosDe: precios_de, asignarATerminal, alAbrirPedido, asignarAPedido, itemsDe, precioDe };
+module.exports = { ListaInvalida, listar, obtener, guardar, activar, fijarPrecios, preciosDe: precios_de, asignarATerminal, alAbrirPedido, asignarAPedido, asignarCliente, itemsDe, precioDe };

@@ -14,13 +14,13 @@ const pid = (req) => Number(req.params.productoId);
 
 const manejar = (fn) => async (req, res, next) => {
   try { await fn(req, res); } catch (err) {
-    if (err instanceof Series.SerieInvalida) return res.status(err.status ?? 400).json({ error: err.message });
+    if (err instanceof Series.SerieInvalida) return res.status(err.status ?? 400).json({ error: err.message, ...(err.clave && { clave: err.clave }) });
     next(err);
   }
 };
 
 router.put('/:productoId/activar', ...GESTIONAR, manejar(async (req, res) => res.json(await Series.activar(pid(req)))));
-router.post('/:productoId/ingresos', ...GESTIONAR, manejar(async (req, res) => res.status(201).json(await Series.ingresar({ ...req.body, producto_id: pid(req) }, { userId: req.usuario?.sub }))));
+router.post('/:productoId/ingresos', ...GESTIONAR, manejar(async (req, res) => res.status(201).json(await Series.ingresar({ ...req.body, producto_id: pid(req) }, { userId: req.usuario?.sub, idSolicitud: req.get('X-ID-Solicitud') || undefined }))));
 router.post('/:productoId/conteo', ...GESTIONAR, manejar(async (req, res) => res.json(await Series.contar(pid(req), Number(req.body.deposito_id), req.body.series, { userId: req.usuario?.sub }))));
 
 // Compromiso y venta de una serie (los llama Ventas para un artículo serializado).

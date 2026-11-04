@@ -2,6 +2,8 @@ const pool = require('../config/db');
 const Mov = require('./movimientoService');
 const Deposito = require('../models/depositoModel');
 const Funciones = require('../funciones/servicio');
+const Claves = require('../servicios/comprobanteTerceroService');
+const M = require('../mensajeria/servicio');
 const { idGlobal } = require('../utils/idGlobal');
 
 // Artículos con número de serie (Stock RF26, RF37, RF41, RN05, RN71, RN79). Cada unidad es una serie: Disponible → Comprometida →
@@ -56,12 +58,16 @@ const activar = async (productoId) => {
 };
 
 // Ingreso de unidades con su número de serie: un movimiento de ingreso por la cantidad y una serie Disponible por cada número.
-const ingresar = async ({ producto_id, deposito_id, series, costo_unitario, proveedor, comprobante }, { userId } = {}) => {
+// Con comprobante, reserva su clave (Usuarios RF27) y la confirma en la misma transacción del ingreso; un casi duplicado no se puede confirmar desde acá (shortcut: usar el ingreso común).
+const ingresar = async ({ producto_id, deposito_id, series, costo_unitario, proveedor, comprobante }, { userId, idSolicitud } = {}) => {
   if (!Array.isArray(series) || !series.length) throw invalida('Indicá los números de serie.');
   const numeros = series.map((s) => String(s ?? '').trim());
   if (numeros.some((s) => !s)) throw invalida('Hay un número de serie vacío.');
   if (new Set(numeros).size !== numeros.length) throw invalida('Hay números de serie repetidos en el ingreso.', 409);
-  return nuevoConn(async (conn) => {
+  let reserva;
+  try { reserva = await Mov.reservarClave(comprobante && { ...comprobante, confirmar_casi_duplicado: undefined }, proveedor, { userId, idSolicitud }); } catch (err) { throw err instanceof Mov.MovimientoInvalido ? Object.assign(invalida(err.message, err.status), { clave: err.clave }) : err; }
+  try {
+  const r = await nuevoConn(async (conn) => {
     await exigirSerializado(conn, producto_id);
     const dep = deposito_id ? await Deposito.getById(deposito_id, conn) : await Deposito.getPredeterminado(conn);
     if (!dep?.activo) throw invalida('El depósito no existe o está inactivo.');
@@ -73,8 +79,16 @@ const ingresar = async ({ producto_id, deposito_id, series, costo_unitario, prov
       const [r] = await conn.query('INSERT INTO series (id_global, producto_id, numero_serie, deposito_id, costo_unitario) VALUES (?, ?, ?, ?, ?)', [await idGlobal(), producto_id, n, dep.id, costo_unitario ?? null]);
       await evento(conn, r.insertId, 'ingreso', { detalle: { proveedor: proveedor ?? null, comprobante: comprobante ?? null }, documento, userId });
     }
+    if (reserva?.id_reserva) await Claves.publicarConfirmacion(conn, { idReserva: reserva.id_reserva, idDocumento: documento, modulo: 'stock', rol: 'registro_fisico', userId, docTipo: 'ingreso_series' });
     return { documento, deposito_id: dep.id, series: numeros };
   });
+  if (reserva) M.despertar();
+  if (reserva?.estado === 'vinculable') await Claves.vincular({ id_clave: reserva.id_clave, modulo: 'stock', id_documento: r.documento, rol: 'registro_fisico', userId });
+  return r;
+  } catch (err) {
+    if (reserva?.id_reserva) await Claves.cancelar(reserva.id_reserva); // el ingreso no se hizo: la clave queda libre
+    throw err;
+  }
 };
 
 // Un paso de estado atómico: el UPDATE solo prospera si la serie sigue en el estado de origen.

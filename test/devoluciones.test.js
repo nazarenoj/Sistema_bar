@@ -141,6 +141,12 @@ test('Ventas.RF15: una venta facturada genera la nota de crédito, que referenci
   assert.equal(r.json.nota_credito.estado, 'aprobada');
   assert.equal(Number(r.json.nota_credito.importe_total), 100);
   assert.deepEqual(items[0].CbtesAsoc.CbteAsoc[0], { Tipo: 11, PtoVta: 1, Nro: v.factura.numero });
+  // El reporte de facturación incluye la nota de crédito restando.
+  const rep = await api('GET', '/api/facturas/reporte?formato=json', { token });
+  assert.equal(rep.status, 200, JSON.stringify(rep.json));
+  const filasRep = JSON.stringify(rep.json);
+  assert.match(filasRep, /Nota de Crédito C/);
+  assert.match(filasRep, /-100/);
   // La factura original sigue siendo la de la cuenta (el historial no se duplica).
   const hist = (await api('GET', '/api/pedidos/historial?limit=100', { token })).json;
   const filas = (hist.pedidos ?? hist.rows ?? []).filter((p) => p.mesa_id === v.mesa.id);

@@ -6,6 +6,7 @@
 const PERMISOS = [
   { id: 'ventas.pedidos.operar', modulo: 'ventas', descripcion: 'Abrir pedidos, cargar ítems, enviar comandas y ver tickets' },
   { id: 'ventas.cuenta.cobrar', modulo: 'ventas', descripcion: 'Cobrar y cerrar la cuenta de una mesa o silla' },
+  { id: 'ventas.pedidos.quitar_enviado', modulo: 'ventas', descripcion: 'Quitar un ítem que ya se envió a producción (con motivo)' },
   { id: 'ventas.pedidos.anular', modulo: 'ventas', descripcion: 'Anular pedidos o ítems cargados' },
   { id: 'ventas.salon.configurar', modulo: 'ventas', descripcion: 'Salones, mesas, sillas y estructuras' },
   { id: 'ventas.catalogo.ver', modulo: 'ventas', descripcion: 'Ver la carta de productos' },

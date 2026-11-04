@@ -193,7 +193,9 @@ const reintentar = async (req, res) => {
         facturaId: id,
       });
       await Factura.updateResultado(id, resultado);
-      return res.json({ message: 'Factura reintentada.', factura: await Factura.getById(id) });
+      const reintentada = await Factura.getById(id);
+      if (reintentada.estado === 'aprobada' && !reintentada.devolucion_id) await require('../services/ventaService').regularizadaPorReintento(reintentada, req.usuario?.sub);
+      return res.json({ message: 'Factura reintentada.', factura: reintentada });
     } catch (err) {
       logger.error(`${req.method} ${req.originalUrl} - ARCA rechazó el reintento de la factura ${id}: ${err.message}`, { stack: err.stack });
       await Factura.updateResultado(id, {
@@ -245,7 +247,7 @@ const getReporte = async (req, res) => {
     return res.status(400).json({ error: `"formato" debe ser uno de: ${FORMATOS_VALIDOS.join(', ')}.` });
 
   try {
-    const facturas = await Factura.getVentasFacturadas(desde || null, hasta || null);
+    const facturas = (await Factura.getVentasFacturadas(desde || null, hasta || null)).map((f) => ({ ...f, importe_neto: f.signo * f.importe_neto, importe_iva: f.signo * f.importe_iva, importe_total: f.signo * f.importe_total }));
 
     const filas = facturas.map((f) => ({
       fecha: f.fecha_emision,
@@ -274,7 +276,7 @@ const getReporte = async (req, res) => {
     const filtros = [
       { label: 'Desde', valor: desde || 'inicio del historial' },
       { label: 'Hasta', valor: hasta || 'hoy' },
-      { label: 'Comprobantes', valor: 'Solo aprobados por ARCA (con CAE)' },
+      { label: 'Comprobantes', valor: 'Solo aprobados por ARCA (con CAE); las notas de crédito restan' },
     ];
 
     await enviarReporte(res, {

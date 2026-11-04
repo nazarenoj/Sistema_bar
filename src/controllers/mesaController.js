@@ -118,10 +118,13 @@ const cerrarCuenta = async (req, res) => {
     }
 
     pedidoIds = pedidosActivos.map(p => p.id);
+    // El cliente puede venir en el cierre o haberse identificado antes en el pedido (Ventas RN81).
+    const [[delPedido]] = await conn.query('SELECT cliente_id FROM pedidos WHERE id IN (?) AND cliente_id IS NOT NULL LIMIT 1', [pedidoIds]);
+    const clienteId = req.body.cliente_id ?? delPedido?.cliente_id ?? null;
     // Las promociones se evalúan al cobrar y dejan su descuento en cada línea (Ventas RN33); con pago mixto no rige la de forma de pago.
     const formaPromo = Array.isArray(req.body.pagos) ? (req.body.pagos.length === 1 ? req.body.pagos[0].forma : null) : metodo_pago;
-    await Promociones.aplicar(conn, pedidoIds, { formaPago: formaPromo, clave: `cuenta:${id}:${pedidosActivos[0].sesion_apertura}`, socio: await Venta.esSocioLocal(req.body.cliente_id, conn) }); // promociones para socios (Clientes RN30)
-    premioAplicado = await Venta.aplicarPremio(conn, pedidoIds, { clienteId: req.body.cliente_id, premio: req.body.premio_sellos }); // premio de sellos (Clientes RF24)
+    await Promociones.aplicar(conn, pedidoIds, { formaPago: formaPromo, clave: `cuenta:${id}:${pedidosActivos[0].sesion_apertura}`, socio: await Venta.esSocioLocal(clienteId, conn) }); // promociones para socios (Clientes RN30)
+    premioAplicado = await Venta.aplicarPremio(conn, pedidoIds, { clienteId: clienteId, premio: req.body.premio_sellos }); // premio de sellos (Clientes RF24)
     totalAcumulado = await Pedido.getTotalAcumulado(pedidoIds, conn);
     // Las reglas del receptor (tipo A, tope de consumidor final) se miran antes de cerrar la cuenta, no después.
     if (facturar && modalidad === 'caea' && !(await Caea.vigente(afipConfig.puntoVenta)))
@@ -136,9 +139,9 @@ const cerrarCuenta = async (req, res) => {
     await Pedido.cerrarPedidosMesa(id, conn);
     const pagos = await Venta.validarPagos(conn, Array.isArray(req.body.pagos) ? req.body.pagos : [{ forma: metodo_pago, importe: totalAcumulado }], totalAcumulado);
     // Venta a cuenta corriente: veredicto y reserva de crédito de Clientes antes de cerrar (Ventas RF16, Clientes RF12, RF26); el débito viaja con la venta.
-    credito = await Venta.reservarCredito(pagos, { clienteId: req.body.cliente_id, idSolicitud: req.get('X-ID-Solicitud') ?? `cuenta:${id}:${pedidosActivos[0].sesion_apertura}`, userId: req.usuario?.sub ?? null,
+    credito = await Venta.reservarCredito(pagos, { clienteId: clienteId, idSolicitud: req.get('X-ID-Solicitud') ?? `cuenta:${id}:${pedidosActivos[0].sesion_apertura}`, userId: req.usuario?.sub ?? null,
       autorizar: () => validarAutorizacion(req, 'ventas.credito.autorizar'), motivoContingencia: req.body.motivo_contingencia, moneda: String(req.body.cuenta_moneda ?? 'ARS').toUpperCase() });
-    canjes = await Venta.retenerCanjes(pagos, { clienteId: req.body.cliente_id, idSolicitud: req.get('X-ID-Solicitud') ?? `cuenta:${id}:${pedidosActivos[0].sesion_apertura}` }); // retención de saldo de vales, gift cards y puntos
+    canjes = await Venta.retenerCanjes(pagos, { clienteId: clienteId, idSolicitud: req.get('X-ID-Solicitud') ?? `cuenta:${id}:${pedidosActivos[0].sesion_apertura}` }); // retención de saldo de vales, gift cards y puntos
     metodoPago = Venta.metodoResumen(pagos);
     await Pedido.setMetodoPago(id, pedidosActivos[0].sesion_apertura, metodoPago, conn);
     // La venta y los mensajes de sus efectos se graban en esta misma transacción (Ventas RN58).
@@ -146,7 +149,7 @@ const cerrarCuenta = async (req, res) => {
       mesa_id: id, sesion_apertura: pedidosActivos[0].sesion_apertura, items, total: totalAcumulado, pagos,
       idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, tipoNoFiscal,
       modalidad: pedidosActivos[0].modalidad, mozoId: pedidosActivos[0].mozo_id, idCompromiso, credito,
-      fid: req.body.cliente_id ? { clienteId: req.body.cliente_id, premio: premioAplicado } : null,
+      fid: clienteId ? { clienteId, premio: premioAplicado } : null, clienteId,
     });
     // La mesa sigue "ocupada": recién se libera cuando se confirma que se imprimió/descargó el
     // comprobante (ver confirmarTicket), para no dejar la mesa disponible sin haberlo entregado.

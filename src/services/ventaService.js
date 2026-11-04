@@ -225,7 +225,7 @@ const liberarSeries = async (idSolicitud) => { if (idSolicitud) await (await pue
 
 // Registra la venta de una cuenta cerrada. Va con la `conn` de la transacción del cierre: si el cierre
 // se revierte, no queda ni la venta ni sus mensajes. Un efecto que falle después nunca revierte la venta.
-const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null, credito = null, fid = null }) => {
+const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null, credito = null, fid = null, clienteId = null }) => {
   const id_global = await idGlobal();
   // Un no fiscal tiene numeración propia, diferenciada de la fiscal, y queda "pendiente de facturación" (RF12, RN84).
   const numeroNoFiscal = tipoNoFiscal ? await Caea.siguienteNumero(`NF:${tipoNoFiscal}`, conn) : null;
@@ -235,8 +235,8 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
   const detalle = items.map((i) => ({ producto_id: i.producto_id, nombre: i.nombre, cantidad: i.cantidad, precio_unitario: Number(i.precio_unitario), ...(i.serie && { serie: i.serie, fecha_fin_garantia: i.fecha_fin_garantia }), ...(i.modificadores && { modificadores: i.modificadores }), ...(i.alergenos && { alergenos: i.alergenos }), ...(i.lista && { lista: i.lista }),
     ...(Number(i.importe_descuento) > 0 && { importe_descuento: Number(i.importe_descuento), promociones: promos.filter((p) => p.item_id === i.id).map((p) => ({ nombre: p.nombre, importe: Number(p.importe) })) }) }));
   const [r] = await conn.query(
-    'INSERT INTO ventas (id_global, mesa_id, sesion_apertura, total, detalle, id_solicitud, config_version, creado_por, condicion_fiscal, tipo_no_fiscal, numero_no_fiscal, modalidad, mozo_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id_global, mesa_id, sesion_apertura, total, JSON.stringify(detalle), idSolicitud ?? null, snap.version, userId ?? null, tipoNoFiscal ? 'no_fiscal' : 'fiscal', tipoNoFiscal, numeroNoFiscal, modalidad, mozoId]
+    'INSERT INTO ventas (id_global, mesa_id, sesion_apertura, total, detalle, id_solicitud, config_version, creado_por, condicion_fiscal, tipo_no_fiscal, numero_no_fiscal, modalidad, mozo_id, cliente_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [id_global, mesa_id, sesion_apertura, total, JSON.stringify(detalle), idSolicitud ?? null, snap.version, userId ?? null, tipoNoFiscal ? 'no_fiscal' : 'fiscal', tipoNoFiscal, numeroNoFiscal, modalidad, mozoId, clienteId ?? fid?.clienteId ?? credito?.clienteId ?? null]
   );
   for (const p of pagos) {
     await conn.query('INSERT INTO pago_venta (venta_id, metodo_pago, importe, referencia, recibido, vuelto, moneda, importe_divisa, cotizacion, cotizacion_id, instrumento, retencion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -316,7 +316,6 @@ const porFormaPago = async ({ desde, hasta } = {}) => {
 
 // Emite la factura que regulariza una venta no fiscal (RN84). Con la factura aprobada la venta deja de estar
 // pendiente; no se repite descuento de stock ni cobro: solo se publica "Venta regularizada" (hacia Contable).
-// shortcut: si el primer intento falla y se reintenta con /facturas/:id/reintentar, el evento no se publica.
 const regularizar = async (idGlobal, receptor, { idIntento, userId } = {}) => {
   const venta = await obtener(idGlobal);
   if (!venta) throw Object.assign(new Error('Venta no encontrada.'), { status: 404 });
@@ -340,17 +339,25 @@ const regularizar = async (idGlobal, receptor, { idIntento, userId } = {}) => {
     throw Object.assign(err, { factura_id: factura.id });
   }
   factura = await Factura.getById(factura.id);
-  if (factura.estado === 'aprobada') {
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
-      await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_regularizada', docTipo: 'venta', docIdGlobal: idGlobal, userId,
-        contenido: { total: venta.total, pagos: venta.pagos, factura_id_global: factura.id_global } });
-      await conn.commit();
-    } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
-    Mensajeria.despertar();
-  }
+  if (factura.estado === 'aprobada') await publicarRegularizada(venta, factura, userId);
   return factura;
+};
+
+const publicarRegularizada = async (venta, factura, userId) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_regularizada', docTipo: 'venta', docIdGlobal: venta.id_global, userId,
+      contenido: { total: venta.total, pagos: venta.pagos, factura_id_global: factura.id_global } });
+    await conn.commit();
+  } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+  Mensajeria.despertar();
+};
+
+// Si la factura aprobada en un reintento (`/facturas/:id/reintentar`) regulariza una venta no fiscal, publica «Venta regularizada».
+const regularizadaPorReintento = async (factura, userId) => {
+  const [[v]] = await pool.query("SELECT id_global FROM ventas WHERE mesa_id = ? AND sesion_apertura = ? AND condicion_fiscal = 'no_fiscal' LIMIT 1", [factura.mesa_id, factura.sesion_apertura]);
+  if (v) await publicarRegularizada(await obtener(v.id_global), factura, userId);
 };
 
 // Margen realizado por producto (Ventas RN62, RN75): ingresos menos el costo de la venta (CV) que informó Stock, con la
@@ -390,4 +397,4 @@ const margen = async ({ desde, hasta } = {}) => {
   }).sort((a, b) => b.margen - a.margen);
 };
 
-module.exports = { retenerCanjes, liberarCanjes, aplicarPremio, esSocioLocal, reservarCredito, liberarCredito, importeACuenta, porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+module.exports = { retenerCanjes, liberarCanjes, aplicarPremio, esSocioLocal, reservarCredito, liberarCredito, importeACuenta, porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, regularizadaPorReintento, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };

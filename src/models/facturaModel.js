@@ -65,7 +65,7 @@ const getHistorial = async (page, limit) => {
 // Ventas ya facturadas (con CAE aprobado) para el reporte contable. `desde`/`hasta` son fechas
 // 'YYYY-MM-DD' opcionales; sin ellas trae todo el historial aprobado.
 const getVentasFacturadas = async (desde, hasta) => {
-  const condiciones = ["f.estado = 'aprobada'", 'f.devolucion_id IS NULL']; // las notas de crédito no suman como ventas
+  const condiciones = ["f.estado = 'aprobada'"]; // las notas de crédito entran con `signo` -1: restan
   const params = [];
   if (desde) {
     condiciones.push('f.fecha_emision >= ?');
@@ -77,7 +77,7 @@ const getVentasFacturadas = async (desde, hasta) => {
   }
 
   const [rows] = await pool.query(
-    `SELECT f.*, m.numero_mesa
+    `SELECT f.*, m.numero_mesa, IF(f.devolucion_id IS NULL, 1, -1) AS signo
      FROM facturas f
      JOIN mesas m ON f.mesa_id = m.id
      WHERE ${condiciones.join(' AND ')}

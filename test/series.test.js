@@ -32,7 +32,7 @@ test('Stock.RN71: sin STK-SERIE (y VEN-SERIE) no se serializa nada; STK-SERIE ex
 
 test('Stock.RF26/RN05: la serie pasa Disponible → Comprometida → Vendida de forma atómica y cada paso queda en el historial', async () => {
   const p = await serializado('Notebook');
-  const ing = await api('POST', `/api/series/${p.id}/ingresos`, { token, body: { series: ['SN1', 'SN2', 'SN3'], costo_unitario: 500, proveedor: 'Mayorista SA', comprobante: { numero: 'A-0001' } } });
+  const ing = await api('POST', `/api/series/${p.id}/ingresos`, { token, body: { series: ['SN1', 'SN2', 'SN3'], costo_unitario: 500, proveedor: 'Mayorista SA', comprobante: { cuit: '30-71111111-1', clase: 'FACTURA', tipo: 'A', punto_venta: 1, numero: '1' } } });
   assert.equal(ing.status, 201, JSON.stringify(ing.json));
   assert.equal(await saldo(p.id), 3);
   assert.equal((await api('POST', `/api/series/${p.id}/ingresos`, { token, body: { series: ['SN2'] } })).status, 409); // repetida
@@ -113,4 +113,17 @@ test('Stock.RF14: el conteo por serie informa faltantes y sobrantes del depósit
   const c = await api('POST', `/api/series/${p.id}/conteo`, { token, body: { deposito_id: dep.id, series: ['R1', 'R3', 'R9'] } });
   assert.equal(c.status, 200, JSON.stringify(c.json));
   assert.deepEqual([c.json.faltantes, c.json.sobrantes], [['R2'], ['R9']]);
+});
+
+test('Usuarios RF27/Stock RF26: el ingreso por series reserva la clave del comprobante y un duplicado se rechaza, también contra el ingreso común', async () => {
+  const p = await serializado('Tablet');
+  const comprobante = { cuit: '30-71111111-1', clase: 'FACTURA', tipo: 'A', punto_venta: 2, numero: '900' };
+  const ing = (series, c = comprobante) => api('POST', `/api/series/${p.id}/ingresos`, { token, body: { series, costo_unitario: 100, proveedor: 'Mayorista SA', comprobante: c } });
+  assert.equal((await ing(['KC1'])).status, 201);
+  const dup = await ing(['KC2']);
+  assert.equal(dup.status, 409, JSON.stringify(dup.json));
+  assert.equal((await pool.query("SELECT COUNT(*) n FROM series WHERE numero_serie = 'KC2'"))[0][0].n, 0); // el ingreso rechazado no dejó nada
+  const comun = await api('POST', '/api/stock/ingresos', { token, body: { motivo: 'compra', proveedor: 'Mayorista SA', comprobante, lineas: [{ item: { tipo: 'producto', id: p.id }, cantidad: 1 }] } });
+  assert.equal(comun.status, 409, JSON.stringify(comun.json));
+  assert.equal((await ing(['KC3'], { ...comprobante, numero: '901' })).status, 201);
 });

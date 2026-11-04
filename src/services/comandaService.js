@@ -134,6 +134,7 @@ const anular = async (id, motivo, actor) => {
   if (!c) return null;
   if (c.estado === 'anulada') throw new ComandaInvalida('La comanda ya está anulada.');
   await pool.query("UPDATE comandas SET estado = 'anulada', motivo_anulacion = ?, anulada_por = ?, anulada_at = NOW() WHERE id = ?", [m, actor?.id ?? null, id]);
+  await pool.query('UPDATE pedido_productos pp JOIN comanda_items ci ON ci.pedido_producto_id = pp.id SET pp.enviado_at = NULL WHERE ci.comanda_id = ?', [id]); // los ítems vuelven a «sin enviar» y se pueden reenviar
   await auditar(null, { modulo: 'ventas', accion: 'comanda_anulada', entidad: 'comanda', entidad_id: c.id_global, detalle: m }, actor);
   return obtener(id);
 };

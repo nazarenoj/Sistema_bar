@@ -310,4 +310,4 @@ const mermas = async ({ desde, hasta } = {}) => {
 // Una presentación con movimientos no se edita (RN61): se crea una versión nueva.
 Presentacion.registrarDetectorUso(async (id) => (await pool.query('SELECT 1 FROM stock_movimientos WHERE presentacion_id = ? LIMIT 1', [id]))[0].length > 0);
 
-module.exports = { MovimientoInvalido, registrar, saldoInicial, ingresar, egresar, transferir, corregir, saldo, existencias, kardex, mermas, motivoDeEgreso, colItem, claveComprobante };
+module.exports = { MovimientoInvalido, registrar, saldoInicial, ingresar, reservarClave, egresar, transferir, corregir, saldo, existencias, kardex, mermas, motivoDeEgreso, colItem, claveComprobante };

@@ -50,6 +50,6 @@ router.post('/devoluciones-proveedor', REGISTRAR, manejar(async (req, res) => {
 }));
 router.get('/devoluciones-proveedor', VER, manejar(async (req, res) => res.json(await Devoluciones.listar(req.query))));
 router.get('/devoluciones-proveedor/:id', VER, manejar(async (req, res) => res.json(await Devoluciones.obtener(Number(req.params.id)))));
-router.post('/devoluciones-proveedor/:id/nota-credito', REGISTRAR, manejar(async (req, res) => res.json(await Devoluciones.cargarNotaCredito(Number(req.params.id), req.body))));
+router.post('/devoluciones-proveedor/:id/nota-credito', REGISTRAR, manejar(async (req, res) => res.json(await Devoluciones.cargarNotaCredito(Number(req.params.id), req.body, { userId: usuario(req) }))));
 
 module.exports = router;

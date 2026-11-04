@@ -92,6 +92,7 @@ test('Stock.RF40/RN80/EX58: la devolución sale al costo del ingreso, solo de lo
   const ok = await api('POST', `/api/stock-ingresos/devoluciones-proveedor/${d.json.id}/nota-credito`, { token, body: nc });
   assert.equal(ok.status, 200, JSON.stringify(ok.json));
   assert.deepEqual([ok.json.estado, ok.json.diferencia_valuacion], ['con_nc', -20]);
+  assert.equal((await pool.query("SELECT COUNT(*) n FROM claves_comprobante WHERE clave LIKE '%-NOTA_CREDITO-A-00005-00000077' AND estado <> 'vencida'"))[0][0].n, 1); // la clave también se reservó con Usuarios (F6)
   assert.equal((await api('POST', `/api/stock-ingresos/devoluciones-proveedor/${d.json.id}/nota-credito`, { token, body: nc })).status, 409);
   const d2 = await dev(b, 1);
   assert.equal((await api('POST', `/api/stock-ingresos/devoluciones-proveedor/${d2.json.id}/nota-credito`, { token, body: nc })).status, 409);

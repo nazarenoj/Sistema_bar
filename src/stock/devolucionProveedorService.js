@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const Mov = require('./movimientoService');
 const M = require('../mensajeria/servicio');
+const Claves = require('../servicios/comprobanteTerceroService');
 const { idGlobal } = require('../utils/idGlobal');
 
 // Devolución a proveedor (Stock RF40, RN80, EX58): egreso con el motivo reservado "Devolución a proveedor" que referencia la línea del
@@ -69,18 +70,28 @@ const listar = async ({ estado } = {}) => (await pool.query(`SELECT * FROM devol
 
 // Sin Compras, la nota de crédito del proveedor se carga a mano (clase Nota de crédito, clave del comprobante RN09). La diferencia entre su
 // importe y el costo devuelto queda a la vista; el ajuste de valuación lo hará quien lleve la contabilidad.
-const cargarNotaCredito = async (id, { comprobante, importe }) => {
+const cargarNotaCredito = async (id, { comprobante, importe }, { userId } = {}) => {
   const d = await obtener(id);
   if (d.estado === 'con_nc') throw invalida('La devolución ya tiene su nota de crédito.', 409);
   const clave = Mov.claveComprobante(comprobante);
   if (!clave) throw invalida('Falta el comprobante de la nota de crédito (CUIT, clase, tipo, punto de venta y número).');
   if (importe !== undefined && !(Number(importe) >= 0)) throw invalida('El importe debe ser mayor o igual a cero.');
+  // La clave también se reserva con Usuarios (RF27), así que una nota de crédito ya cargada por otro módulo se detecta como duplicado.
+  let reserva;
+  try { reserva = await Mov.reservarClave(comprobante, d.proveedor, { userId }); } catch (err) { throw err instanceof Mov.MovimientoInvalido ? invalida(err.message, err.status, { clave: err.clave }) : err; }
+  const conn = await pool.getConnection();
   try {
-    await pool.query("UPDATE devoluciones_proveedor SET estado = 'con_nc', nota_credito_clave = ?, nota_credito_importe = ? WHERE id = ?", [clave, importe ?? null, id]);
+    await conn.beginTransaction();
+    await conn.query("UPDATE devoluciones_proveedor SET estado = 'con_nc', nota_credito_clave = ?, nota_credito_importe = ? WHERE id = ?", [clave, importe ?? null, id]);
+    if (reserva?.id_reserva) await Claves.publicarConfirmacion(conn, { idReserva: reserva.id_reserva, idDocumento: d.id_global, modulo: 'stock', rol: 'registro_fisico', userId, docTipo: 'nota_credito_proveedor' });
+    await conn.commit();
+    if (reserva) M.despertar();
   } catch (err) {
+    await conn.rollback();
+    if (reserva?.id_reserva) await Claves.cancelar(reserva.id_reserva);
     if (err.code === 'ER_DUP_ENTRY') throw invalida('Esa nota de crédito ya está cargada en otra devolución.', 409);
     throw err;
-  }
+  } finally { conn.release(); }
   const r = await obtener(id);
   const costo = r.costo_unitario === null ? null : Math.round(Number(r.costo_unitario) * Number(r.cantidad) * 100) / 100;
   return { ...r, diferencia_valuacion: importe === undefined || costo === null ? null : Math.round((Number(importe) - costo) * 100) / 100 };

@@ -155,3 +155,24 @@ test('Ventas.RN84/EX38: regularizar factura la venta no fiscal, no la duplica y 
     Modulos.estaInstalado = instalado;
   }
 });
+
+test('Ventas.RN84: si la regularización falla y se reintenta por /facturas/:id/reintentar, igual se publica "Venta regularizada" (una sola vez)', async () => {
+  const instalado = Modulos.estaInstalado;
+  Modulos.estaInstalado = async (m) => m === 'contable' || instalado(m);
+  const real = wsfe.solicitarCAE;
+  try {
+    const id = (await api('GET', '/api/ventas/no-fiscales-pendientes', { token })).json[0].id_global;
+    const datos = { tipo_comprobante: 11, doc_tipo: 99, doc_nro: '0', condicion_iva_receptor_id: 5 };
+    wsfe.solicitarCAE = async () => ({ FeDetResp: { FECAEDetResponse: [{ Resultado: 'R', Observaciones: { Obs: [{ Code: 10016, Msg: 'Rechazado de prueba' }] } }] } }); // rechazo definitivo: no queda indeterminado
+    const r = await api('POST', `/api/ventas/${id}/regularizar`, { token, headers: { 'X-ID-Solicitud': 'regulariza-03' }, body: datos });
+    assert.deepEqual([r.status, r.json.factura.estado], [200, 'rechazada'], JSON.stringify(r.json));
+    assert.equal((await pool.query("SELECT COUNT(*) n FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'venta_regularizada'", [id]))[0][0].n, 0);
+    wsfe.solicitarCAE = real;
+    const re = await api('POST', `/api/facturas/${r.json.factura.id}/reintentar`, { token, headers: { 'X-ID-Solicitud': 'regulariza-04' } });
+    assert.equal(re.status, 200, JSON.stringify(re.json));
+    assert.equal((await pool.query("SELECT COUNT(*) n FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'venta_regularizada'", [id]))[0][0].n, 1);
+  } finally {
+    wsfe.solicitarCAE = real;
+    Modulos.estaInstalado = instalado;
+  }
+});
