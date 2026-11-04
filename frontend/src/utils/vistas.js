@@ -7,4 +7,5 @@ export const PERMISO_VISTA = {
   usuarios: 'usuarios.gestionar',
   ventas: 'ventas.historial.ver',
   facturacion: 'facturacion.ver',
+  stock: 'stock.movimientos.ver',
 }
