@@ -313,7 +313,7 @@ Revisión de dependencias entre fases (A a F) hecha contra el código al cerrar 
 
 | # | Brecha | Origen | Qué falta |
 |---|--------|--------|-----------|
-| 3 | Notas fiscales de Clientes fuera de `facturas` y del libro IVA | E2, E6 | Las notas de crédito y débito y la factura agrupada guardan el CAE en `movimientos_cc` y `facturas_remitos`. Falta que entren a `facturas` (o al libro IVA) cuando se encare Contable. |
+| 3 | Notas fiscales de Clientes fuera de `facturas` y del libro IVA | E2, E6 | Las notas de crédito y débito y la factura agrupada guardan el CAE en `movimientos_cc` y `facturas_remitos`. Falta que entren a `facturas` (o al libro IVA) cuando se encare Contable. **Decisión: se resuelve dentro de Contable** (no se toca `facturas` ahora); hasta entonces el libro IVA y los reportes de facturación no incluyen estos comprobantes. |
 | 11 | Compromiso de venta solo al cerrar | B3, C3, C5 | No se toma «al enviar la comanda». |
 | 12 | Pruebas contra servicios reales | B0, B7, B8, B12, F8 | Periféricos del cliente piloto (B0), ARCA real (padrón, CAEA, consulta de comprobantes) y SMTP con STARTTLS solo se probaron con simulaciones. |
 | 13 | Sin pantallas | A a F | Todo se probó por la API; el frontend sigue siendo el de antes de la plataforma. |
