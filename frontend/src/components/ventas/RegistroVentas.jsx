@@ -5,18 +5,21 @@ import Modal, { Campo, Tarjeta } from '../layout/Modal'
 import Spinner from '../Spinner'
 import { dinero, fecha, numeroComprobante } from '../../utils/formato'
 import { descargarArchivo } from '../../utils/ticket'
+import { Detalle } from '../layout/Modulo'
 
 const ESTADOS = { cerrada: ['Cerrada', 'bg-marca-600'], devuelta_parcial: ['Devuelta parcial', 'bg-amber-500'], anulada: ['Anulada', 'bg-rose-400'] }
 const FILTROS_VACIOS = { desde: '', hasta: '', estado: '', mesa: '', usuario: '' }
 const textoComprobante = (v) => (v.numero ? numeroComprobante(v.punto_venta, v.numero) : v.numero_no_fiscal ? `NF ${v.numero_no_fiscal}` : 'Sin comprobante')
 
-export default function RegistroVentas({ addToast }) {
+export default function RegistroVentas({ addToast, usuario }) {
   const [filtros, setFiltros] = useState(FILTROS_VACIOS)
   const [aplicados, setAplicados] = useState(FILTROS_VACIOS)
   const [pagina, setPagina] = useState(1)
   const [datos, setDatos] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [detalle, setDetalle] = useState(null)
+  const [devolucion, setDevolucion] = useState(null) // { motivo, reingreso } mientras se completa el formulario
+  const [devoluciones, setDevoluciones] = useState([])
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -33,7 +36,18 @@ export default function RegistroVentas({ addToast }) {
     catch (err) { addToast(err.message, 'error') }
   }
   const abrir = async (v) => {
-    try { setDetalle(await api.llamar(`/ventas/${v.id_global}`)) } catch (err) { addToast(err.message, 'error') }
+    try {
+      setDetalle(await api.llamar(`/ventas/${v.id_global}`)); setDevolucion(null)
+      setDevoluciones(await api.llamar(`/devoluciones${api.qs({ venta: v.id_global })}`).catch(() => []))
+    } catch (err) { addToast(err.message, 'error') }
+  }
+  const devolverTodo = async (e) => {
+    e.preventDefault()
+    try {
+      await api.llamar('/devoluciones', { method: 'POST', body: { venta_id_global: detalle.id_global, todo: true, motivo: devolucion.motivo, reingreso: devolucion.reingreso } })
+      addToast('Venta anulada y devolución registrada.')
+      setDetalle(null); cargar()
+    } catch (err) { addToast(err.message, 'error') }
   }
   const set = (k) => (e) => setFiltros(f => ({ ...f, [k]: e.target.value }))
 
@@ -121,6 +135,18 @@ export default function RegistroVentas({ addToast }) {
               <p className="flex justify-between font-semibold border-t mt-1 pt-1"><span>Total</span><span>{dinero(detalle.total)}</span></p>
               {detalle.devuelto > 0 && <p className="flex justify-between text-rose-500"><span>Devuelto</span><span>−{dinero(detalle.devuelto)}</span></p>}
             </div>
+            {devoluciones.length > 0 && <div><p className="font-semibold text-stone-700 mb-1">Devoluciones</p><Detalle datos={devoluciones} /></div>}
+            {api.can(usuario, 'ventas.devoluciones.crear') && detalle.estado !== 'anulada' && (
+              devolucion === null
+                ? <button onClick={() => setDevolucion({ motivo: '', reingreso: 'reingreso' })} className="btn btn-rojo">Anular / devolver toda la venta</button>
+                : (
+                  <form onSubmit={devolverTodo} className="grid grid-cols-2 gap-3 border-t pt-3">
+                    <Campo etiqueta="Motivo" className="col-span-2"><input required value={devolucion.motivo} onChange={e => setDevolucion({ ...devolucion, motivo: e.target.value })} className="campo w-full" /></Campo>
+                    <Campo etiqueta="Mercadería"><select value={devolucion.reingreso} onChange={e => setDevolucion({ ...devolucion, reingreso: e.target.value })} className="campo w-full"><option value="reingreso">Vuelve al stock</option><option value="merma">Se da de baja (merma)</option></select></Campo>
+                    <div className="flex items-end gap-2"><button className="btn btn-rojo">Confirmar</button><button type="button" onClick={() => setDevolucion(null)} className="btn bg-stone-400 hover:bg-stone-500">Cancelar</button></div>
+                  </form>
+                )
+            )}
             {detalle.reimpresiones?.length > 0 && <p className="text-xs text-stone-500">Reimpresiones: {detalle.reimpresiones.length}</p>}
           </div>
         </Modal>

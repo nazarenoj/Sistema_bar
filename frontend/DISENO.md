@@ -42,4 +42,13 @@ Los colores con significado no se tocan: verde / rojo / ámbar para estados (lib
 | Stock (existencias, kardex, ingresos y egresos, valorizado, vencimientos, reposición, depósitos) | `stock/Existencias.jsx` | `stock.movimientos.ver` |
 | Clientes y cuentas (búsqueda, ficha, movimientos, informes de deuda) | `clientes/Clientes.jsx` | `clientes.ver` |
 
-Sin pantalla todavía: devoluciones, producción, inventario por tomas, trazabilidad y alérgenos, series, etiquetas, ingreso por foto, reservas, comisiones, recibos y fidelización de Clientes, copias, correo y padrón. Las pantallas nuevas se registran en `components/pantallas.jsx`.
+| Producción (órdenes, informe), Inventario (tomas y diferencias), Proveedores (fotos, devoluciones, claves), Calidad y trazabilidad (alérgenos, temperaturas, series, etiquetas) | `modulos/stockOperativo.jsx` | los de cada pestaña |
+| Reservas, Comisiones, Carta y modificadores | `modulos/ventasExtra.jsx` | `ventas.pedidos.operar` / `ventas.catalogo.ver` |
+| Recibos y remitos, Fidelización | `modulos/clientesExtra.jsx` | `clientes.ver` |
+| Copias, Correo, Consulta de CUIT, Sucursales, Verificación en dos pasos | `modulos/sistema.jsx` | los de cada pestaña |
+| Devolución total de una venta | dentro del detalle de `ventas/RegistroVentas.jsx` | `ventas.devoluciones.crear` |
+
+## Pantallas por configuración
+Las pantallas de `components/modulos/` son archivos de configuración sobre `layout/Modulo.jsx`: cada pestaña declara su ruta, filtros, alta, acciones por fila y detalle. Si una respuesta no tiene un formato propio, `TablaAuto` arma las columnas con las claves. Una pantalla nueva de este tipo es una entrada en esos archivos más su registro en `pantallas.jsx`, `vistas.js` y `Menu.jsx`.
+
+Sin interfaz propia todavía (existen en la API): alta de recibos de cobro, notas de débito y crédito, apertura y cierre de cuentas corrientes, remitos nuevos y facturación agrupada, series por producto (ingreso, venta y baja), etiquetas (peso, góndola, elaborado), alta de ingresos por foto (subida de imagen), alérgenos por artículo, lotes (bloqueo y merma de fin de día), alta de turnos y pedidos especiales, activación del segundo factor, comprobantes de terceros (reserva y vínculo) y mantenimiento de padrón y numeración de ARCA.
