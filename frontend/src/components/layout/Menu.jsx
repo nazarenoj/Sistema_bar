@@ -19,6 +19,7 @@ const PUNTO = <Ico d={<circle cx="12" cy="12" r="3" />} />
 const GRUPOS = [
   { grupo: 'Operaciones', items: [{ id: 'mesas', titulo: 'Panel de Mesas' }, { id: 'historial', titulo: 'Historial de Pedidos' }, { id: 'ventas', titulo: 'Registro de ventas' }, { id: 'facturacion', titulo: 'Facturación' }] },
   { grupo: 'Catálogo e inventario', items: [{ id: 'productos', titulo: 'Productos' }, { id: 'insumos', titulo: 'Insumos' }, { id: 'stock', titulo: 'Stock' }] },
+  { grupo: 'Clientes', items: [{ id: 'clientes', titulo: 'Clientes y cuentas' }] },
   { grupo: 'Administración', items: [{ id: 'usuarios', titulo: 'Usuarios y accesos' }, { id: 'notificaciones', titulo: 'Notificaciones' }] },
 ]
 
