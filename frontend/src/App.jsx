@@ -31,8 +31,8 @@ export default function App() {
   const { confirm, confirmState, resolveConfirm } = useConfirm()
 
   const addToast = useCallback((message, type = 'success') => {
-    const id = Date.now()
-    setToasts(prev => [...prev, { id, message, type }])
+    const id = Date.now() + Math.random()
+    setToasts(prev => (prev.some(t => t.message === message) ? prev : [...prev, { id, message, type }])) // el mismo aviso no se repite mientras sigue visible
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
   }, [])
 
