@@ -13,15 +13,17 @@ const ICONOS = {
   notificaciones: <Ico d={<><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" /><path d="M10 19a2 2 0 0 0 4 0" /></>} />,
 }
 
+const PUNTO = <Ico d={<circle cx="12" cy="12" r="3" />} />
+
 // Una sola lista define el menú, el título de cada pantalla y sus migas de pan.
 const GRUPOS = [
-  { grupo: 'Operaciones', items: [{ id: 'mesas', titulo: 'Panel de Mesas' }, { id: 'historial', titulo: 'Historial de Pedidos' }] },
+  { grupo: 'Operaciones', items: [{ id: 'mesas', titulo: 'Panel de Mesas' }, { id: 'historial', titulo: 'Historial de Pedidos' }, { id: 'ventas', titulo: 'Registro de ventas' }, { id: 'facturacion', titulo: 'Facturación' }] },
   { grupo: 'Catálogo e inventario', items: [{ id: 'productos', titulo: 'Productos' }, { id: 'insumos', titulo: 'Insumos' }] },
   { grupo: 'Administración', items: [{ id: 'usuarios', titulo: 'Usuarios y accesos' }, { id: 'notificaciones', titulo: 'Notificaciones' }] },
 ]
 
 export const TITULOS = Object.fromEntries(
-  GRUPOS.flatMap(g => g.items.map(i => [i.id, { titulo: i.titulo, grupo: g.grupo, icono: ICONOS[i.id] }]))
+  GRUPOS.flatMap(g => g.items.map(i => [i.id, { titulo: i.titulo, grupo: g.grupo, icono: ICONOS[i.id] ?? PUNTO }]))
 )
 
 export default function Menu({ vista, setVista, usuario, enLinea, nuevasNotif }) {
@@ -55,7 +57,7 @@ export default function Menu({ vista, setVista, usuario, enLinea, nuevasNotif })
                   className={`w-full flex items-center gap-3 px-3 py-2 mx-2 my-0.5 text-sm text-left rounded-lg transition
                     ${vista === i.id ? 'bg-arena-300 text-cafe-800 font-semibold' : 'hover:bg-white/10 hover:text-white'}`}
                 >
-                  {ICONOS[i.id]}
+                  {ICONOS[i.id] ?? PUNTO}
                   <span className="flex-1">{i.titulo}</span>
                   {i.id === 'notificaciones' && nuevasNotif > 0 && (
                     <span className="bg-rose-400 text-white text-[11px] font-bold rounded px-1.5">{nuevasNotif}</span>

@@ -260,3 +260,12 @@ export const getHistorialFacturas = (page = 1, limit = 20) => request(`/facturas
 export const getFactura           = (id)     => request(`/facturas/${id}`)
 export const reintentarFactura    = (id)     => request(`/facturas/${id}/reintentar`, { method: 'POST' })
 export const getEstadoAfip        = ()       => request('/facturas/estado-afip')
+
+// Llamada genérica para las pantallas de cada módulo (misma capa: clave de solicitud, autorización, sesión vencida).
+export const llamar = request
+export const qs = (filtros = {}) => {
+  const p = new URLSearchParams()
+  Object.entries(filtros).forEach(([k, v]) => { if (v !== '' && v != null) p.set(k, v) })
+  const s = p.toString()
+  return s ? `?${s}` : ''
+}

@@ -13,6 +13,7 @@ import CambiarUsuarioModal from './components/CambiarUsuarioModal'
 import AutorizacionModal from './components/AutorizacionModal'
 import NotificacionesPanel from './components/NotificacionesPanel'
 import { PERMISO_VISTA } from './utils/vistas'
+import { PANTALLAS } from './components/pantallas'
 import useConexion from './hooks/useConexion'
 import useConfirm from './hooks/useConfirm'
 import * as api from './api'
@@ -114,6 +115,7 @@ export default function App() {
       {vista === 'mesas' && <MesaGrid addToast={addToast} confirm={confirm} productos={productos} />}
       {vista === 'historial' && <HistorialPedidos addToast={addToast} />}
       {vista === 'notificaciones' && <NotificacionesPanel addToast={addToast} onCambio={setNuevasNotif} />}
+      {PANTALLAS[vista] && (() => { const P = PANTALLAS[vista]; return <P addToast={addToast} confirm={confirm} usuario={usuario} /> })()}
       {vista === 'usuarios' && api.can(usuario, 'usuarios.gestionar') && <UsuariosPanel addToast={addToast} confirm={confirm} usuario={usuario} />}
     </Layout>
     <div>
