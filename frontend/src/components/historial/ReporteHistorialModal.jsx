@@ -61,20 +61,20 @@ export default function ReporteHistorialModal({ filtrosAplicados, sort, order, o
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="animate-fade-in bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="bg-indigo-600 px-6 py-5 text-white flex justify-between items-center">
+        <div className="bg-cafe-800 px-6 py-5 text-white flex justify-between items-center">
           <h2 className="font-bold text-lg">Exportar historial filtrado</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20 transition text-xl leading-none">✕</button>
         </div>
 
         <div className="p-6 space-y-4">
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
               Se va a exportar
             </p>
             {chips.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {chips.map((chip) => (
-                  <span key={chip} className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-50 text-indigo-600">
+                  <span key={chip} className="text-xs font-semibold px-2 py-1 rounded-full bg-marca-50 text-cafe-800">
                     {chip}
                   </span>
                 ))}
@@ -85,7 +85,7 @@ export default function ReporteHistorialModal({ filtrosAplicados, sort, order, o
                 el rango de fechas en la pantalla antes de descargar.
               </p>
             )}
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-xs text-stone-400 mt-2">
               Son los filtros aplicados en la pantalla. Para cambiarlos, cerrá este cuadro y usá la
               barra de filtros del historial.
             </p>
@@ -96,11 +96,11 @@ export default function ReporteHistorialModal({ filtrosAplicados, sort, order, o
               type="checkbox"
               checked={incluirItems}
               onChange={(e) => setIncluirItems(e.target.checked)}
-              className="mt-0.5 accent-indigo-600"
+              className="mt-0.5 accent-cafe-800"
             />
-            <span className="text-sm text-gray-700">
+            <span className="text-sm text-stone-700">
               Incluir detalle de ítems vendidos
-              <span className="block text-xs text-gray-400">
+              <span className="block text-xs text-stone-400">
                 Agrega cada producto de cada cuenta, con cantidad y subtotal.
               </span>
             </span>
@@ -111,14 +111,14 @@ export default function ReporteHistorialModal({ filtrosAplicados, sort, order, o
           <div className="flex justify-end gap-2 pt-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border text-gray-600 text-sm font-semibold hover:bg-gray-50 transition"
+              className="px-4 py-2 rounded-lg border text-stone-600 text-sm font-semibold hover:bg-stone-50 transition"
             >
               Cancelar
             </button>
             <button
               onClick={handleGenerar}
               disabled={generando}
-              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-cafe-800 text-white text-sm font-semibold hover:bg-cafe-700 transition disabled:opacity-50"
             >
               {generando ? 'Generando…' : `⬇ Descargar ${formatoPorValue(formato).label}`}
             </button>

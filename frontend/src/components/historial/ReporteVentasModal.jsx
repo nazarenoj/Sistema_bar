@@ -38,19 +38,19 @@ export default function ReporteVentasModal({ onClose, addToast }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="animate-fade-in bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
-        <div className="bg-indigo-600 px-6 py-5 text-white flex justify-between items-center">
+        <div className="bg-cafe-800 px-6 py-5 text-white flex justify-between items-center">
           <h2 className="font-bold text-lg">Reporte de ventas facturadas</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20 transition text-xl leading-none">✕</button>
         </div>
 
         <div className="p-6 space-y-4">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-stone-500">
             Se exportan las ventas con comprobante aprobado por ARCA en el rango elegido, con un
             resumen por tipo de comprobante y método de pago.
           </p>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Desde</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Desde</label>
             <input
               type="date"
               value={desde}
@@ -61,7 +61,7 @@ export default function ReporteVentasModal({ onClose, addToast }) {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Hasta</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Hasta</label>
             <input
               type="date"
               value={hasta}
@@ -76,14 +76,14 @@ export default function ReporteVentasModal({ onClose, addToast }) {
           <div className="flex justify-end gap-2 pt-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border text-gray-600 text-sm font-semibold hover:bg-gray-50 transition"
+              className="px-4 py-2 rounded-lg border text-stone-600 text-sm font-semibold hover:bg-stone-50 transition"
             >
               Cancelar
             </button>
             <button
               onClick={handleGenerar}
               disabled={generando}
-              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-cafe-800 text-white text-sm font-semibold hover:bg-cafe-700 transition disabled:opacity-50"
             >
               {generando ? 'Generando…' : `⬇ Descargar ${formatoPorValue(formato).label}`}
             </button>

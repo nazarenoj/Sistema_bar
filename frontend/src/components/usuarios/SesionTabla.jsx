@@ -40,12 +40,12 @@ export default function SesionTabla({ addToast, confirm }) {
       {loading ? (
         <div className="flex justify-center py-16"><Spinner size="lg" /></div>
       ) : sesiones.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">No hay sesiones abiertas.</div>
+        <div className="text-center py-16 text-stone-400">No hay sesiones abiertas.</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b text-gray-500 text-xs uppercase tracking-wider">
+              <tr className="bg-stone-50 border-b text-stone-500 text-xs uppercase tracking-wider">
                 <th className="text-left px-5 py-3">Usuario</th>
                 <th className="text-left px-5 py-3">Terminal</th>
                 <th className="text-left px-5 py-3">Inicio</th>
@@ -56,14 +56,14 @@ export default function SesionTabla({ addToast, confirm }) {
             </thead>
             <tbody className="divide-y">
               {sesiones.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3.5 font-semibold text-gray-800">
-                    {s.username}<span className="ml-2 text-xs text-gray-400 capitalize">{s.rol}</span>
+                <tr key={s.id} className="hover:bg-stone-50 transition-colors">
+                  <td className="px-5 py-3.5 font-semibold text-stone-800">
+                    {s.username}<span className="ml-2 text-xs text-stone-400 capitalize">{s.rol}</span>
                   </td>
-                  <td className="px-5 py-3.5 text-gray-500">{s.terminal || 'Equipo sin registrar'}</td>
-                  <td className="px-5 py-3.5 text-gray-500">{hora(s.inicio)}</td>
-                  <td className="px-5 py-3.5 text-gray-500">{hora(s.ultimo_acceso)}</td>
-                  <td className="px-5 py-3.5 text-gray-400">{s.ip || '—'}</td>
+                  <td className="px-5 py-3.5 text-stone-500">{s.terminal || 'Equipo sin registrar'}</td>
+                  <td className="px-5 py-3.5 text-stone-500">{hora(s.inicio)}</td>
+                  <td className="px-5 py-3.5 text-stone-500">{hora(s.ultimo_acceso)}</td>
+                  <td className="px-5 py-3.5 text-stone-400">{s.ip || '—'}</td>
                   <td className="px-5 py-3.5 text-right">
                     <button onClick={() => cerrar(s)}
                       className="px-3 py-1 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold hover:bg-rose-50 transition">

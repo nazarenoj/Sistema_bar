@@ -124,7 +124,7 @@ export default function ProductoModal({ producto, insumos, onClose, onSaved, add
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="animate-fade-in bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-        <div className="bg-indigo-600 px-6 py-5 text-white flex justify-between items-center">
+        <div className="bg-cafe-800 px-6 py-5 text-white flex justify-between items-center">
           <h2 className="font-bold text-lg">{editing ? 'Editar Producto' : 'Nuevo Producto'}</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20 transition text-xl leading-none">✕</button>
         </div>
@@ -137,43 +137,43 @@ export default function ProductoModal({ producto, insumos, onClose, onSaved, add
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Nombre *</label>
             <input value={form.nombre} onChange={set('nombre')} required
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Precio *</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Precio *</label>
               <input type="number" step="0.01" min="0" value={form.precio} onChange={set('precio')} required
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Stock</label>
               <input type="number" min="0" step="1" value={form.stock} onChange={set('stock')}
                 disabled={editing}
                 title={editing ? 'El stock se descuenta automáticamente al cerrar cuentas.' : undefined}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400
-                  disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" />
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500
+                  disabled:bg-stone-100 disabled:text-stone-400 disabled:cursor-not-allowed" />
               {editing && (
-                <p className="text-xs text-gray-400 mt-1">Se actualiza solo al cerrar cuentas.</p>
+                <p className="text-xs text-stone-400 mt-1">Se actualiza solo al cerrar cuentas.</p>
               )}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Descripción</label>
             <textarea value={form.descripcion} onChange={set('descripcion')} rows={2}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500 resize-none" />
           </div>
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg font-medium text-sm hover:bg-gray-50 transition">
+              className="flex-1 border border-stone-300 text-stone-700 py-2 rounded-lg font-medium text-sm hover:bg-stone-50 transition">
               Cancelar
             </button>
             <button type="submit" disabled={submitting}
-              className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+              className="flex-1 bg-cafe-800 text-white py-2 rounded-lg font-medium text-sm hover:bg-cafe-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
               {submitting && <Spinner size="sm" />}
               {editing ? 'Guardar cambios' : 'Crear producto'}
             </button>
@@ -181,10 +181,10 @@ export default function ProductoModal({ producto, insumos, onClose, onSaved, add
         </form>
 
         <div className="px-6 pb-6 pt-2 border-t">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Insumos que consume</h3>
+            <h3 className="text-sm font-semibold text-stone-700 mb-3">Insumos que consume</h3>
 
             {recetaInsumos.length === 0 ? (
-              <p className="text-xs text-gray-400 mb-3">
+              <p className="text-xs text-stone-400 mb-3">
                 {editing ? 'Este producto todavía no tiene insumos asociados.' : 'Todavía no agregaste insumos a la receta.'}
               </p>
             ) : (
@@ -192,9 +192,9 @@ export default function ProductoModal({ producto, insumos, onClose, onSaved, add
                 <table className="w-full text-sm">
                   <tbody className="divide-y">
                     {recetaInsumos.map(linea => (
-                      <tr key={linea.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 font-medium text-gray-800">{linea.nombre}</td>
-                        <td className="px-3 py-2 text-right text-gray-500">
+                      <tr key={linea.id} className="hover:bg-stone-50">
+                        <td className="px-3 py-2 font-medium text-stone-800">{linea.nombre}</td>
+                        <td className="px-3 py-2 text-right text-stone-500">
                           {Number(linea.cantidad_consumida)} {linea.unidad}
                         </td>
                         <td className="text-center pr-2 w-8">
@@ -202,7 +202,7 @@ export default function ProductoModal({ producto, insumos, onClose, onSaved, add
                             type="button"
                             onClick={() => handleRemoveInsumo(linea)}
                             title="Quitar insumo"
-                            className="text-gray-300 hover:text-rose-600 transition">
+                            className="text-stone-300 hover:text-rose-600 transition">
                             ✕
                           </button>
                         </td>

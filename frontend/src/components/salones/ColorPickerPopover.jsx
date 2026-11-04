@@ -22,9 +22,9 @@ export default function ColorPickerPopover({ anchorPos, title, fields, onChange,
       style={{ position: 'fixed', left, top, zIndex: 60 }}
       className="bg-white rounded-xl shadow-2xl border w-56 p-4 space-y-3 animate-fade-in"
     >
-      {title && <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">{title}</p>}
+      {title && <p className="text-xs font-bold text-stone-500 uppercase tracking-wide">{title}</p>}
       {fields.map(({ key, label, value }) => (
-        <label key={key} className="flex items-center justify-between text-sm text-gray-600 gap-3">
+        <label key={key} className="flex items-center justify-between text-sm text-stone-600 gap-3">
           {label}
           <input
             type="color"
@@ -36,7 +36,7 @@ export default function ColorPickerPopover({ anchorPos, title, fields, onChange,
       ))}
       <button
         onClick={onClose}
-        className="w-full text-xs font-semibold text-indigo-600 hover:text-indigo-800 pt-1"
+        className="w-full text-xs font-semibold text-cafe-800 hover:text-cafe-900 pt-1"
       >
         Cerrar
       </button>

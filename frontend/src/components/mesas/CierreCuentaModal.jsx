@@ -100,21 +100,21 @@ export default function CierreCuentaModal({ onConfirm, onCancel, submitting }) {
         </div>
 
         <div className="p-6">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Método de pago</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Método de pago</p>
           <div className="grid grid-cols-2 gap-2 mb-5">
             {METODOS_PAGO.map((m) => (
               <button
                 key={m.value}
                 onClick={() => setMetodoPago(m.value)}
                 className={`py-2 rounded-lg text-sm font-semibold border transition
-                  ${metodoPago === m.value ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                  ${metodoPago === m.value ? 'bg-cafe-800 text-white border-cafe-800' : 'border-stone-200 text-stone-600 hover:bg-stone-50'}`}
               >
                 {m.label}
               </button>
             ))}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-gray-700 mb-4 select-none font-semibold">
+          <label className="flex items-center gap-2 text-sm text-stone-700 mb-4 select-none font-semibold">
             <input
               type="checkbox"
               checked={facturar}
@@ -133,21 +133,21 @@ export default function CierreCuentaModal({ onConfirm, onCancel, submitting }) {
               </p>
             ) : (
               <>
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Comprobante</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Comprobante</p>
                 <div className="flex gap-2 mb-5">
                   {config.tipos_comprobante.map((t) => (
                     <button
                       key={t.tipo_comprobante}
                       onClick={() => setTipoComprobante(t.tipo_comprobante)}
                       className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition
-                        ${tipoComprobante === t.tipo_comprobante ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        ${tipoComprobante === t.tipo_comprobante ? 'bg-cafe-800 text-white border-cafe-800' : 'border-stone-200 text-stone-600 hover:bg-stone-50'}`}
                     >
                       {t.nombre}
                     </button>
                   ))}
                 </div>
 
-                <label className="flex items-center gap-2 text-sm text-gray-600 mb-3 select-none">
+                <label className="flex items-center gap-2 text-sm text-stone-600 mb-3 select-none">
                   <input
                     type="checkbox"
                     checked={consumidorFinal}
@@ -214,7 +214,7 @@ export default function CierreCuentaModal({ onConfirm, onCancel, submitting }) {
               {submitting ? '⏳ Procesando…' : puedeFacturar ? '💳 Cerrar y facturar' : '💳 Cerrar sin facturar'}
             </button>
             <button onClick={onCancel} disabled={submitting}
-              className="text-gray-400 text-sm py-1 hover:text-gray-600 transition">
+              className="text-stone-400 text-sm py-1 hover:text-stone-600 transition">
               Cancelar
             </button>
           </div>

@@ -27,7 +27,7 @@ export default function CambiarPasswordModal({ forzado, onDone, onClose, addToas
     }
   }
 
-  const campo = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
+  const campo = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500'
 
   return (
     <div
@@ -35,7 +35,7 @@ export default function CambiarPasswordModal({ forzado, onDone, onClose, addToas
       onClick={(e) => !forzado && e.target === e.currentTarget && onClose()}
     >
       <div className="animate-fade-in bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
-        <div className="bg-indigo-600 px-6 py-5 text-white flex justify-between items-center">
+        <div className="bg-cafe-800 px-6 py-5 text-white flex justify-between items-center">
           <h2 className="font-bold text-lg">{forzado ? 'Elegí tu contraseña' : 'Cambiar contraseña'}</h2>
           {!forzado && (
             <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20 transition text-xl leading-none">✕</button>
@@ -44,7 +44,7 @@ export default function CambiarPasswordModal({ forzado, onDone, onClose, addToas
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {forzado && (
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-stone-600">
               Tenés que cambiar la contraseña que te dieron antes de usar el sistema.
             </p>
           )}
@@ -53,28 +53,28 @@ export default function CambiarPasswordModal({ forzado, onDone, onClose, addToas
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña actual</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Contraseña actual</label>
             <input type="password" value={actual} onChange={(e) => setActual(e.target.value)} required autoFocus className={campo} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña nueva</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Contraseña nueva</label>
             <input type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} required minLength={8} className={campo} />
-            <p className="text-xs text-gray-400 mt-1">Mínimo 8 caracteres.</p>
+            <p className="text-xs text-stone-400 mt-1">Mínimo 8 caracteres.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Repetir la nueva</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Repetir la nueva</label>
             <input type="password" value={repetir} onChange={(e) => setRepetir(e.target.value)} required className={campo} />
           </div>
 
           <div className="flex gap-3 pt-2">
             {!forzado && (
               <button type="button" onClick={onClose}
-                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg font-medium text-sm hover:bg-gray-50 transition">
+                className="flex-1 border border-stone-300 text-stone-700 py-2 rounded-lg font-medium text-sm hover:bg-stone-50 transition">
                 Cancelar
               </button>
             )}
             <button type="submit" disabled={submitting}
-              className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+              className="flex-1 bg-cafe-800 text-white py-2 rounded-lg font-medium text-sm hover:bg-cafe-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
               {submitting && <Spinner size="sm" />}
               Guardar
             </button>

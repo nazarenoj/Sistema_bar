@@ -379,9 +379,9 @@ export default function MesaGrid({ addToast, confirm, productos }) {
       {/* Header */}
       <div className="flex flex-wrap gap-4 items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Panel de Mesas</h1>
+          <h1 className="sr-only">Panel de Mesas</h1>
           {!loading && (
-            <p className="text-sm text-gray-500 mt-0.5">
+            <p className="text-sm text-stone-500 mt-0.5">
               <span className="text-emerald-600 font-semibold">{libres} libres</span>
               {' · '}
               <span className="text-rose-600 font-semibold">{ocupadas} ocupadas</span>
@@ -393,17 +393,17 @@ export default function MesaGrid({ addToast, confirm, productos }) {
             <form onSubmit={handleCrear} className="flex gap-2">
               <input type="number" placeholder="Nº mesa" value={nroInput}
                 onChange={(e) => setNroInput(e.target.value)} min="1"
-                className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500" />
               <button type="submit" disabled={creando || !salonActivoId}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold
-                  hover:bg-indigo-700 transition disabled:opacity-50">
+                className="bg-cafe-800 text-white px-4 py-2 rounded-lg text-sm font-semibold
+                  hover:bg-cafe-700 transition disabled:opacity-50">
                 + Mesa
               </button>
             </form>
           )}
           <button onClick={toggleEditMode}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition
-              ${editMode ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>
+              ${editMode ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-cafe-800 text-white hover:bg-cafe-700'}`}>
             {editMode ? '✓ Terminar edición' : '✎ Editar salón'}
           </button>
         </div>
@@ -421,20 +421,20 @@ export default function MesaGrid({ addToast, confirm, productos }) {
 
       {editMode && salonActivoId && (
         <div className="flex flex-wrap gap-2 items-center mb-4 bg-white border rounded-xl p-3">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Agregar:</span>
+          <span className="text-xs font-bold text-stone-500 uppercase tracking-wide">Agregar:</span>
           {TIPOS_ESTRUCTURA.map((tipo) => (
             <button key={tipo} onClick={() => handleAgregarEstructura(tipo)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 capitalize">
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-stone-700 capitalize">
               + {tipo}
             </button>
           ))}
           <button onClick={handleAbrirColorSalon}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700">
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-stone-700">
             🎨 Fondo del salón
           </button>
           {puedeCombinar && (
             <button onClick={handleCombinar}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 ml-auto">
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cafe-800 text-white hover:bg-cafe-700 ml-auto">
               Combinar ({seleccion.size})
             </button>
           )}
@@ -444,7 +444,7 @@ export default function MesaGrid({ addToast, confirm, productos }) {
               🔓 Separar mesa {grupoASepararItem.mesa.numero_mesa_grupo}
             </button>
           )}
-          <span className="text-xs text-gray-400 ml-auto">
+          <span className="text-xs text-stone-400 ml-auto">
             Arrastrá para acomodar · arrastrá la esquina para redimensionar · click en mesas libres para seleccionarlas, combinarlas o separarlas
           </span>
         </div>
@@ -454,13 +454,13 @@ export default function MesaGrid({ addToast, confirm, productos }) {
       {loading ? (
         <div className="flex justify-center mt-20"><Spinner size="lg" /></div>
       ) : !salonActivoId ? (
-        <div className="text-center text-gray-400 mt-20">
+        <div className="text-center text-stone-400 mt-20">
           <p className="text-6xl mb-4">🏠</p>
           <p className="font-medium">No hay salones. Activá "Editar salón" para crear el primero.</p>
         </div>
       ) : (
         <div
-          className="relative w-full min-h-[560px] rounded-2xl border-2 border-dashed border-gray-200 overflow-auto"
+          className="relative w-full min-h-[560px] rounded-2xl border-2 border-dashed border-stone-200 overflow-auto"
           style={{
             backgroundColor: salonActivo?.color_fondo || '#f9fafb',
             backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.08) 1.5px, transparent 1.5px)',
@@ -500,7 +500,7 @@ export default function MesaGrid({ addToast, confirm, productos }) {
           ))}
 
           {mesas.length === 0 && estructuras.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+            <div className="absolute inset-0 flex items-center justify-center text-stone-400">
               <div className="text-center">
                 <p className="text-6xl mb-4">🍽️</p>
                 <p className="font-medium">Este salón está vacío.</p>

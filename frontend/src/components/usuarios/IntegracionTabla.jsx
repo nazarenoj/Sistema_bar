@@ -33,9 +33,9 @@ export default function IntegracionTabla({ addToast, usuario }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">Efectos entre módulos que no se pudieron aplicar. El documento de origen no se revierte.</p>
+        <p className="text-sm text-stone-500">Efectos entre módulos que no se pudieron aplicar. El documento de origen no se revierte.</p>
         {api.can(usuario, 'integracion.conciliar') && (
-          <button onClick={conciliar} className="px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 text-sm font-semibold hover:bg-indigo-50">Ejecutar conciliación</button>
+          <button onClick={conciliar} className="px-3 py-1.5 rounded-lg border border-arena-300 text-cafe-800 text-sm font-semibold hover:bg-marca-50">Ejecutar conciliación</button>
         )}
       </div>
       {descartando && (
@@ -43,25 +43,25 @@ export default function IntegracionTabla({ addToast, usuario }) {
           <span className="text-sm text-amber-800">Motivo del descarte:</span>
           <input value={motivo} onChange={(e) => setMotivo(e.target.value)} required minLength={3} autoFocus className="border rounded-lg px-3 py-1.5 text-sm flex-1 min-w-48" />
           <button className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-semibold">Descartar</button>
-          <button type="button" onClick={() => setDescartando(null)} className="text-sm text-gray-500">Cancelar</button>
+          <button type="button" onClick={() => setDescartando(null)} className="text-sm text-stone-500">Cancelar</button>
         </form>
       )}
       <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
-        {filas.length === 0 ? <div className="text-center py-16 text-gray-400">No hay pendientes.</div> : (
+        {filas.length === 0 ? <div className="text-center py-16 text-stone-400">No hay pendientes.</div> : (
           <table className="w-full text-sm">
-            <thead><tr className="bg-gray-50 border-b text-gray-500 text-xs uppercase tracking-wider">
+            <thead><tr className="bg-stone-50 border-b text-stone-500 text-xs uppercase tracking-wider">
               <th className="text-left px-4 py-3">Causa</th><th className="text-left px-4 py-3">Detalle</th>
               <th className="text-left px-4 py-3">Responsable</th><th className="text-left px-4 py-3">Plazo</th><th className="text-right px-4 py-3">Acciones</th>
             </tr></thead>
             <tbody className="divide-y">
               {filas.map(p => (
-                <tr key={p.id} className="align-top hover:bg-gray-50">
+                <tr key={p.id} className="align-top hover:bg-stone-50">
                   <td className="px-4 py-3 capitalize">{p.causa.replace('_', ' ')}</td>
-                  <td className="px-4 py-3 text-gray-600">{p.motivo}<div className="text-xs text-gray-400">{p.id_operacion}</div></td>
-                  <td className="px-4 py-3 text-gray-500">{p.modulo_responsable} · {p.rol_responsable}</td>
-                  <td className="px-4 py-3 text-gray-500">{hora(p.limite_ms)}{p.vencido ? <span className="ml-1 text-rose-600 font-semibold">Vencido</span> : null}</td>
+                  <td className="px-4 py-3 text-stone-600">{p.motivo}<div className="text-xs text-stone-400">{p.id_operacion}</div></td>
+                  <td className="px-4 py-3 text-stone-500">{p.modulo_responsable} · {p.rol_responsable}</td>
+                  <td className="px-4 py-3 text-stone-500">{hora(p.limite_ms)}{p.vencido ? <span className="ml-1 text-rose-600 font-semibold">Vencido</span> : null}</td>
                   <td className="px-4 py-3"><div className="flex gap-2 justify-end">
-                    {p.mensaje_id && <button onClick={() => reintentar(p)} className={`${boton} border-indigo-200 text-indigo-600 hover:bg-indigo-50`}>Reintentar</button>}
+                    {p.mensaje_id && <button onClick={() => reintentar(p)} className={`${boton} border-arena-300 text-cafe-800 hover:bg-marca-50`}>Reintentar</button>}
                     <button onClick={() => setDescartando(p)} className={`${boton} border-rose-200 text-rose-600 hover:bg-rose-50`}>Descartar</button>
                   </div></td>
                 </tr>

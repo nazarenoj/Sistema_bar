@@ -45,13 +45,13 @@ export default function GraficosVentas({ addToast }) {
     <div className="bg-white rounded-2xl shadow-sm border p-5 mb-4">
       <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
         <div>
-          <h2 className="font-bold text-gray-800 mb-1">
+          <h2 className="font-bold text-stone-800 mb-1">
             Ventas {tipo === 'dia' ? 'por hora' : 'por día'}
           </h2>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-stone-400">
             {rango.desde === rango.hasta ? rango.desde : `${rango.desde} a ${rango.hasta}`}
             {' · '}Total del período:{' '}
-            <span className="font-semibold text-gray-600">${totalPeriodo.toFixed(2)}</span>
+            <span className="font-semibold text-stone-600">${totalPeriodo.toFixed(2)}</span>
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-end">
@@ -72,7 +72,7 @@ export default function GraficosVentas({ addToast }) {
             <button
               onClick={() => setModo('monto')}
               className={`px-3 py-1.5 font-semibold transition ${
-                modo === 'monto' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                modo === 'monto' ? 'bg-cafe-800 text-white' : 'bg-white text-stone-600 hover:bg-stone-50'
               }`}
             >
               $ Monto
@@ -80,7 +80,7 @@ export default function GraficosVentas({ addToast }) {
             <button
               onClick={() => setModo('porcentaje')}
               className={`px-3 py-1.5 font-semibold transition ${
-                modo === 'porcentaje' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                modo === 'porcentaje' ? 'bg-cafe-800 text-white' : 'bg-white text-stone-600 hover:bg-stone-50'
               }`}
             >
               % Porcentaje
@@ -92,7 +92,7 @@ export default function GraficosVentas({ addToast }) {
       {loading ? (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
       ) : totalPeriodo === 0 ? (
-        <div className="text-center py-12 text-gray-400 text-sm">No hay ventas registradas en este período.</div>
+        <div className="text-center py-12 text-stone-400 text-sm">No hay ventas registradas en este período.</div>
       ) : (
         <div className="max-h-96 overflow-y-auto pr-1 space-y-1.5">
           {datos.map((d) => {
@@ -100,14 +100,14 @@ export default function GraficosVentas({ addToast }) {
             const anchoPct = valor > 0 ? Math.max((valor / max) * 100, 1.5) : 0
             return (
               <div key={d.clave} className="flex items-center gap-3">
-                <div className="w-12 shrink-0 text-xs text-gray-500 text-right">{d.etiqueta}</div>
-                <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                <div className="w-12 shrink-0 text-xs text-stone-500 text-right">{d.etiqueta}</div>
+                <div className="flex-1 bg-stone-100 rounded-full h-4 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-indigo-500"
+                    className="h-full rounded-full bg-cafe-700"
                     style={{ width: `${anchoPct}%` }}
                   />
                 </div>
-                <div className="w-24 shrink-0 text-xs text-gray-600 font-semibold text-right">
+                <div className="w-24 shrink-0 text-xs text-stone-600 font-semibold text-right">
                   {modo === 'monto' ? `$${valor.toFixed(2)}` : `${valor}%`}
                 </div>
               </div>

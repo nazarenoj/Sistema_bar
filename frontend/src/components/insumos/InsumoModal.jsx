@@ -72,7 +72,7 @@ export default function InsumoModal({ insumo, onClose, onSaved, addToast }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="animate-fade-in bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="bg-indigo-600 px-6 py-5 text-white flex justify-between items-center">
+        <div className="bg-cafe-800 px-6 py-5 text-white flex justify-between items-center">
           <h2 className="font-bold text-lg">{editing ? 'Editar Insumo' : 'Nuevo Insumo'}</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20 transition text-xl leading-none">✕</button>
         </div>
@@ -85,50 +85,50 @@ export default function InsumoModal({ insumo, onClose, onSaved, addToast }) {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Nombre *</label>
             <input value={form.nombre} onChange={set('nombre')} required
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Unidad *</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Unidad *</label>
               <input value={form.unidad} onChange={set('unidad')} placeholder="kg, litros, unidades…" required
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Costo unitario</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Costo unitario</label>
               <input type="number" step="0.01" min="0" value={form.costo_unitario} onChange={set('costo_unitario')}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500" />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Stock</label>
             <input type="number" min="0" step="0.001" value={form.stock} onChange={set('stock')}
               disabled={editing}
               title={editing ? 'El stock se descuenta automáticamente al vender productos que usan este insumo.' : undefined}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400
-                disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" />
-            <p className="text-xs text-gray-400 mt-1">
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500
+                disabled:bg-stone-100 disabled:text-stone-400 disabled:cursor-not-allowed" />
+            <p className="text-xs text-stone-400 mt-1">
               {editing ? 'Se actualiza solo al venderse productos que lo usan.' : 'Cantidad inicial en existencia.'}
             </p>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-stone-700">
             <input type="checkbox" checked={form.disponible}
               onChange={(e) => setForm(f => ({ ...f, disponible: e.target.checked }))}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" />
+              className="rounded border-stone-300 text-cafe-800 focus:ring-marca-500" />
             Disponible
           </label>
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg font-medium text-sm hover:bg-gray-50 transition">
+              className="flex-1 border border-stone-300 text-stone-700 py-2 rounded-lg font-medium text-sm hover:bg-stone-50 transition">
               Cancelar
             </button>
             <button type="submit" disabled={submitting}
-              className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+              className="flex-1 bg-cafe-800 text-white py-2 rounded-lg font-medium text-sm hover:bg-cafe-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
               {submitting && <Spinner size="sm" />}
               {editing ? 'Guardar cambios' : 'Crear insumo'}
             </button>

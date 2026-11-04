@@ -3,8 +3,19 @@
 @tailwind utilities;
 
 @layer base {
-  body { @apply antialiased bg-gray-50; }
+  body { @apply antialiased bg-crema; }
   ::-webkit-scrollbar        { @apply w-1.5; }
   ::-webkit-scrollbar-track  { @apply bg-transparent; }
-  ::-webkit-scrollbar-thumb  { @apply bg-gray-300 rounded-full; }
+  ::-webkit-scrollbar-thumb  { @apply bg-stone-300 rounded-full; }
+}
+
+@layer components {
+  .campo { @apply border border-stone-300 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:border-cafe-700; }
+  .paginador { @apply px-3 py-1 border border-stone-300 bg-white text-stone-700 text-sm disabled:text-stone-300 enabled:hover:bg-stone-100; }
+  .btn { @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white rounded-lg transition; }
+  .btn-azul { @apply bg-cafe-800 hover:bg-cafe-700; }
+  .btn-verde { @apply bg-marca-600 hover:bg-marca-700; }
+  .btn-rojo { @apply bg-rose-400 hover:bg-rose-500; }
+  .btn-chico { @apply px-2 py-0.5 text-xs; }
+  .etiqueta { @apply inline-block px-2 py-0.5 text-xs font-semibold text-white rounded-md; }
 }

@@ -10,7 +10,7 @@ const TIPOS = {
   otro: 'Otro',
 }
 const boton = 'px-3 py-1 rounded-lg border text-xs font-semibold transition'
-const campo = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
+const campo = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500'
 
 const haceCuanto = (seg) => {
   if (seg === null || seg === undefined) return 'nunca'
@@ -60,12 +60,12 @@ export default function TerminalTabla({ addToast }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-stone-500">
           Cada puesto tiene un código. Se escribe una vez en la pantalla de ingreso del equipo (&ldquo;Configurar terminal&rdquo;).
         </p>
         <button
           onClick={() => setModal(null)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition flex items-center gap-2 shrink-0"
+          className="bg-cafe-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-cafe-700 transition flex items-center gap-2 shrink-0"
         >
           <span className="text-lg leading-none">+</span> Nueva terminal
         </button>
@@ -75,12 +75,12 @@ export default function TerminalTabla({ addToast }) {
         {loading ? (
           <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : terminales.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">No hay terminales registradas.</div>
+          <div className="text-center py-16 text-stone-400">No hay terminales registradas.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b text-gray-500 text-xs uppercase tracking-wider">
+                <tr className="bg-stone-50 border-b text-stone-500 text-xs uppercase tracking-wider">
                   <th className="text-left px-5 py-3">Nombre</th>
                   <th className="text-left px-5 py-3">Tipo</th>
                   <th className="text-left px-5 py-3">Código</th>
@@ -92,26 +92,26 @@ export default function TerminalTabla({ addToast }) {
               </thead>
               <tbody className="divide-y">
                 {terminales.map(t => (
-                  <tr key={t.id} className={`hover:bg-gray-50 transition-colors ${t.activa ? '' : 'opacity-50'}`}>
-                    <td className="px-5 py-3.5 font-semibold text-gray-800">
-                      {t.nombre}{t.codigo === esteEquipo && <span className="ml-2 text-xs text-indigo-500">(este equipo)</span>}
+                  <tr key={t.id} className={`hover:bg-stone-50 transition-colors ${t.activa ? '' : 'opacity-50'}`}>
+                    <td className="px-5 py-3.5 font-semibold text-stone-800">
+                      {t.nombre}{t.codigo === esteEquipo && <span className="ml-2 text-xs text-cafe-800">(este equipo)</span>}
                     </td>
-                    <td className="px-5 py-3.5 text-gray-500">{TIPOS[t.tipo]}</td>
-                    <td className="px-5 py-3.5 font-mono tracking-widest text-gray-700">{t.codigo}</td>
+                    <td className="px-5 py-3.5 text-stone-500">{TIPOS[t.tipo]}</td>
+                    <td className="px-5 py-3.5 font-mono tracking-widest text-stone-700">{t.codigo}</td>
                     <td className="px-5 py-3.5 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold
                         ${t.estado_conexion === 'en_linea' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'}`}>
                         {t.estado_conexion === 'en_linea' ? 'En línea' : 'Sin conexión'}
                       </span>
-                      <div className="text-xs text-gray-400 mt-0.5">{haceCuanto(t.segundos_sin_contacto)}</div>
+                      <div className="text-xs text-stone-400 mt-0.5">{haceCuanto(t.segundos_sin_contacto)}</div>
                     </td>
-                    <td className="px-5 py-3.5 text-center text-gray-600">{t.sesiones_abiertas}</td>
-                    <td className="px-5 py-3.5 text-center text-gray-500">{t.inactividad_min ? `${t.inactividad_min} min` : 'Según rol'}</td>
+                    <td className="px-5 py-3.5 text-center text-stone-600">{t.sesiones_abiertas}</td>
+                    <td className="px-5 py-3.5 text-center text-stone-500">{t.inactividad_min ? `${t.inactividad_min} min` : 'Según rol'}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex gap-2 justify-end flex-wrap">
                         <button onClick={() => usarEnEsteEquipo(t)} disabled={!t.activa}
-                          className={`${boton} border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40`}>Usar en este equipo</button>
-                        <button onClick={() => setModal(t)} className={`${boton} border-indigo-200 text-indigo-600 hover:bg-indigo-50`}>Editar</button>
+                          className={`${boton} border-stone-300 text-stone-600 hover:bg-stone-50 disabled:opacity-40`}>Usar en este equipo</button>
+                        <button onClick={() => setModal(t)} className={`${boton} border-arena-300 text-cafe-800 hover:bg-marca-50`}>Editar</button>
                         <button onClick={() => alternarActiva(t)}
                           className={`${boton} ${t.activa ? 'border-rose-200 text-rose-600 hover:bg-rose-50' : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'}`}>
                           {t.activa ? 'Desactivar' : 'Activar'}
@@ -176,7 +176,7 @@ function TerminalModal({ terminal, onClose, onSaved, addToast }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="animate-fade-in bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="bg-indigo-600 px-6 py-5 text-white flex justify-between items-center">
+        <div className="bg-cafe-800 px-6 py-5 text-white flex justify-between items-center">
           <h2 className="font-bold text-lg">{editing ? 'Editar terminal' : 'Nueva terminal'}</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20 transition text-xl leading-none">✕</button>
         </div>
@@ -185,30 +185,30 @@ function TerminalModal({ terminal, onClose, onSaved, addToast }) {
             <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-2.5 rounded-lg">{error}</div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Nombre *</label>
             <input value={form.nombre} onChange={set('nombre')} required maxLength={60} placeholder="Caja 1, Barra, Tablet de salón…" className={campo} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Tipo</label>
               <select value={form.tipo} onChange={set('tipo')} className={campo}>
                 {Object.entries(TIPOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Inactividad (min)</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Inactividad (min)</label>
               <input type="number" min="1" max="1440" value={form.inactividad_min} onChange={set('inactividad_min')}
                 placeholder="Según rol" className={campo} />
             </div>
           </div>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-stone-400">
             Minutos sin actividad después de los cuales se cierra la sesión en este puesto. Vacío = el valor del rol (10 min por defecto).
           </p>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg font-medium text-sm hover:bg-gray-50 transition">Cancelar</button>
+              className="flex-1 border border-stone-300 text-stone-700 py-2 rounded-lg font-medium text-sm hover:bg-stone-50 transition">Cancelar</button>
             <button type="submit" disabled={submitting}
-              className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+              className="flex-1 bg-cafe-800 text-white py-2 rounded-lg font-medium text-sm hover:bg-cafe-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
               {submitting && <Spinner size="sm" />}
               {editing ? 'Guardar cambios' : 'Crear terminal'}
             </button>

@@ -8,8 +8,8 @@ export default function SalonSelector({ salones, salonActivoId, onSelect, editMo
             onClick={() => onSelect(salon.id)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition
               ${salon.id === salonActivoId
-                ? 'bg-indigo-600 text-white shadow'
-                : 'bg-white text-gray-600 border hover:bg-gray-50'}`}
+                ? 'bg-cafe-800 text-white shadow'
+                : 'bg-white text-stone-600 border hover:bg-stone-50'}`}
           >
             {salon.nombre}
           </button>
@@ -19,7 +19,7 @@ export default function SalonSelector({ salones, salonActivoId, onSelect, editMo
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); onRename(salon) }}
                 title="Renombrar salón"
-                className="w-5 h-5 rounded-full bg-slate-600 text-white text-[10px] flex items-center justify-center"
+                className="w-5 h-5 rounded-full bg-cafe-700 text-white text-[10px] flex items-center justify-center"
               >
                 ✎
               </button>
@@ -38,8 +38,8 @@ export default function SalonSelector({ salones, salonActivoId, onSelect, editMo
       {editMode && (
         <button
           onClick={onCreate}
-          className="px-3 py-2 rounded-lg text-sm font-semibold border-2 border-dashed border-indigo-300
-            text-indigo-600 hover:bg-indigo-50 transition"
+          className="px-3 py-2 rounded-lg text-sm font-semibold border-2 border-dashed border-arena-300
+            text-cafe-800 hover:bg-marca-50 transition"
         >
           + Salón
         </button>

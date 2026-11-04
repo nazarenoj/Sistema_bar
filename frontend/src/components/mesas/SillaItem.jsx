@@ -79,8 +79,8 @@ export default function SillaItem({ silla, numero, editMode, tamanoMesa, onMove,
       <span style={{ fontSize: emojiSize }} className="block leading-none drop-shadow">🪑</span>
       <span
         style={{ width: badgeSize, height: badgeSize, fontSize: badgeFont }}
-        className="absolute -bottom-1 -right-1 bg-white text-gray-800 font-bold
-          rounded-full flex items-center justify-center border border-gray-300 pointer-events-none"
+        className="absolute -bottom-1 -right-1 bg-white text-stone-800 font-bold
+          rounded-full flex items-center justify-center border border-stone-300 pointer-events-none"
       >
         {numero}
       </span>

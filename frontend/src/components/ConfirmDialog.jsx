@@ -30,13 +30,13 @@ export default function ConfirmDialog({ state, onResolve }) {
     >
       <div className="animate-fade-in bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
         <div className="px-6 pt-6 pb-2">
-          <h2 className="font-bold text-lg text-gray-900">{title}</h2>
-          <p className="mt-2 text-sm text-gray-600">{message}</p>
+          <h2 className="font-bold text-lg text-stone-900">{title}</h2>
+          <p className="mt-2 text-sm text-stone-600">{message}</p>
         </div>
         <div className="flex gap-3 px-6 pb-6 pt-4">
           <button
             onClick={() => onResolve(false)}
-            className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg font-medium text-sm hover:bg-gray-50 transition"
+            className="flex-1 border border-stone-300 text-stone-700 py-2 rounded-lg font-medium text-sm hover:bg-stone-50 transition"
           >
             {cancelLabel}
           </button>
@@ -44,7 +44,7 @@ export default function ConfirmDialog({ state, onResolve }) {
             onClick={() => onResolve(true)}
             autoFocus
             className={`flex-1 py-2 rounded-lg font-medium text-sm text-white transition ${
-              danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
+              danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-cafe-800 hover:bg-cafe-700'
             }`}
           >
             {confirmLabel}

@@ -31,10 +31,10 @@ export default function Login({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm">
-        <p className="text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1">Sistema</p>
-        <h1 className="text-2xl font-black text-gray-800 mb-6">Chapola</h1>
+        <p className="text-xs font-semibold text-cafe-800 uppercase tracking-widest mb-1">Sistema</p>
+        <h1 className="text-2xl font-black text-stone-800 mb-6">Chapola</h1>
 
         {aviso && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-2.5 rounded-lg mb-4">
@@ -42,7 +42,7 @@ export default function Login({ onLogin }) {
           </div>
         )}
 
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+        <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">
           Usuario
         </label>
         <input
@@ -51,10 +51,10 @@ export default function Login({ onLogin }) {
           onChange={(e) => setUsername(e.target.value)}
           autoFocus
           required
-          className="w-full border rounded-lg px-3 py-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="w-full border rounded-lg px-3 py-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500"
         />
 
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+        <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">
           Contraseña
         </label>
         <input
@@ -62,7 +62,7 @@ export default function Login({ onLogin }) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full border rounded-lg px-3 py-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="w-full border rounded-lg px-3 py-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500"
         />
 
         {error && <p className="text-rose-600 text-sm mb-4">{error}</p>}
@@ -70,7 +70,7 @@ export default function Login({ onLogin }) {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition disabled:opacity-50"
+          className="w-full bg-cafe-800 text-white py-2.5 rounded-xl font-bold hover:bg-cafe-700 transition disabled:opacity-50"
         >
           {submitting ? 'Ingresando…' : 'Ingresar'}
         </button>
@@ -78,7 +78,7 @@ export default function Login({ onLogin }) {
         <div className="mt-5 text-center">
           {verTerminal || terminal || instancia ? (
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 text-left">
+              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1 text-left">
                 Código de esta terminal
               </label>
               <input
@@ -87,9 +87,9 @@ export default function Login({ onLogin }) {
                 onChange={(e) => setTerminal(e.target.value.toUpperCase())}
                 maxLength={8}
                 placeholder="Lo da el Administrador"
-                className="w-full border rounded-lg px-3 py-2 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="w-full border rounded-lg px-3 py-2 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-marca-500"
               />
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 mt-3 text-left">
+              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1 mt-3 text-left">
                 Cliente (solo si el Administrador lo indica)
               </label>
               <input
@@ -97,11 +97,11 @@ export default function Login({ onLogin }) {
                 value={instancia}
                 onChange={(e) => setInstancia(e.target.value.toUpperCase())}
                 maxLength={10}
-                className="w-full border rounded-lg px-3 py-2 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="w-full border rounded-lg px-3 py-2 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-marca-500"
               />
             </div>
           ) : (
-            <button type="button" onClick={() => setVerTerminal(true)} className="text-xs text-gray-400 hover:text-gray-600">
+            <button type="button" onClick={() => setVerTerminal(true)} className="text-xs text-stone-400 hover:text-stone-600">
               Configurar terminal
             </button>
           )}

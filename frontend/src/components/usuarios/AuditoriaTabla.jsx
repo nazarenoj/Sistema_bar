@@ -3,7 +3,7 @@ import * as api from '../../api'
 import Spinner from '../Spinner'
 
 const hora = (ms) => new Date(Number(ms)).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'medium' })
-const campo = 'border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
+const campo = 'border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500'
 
 export default function AuditoriaTabla({ addToast }) {
   const [filas, setFilas] = useState([])
@@ -42,7 +42,7 @@ export default function AuditoriaTabla({ addToast }) {
           <option value="">Todos los resultados</option>
           <option value="ok">Correctos</option><option value="denegado">Denegados</option><option value="error">Con error</option>
         </select>
-        <button onClick={verificar} className="px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 text-sm font-semibold hover:bg-indigo-50">Verificar integridad</button>
+        <button onClick={verificar} className="px-3 py-1.5 rounded-lg border border-arena-300 text-cafe-800 text-sm font-semibold hover:bg-marca-50">Verificar integridad</button>
         {integridad && (
           <span className={`text-sm font-semibold ${integridad.ok ? 'text-emerald-600' : 'text-rose-600'}`}>
             {integridad.ok ? `Cadena íntegra (${integridad.total} eventos)` : `Cadena rota en el evento ${integridad.primer_roto}`}
@@ -52,20 +52,20 @@ export default function AuditoriaTabla({ addToast }) {
       <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
         {loading ? <div className="flex justify-center py-16"><Spinner size="lg" /></div> : (
           <table className="w-full text-sm">
-            <thead><tr className="bg-gray-50 border-b text-gray-500 text-xs uppercase tracking-wider">
+            <thead><tr className="bg-stone-50 border-b text-stone-500 text-xs uppercase tracking-wider">
               <th className="text-left px-4 py-3">Fecha</th><th className="text-left px-4 py-3">Usuario</th>
               <th className="text-left px-4 py-3">Acción</th><th className="text-left px-4 py-3">Detalle</th>
             </tr></thead>
             <tbody className="divide-y">
               {filas.map(f => (
-                <tr key={f.id} className="hover:bg-gray-50 align-top">
-                  <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{hora(f.ts_ms)}</td>
-                  <td className="px-4 py-2.5 text-gray-700">{f.username || '—'}</td>
+                <tr key={f.id} className="hover:bg-stone-50 align-top">
+                  <td className="px-4 py-2.5 text-stone-500 whitespace-nowrap">{hora(f.ts_ms)}</td>
+                  <td className="px-4 py-2.5 text-stone-700">{f.username || '—'}</td>
                   <td className="px-4 py-2.5">
-                    <span className={f.resultado === 'ok' ? 'text-gray-800' : 'text-rose-600 font-semibold'}>{f.modulo}.{f.accion}</span>
-                    {f.entidad && <div className="text-xs text-gray-400">{f.entidad} {f.entidad_id}</div>}
+                    <span className={f.resultado === 'ok' ? 'text-stone-800' : 'text-rose-600 font-semibold'}>{f.modulo}.{f.accion}</span>
+                    {f.entidad && <div className="text-xs text-stone-400">{f.entidad} {f.entidad_id}</div>}
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500 max-w-md break-words">
+                  <td className="px-4 py-2.5 text-xs text-stone-500 max-w-md break-words">
                     {f.detalle}{f.valor_anterior && <div>Antes: {f.valor_anterior}</div>}{f.valor_nuevo && <div>Después: {f.valor_nuevo}</div>}
                   </td>
                 </tr>
@@ -74,7 +74,7 @@ export default function AuditoriaTabla({ addToast }) {
           </table>
         )}
       </div>
-      {hayMas && <button onClick={() => cargar(true)} className="mt-4 text-sm text-indigo-600 font-semibold">Ver más</button>}
+      {hayMas && <button onClick={() => cargar(true)} className="mt-4 text-sm text-cafe-800 font-semibold">Ver más</button>}
     </div>
   )
 }

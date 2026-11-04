@@ -78,7 +78,7 @@ export default function BuscadorInsumo({ insumos, onAdd, disabled }) {
           onChange={handleQueryChange}
           onFocus={() => setOpen(true)}
           className="w-full border rounded-lg px-3 py-2 text-sm bg-white
-            focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            focus:outline-none focus:ring-2 focus:ring-marca-500"
         />
       </div>
 
@@ -88,9 +88,9 @@ export default function BuscadorInsumo({ insumos, onAdd, disabled }) {
           {coincidencias.map(i => (
             <li key={i.id}>
               <button type="button" onClick={() => handleSelect(i)}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex justify-between gap-2">
-                <span className="font-medium text-gray-800">{i.nombre}</span>
-                <span className="text-gray-500 shrink-0">{i.unidad}</span>
+                className="w-full text-left px-3 py-2 text-sm hover:bg-marca-50 flex justify-between gap-2">
+                <span className="font-medium text-stone-800">{i.nombre}</span>
+                <span className="text-stone-500 shrink-0">{i.unidad}</span>
               </button>
             </li>
           ))}
@@ -99,7 +99,7 @@ export default function BuscadorInsumo({ insumos, onAdd, disabled }) {
       )}
       {open && dropdownStyle && texto !== '' && coincidencias.length === 0 && createPortal(
         <div ref={dropdownRef} style={dropdownStyle}
-          className="z-[100] bg-white border rounded-lg shadow-lg px-3 py-2 text-sm text-gray-400">
+          className="z-[100] bg-white border rounded-lg shadow-lg px-3 py-2 text-sm text-stone-400">
           Sin coincidencias
         </div>,
         document.body
@@ -110,10 +110,10 @@ export default function BuscadorInsumo({ insumos, onAdd, disabled }) {
         placeholder="Cant."
         onChange={e => setCantidad(e.target.value)}
         className="w-20 border rounded-lg px-2 py-2 text-sm text-center
-          focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          focus:outline-none focus:ring-2 focus:ring-marca-500" />
       <button type="submit" disabled={disabled || !seleccionado || cantidad === ''}
-        className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold
-          hover:bg-indigo-700 transition disabled:opacity-50">
+        className="bg-cafe-800 text-white px-4 py-2 rounded-lg text-sm font-semibold
+          hover:bg-cafe-700 transition disabled:opacity-50">
         Añadir
       </button>
     </form>

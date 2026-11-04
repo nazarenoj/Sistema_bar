@@ -27,7 +27,7 @@ export default function DetallePedidoModal({ pedidoId, onClose, addToast }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="animate-fade-in bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-        <div className="bg-indigo-600 px-6 py-5 text-white flex justify-between items-center">
+        <div className="bg-cafe-800 px-6 py-5 text-white flex justify-between items-center">
           <h2 className="font-bold text-lg">
             {data ? `Mesa ${data.pedido.numero_mesa ?? ''} · Pedido #${data.pedido.id}` : 'Detalle del pedido'}
           </h2>
@@ -40,29 +40,29 @@ export default function DetallePedidoModal({ pedidoId, onClose, addToast }) {
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
-                <div className="bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-gray-400 uppercase tracking-wider mb-0.5">Apertura mesa</p>
-                  <p className="text-gray-700 font-medium">{formatHora(data.pedido.sesion_apertura)}</p>
+                <div className="bg-stone-50 rounded-lg px-3 py-2">
+                  <p className="text-stone-400 uppercase tracking-wider mb-0.5">Apertura mesa</p>
+                  <p className="text-stone-700 font-medium">{formatHora(data.pedido.sesion_apertura)}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-gray-400 uppercase tracking-wider mb-0.5">Apertura silla</p>
-                  <p className="text-gray-700 font-medium">{formatHora(data.pedido.fecha_creacion)}</p>
+                <div className="bg-stone-50 rounded-lg px-3 py-2">
+                  <p className="text-stone-400 uppercase tracking-wider mb-0.5">Apertura silla</p>
+                  <p className="text-stone-700 font-medium">{formatHora(data.pedido.fecha_creacion)}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-gray-400 uppercase tracking-wider mb-0.5">Cierre silla</p>
-                  <p className="text-gray-700 font-medium">{formatHora(data.pedido.fecha_cierre)}</p>
+                <div className="bg-stone-50 rounded-lg px-3 py-2">
+                  <p className="text-stone-400 uppercase tracking-wider mb-0.5">Cierre silla</p>
+                  <p className="text-stone-700 font-medium">{formatHora(data.pedido.fecha_cierre)}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-gray-400 uppercase tracking-wider mb-0.5">Cierre mesa</p>
-                  <p className="text-gray-700 font-medium">{formatHora(data.pedido.hora_cierre_mesa)}</p>
+                <div className="bg-stone-50 rounded-lg px-3 py-2">
+                  <p className="text-stone-400 uppercase tracking-wider mb-0.5">Cierre mesa</p>
+                  <p className="text-stone-700 font-medium">{formatHora(data.pedido.hora_cierre_mesa)}</p>
                 </div>
               </div>
 
               {data.pedido.factura_id && (
-                <div className="bg-gray-50 rounded-xl px-4 py-3 mb-4 text-xs space-y-1">
+                <div className="bg-stone-50 rounded-xl px-4 py-3 mb-4 text-xs space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Comprobante</span>
-                    <span className="font-semibold text-gray-700">
+                    <span className="text-stone-500">Comprobante</span>
+                    <span className="font-semibold text-stone-700">
                       {TIPO_COMPROBANTE_LABEL[data.pedido.tipo_comprobante] || '—'}
                       {data.pedido.factura_numero
                         ? ` · ${String(data.pedido.factura_punto_venta).padStart(4, '0')}-${String(data.pedido.factura_numero).padStart(8, '0')}`
@@ -70,19 +70,19 @@ export default function DetallePedidoModal({ pedidoId, onClose, addToast }) {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Estado</span>
-                    <span className="font-semibold text-gray-700 capitalize">{data.pedido.factura_estado}</span>
+                    <span className="text-stone-500">Estado</span>
+                    <span className="font-semibold text-stone-700 capitalize">{data.pedido.factura_estado}</span>
                   </div>
                   {data.pedido.cae && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">CAE</span>
-                      <span className="font-mono text-gray-700">{data.pedido.cae}</span>
+                      <span className="text-stone-500">CAE</span>
+                      <span className="font-mono text-stone-700">{data.pedido.cae}</span>
                     </div>
                   )}
                   {data.pedido.metodo_pago && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Método de pago</span>
-                      <span className="font-semibold text-gray-700 capitalize">
+                      <span className="text-stone-500">Método de pago</span>
+                      <span className="font-semibold text-stone-700 capitalize">
                         {data.pedido.metodo_pago.replace('_', ' ')}
                       </span>
                     </div>
@@ -91,12 +91,12 @@ export default function DetallePedidoModal({ pedidoId, onClose, addToast }) {
               )}
 
               {data.items.length === 0 ? (
-                <p className="text-center text-gray-400 py-6">Este pedido no tiene productos.</p>
+                <p className="text-center text-stone-400 py-6">Este pedido no tiene productos.</p>
               ) : (
                 <div className="border rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50 border-b text-gray-500 text-xs uppercase tracking-wider">
+                      <tr className="bg-stone-50 border-b text-stone-500 text-xs uppercase tracking-wider">
                         <th className="text-left px-4 py-2">Producto</th>
                         <th className="text-right px-4 py-2">Cant.</th>
                         <th className="text-right px-4 py-2">P. Unit.</th>
@@ -107,10 +107,10 @@ export default function DetallePedidoModal({ pedidoId, onClose, addToast }) {
                     <tbody className="divide-y">
                       {data.items.map(item => (
                         <tr key={item.id}>
-                          <td className="px-4 py-2.5 font-medium text-gray-800">{item.nombre}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-600">{item.cantidad}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-600">${Number(item.precio_unitario).toFixed(2)}</td>
-                          <td className="px-4 py-2.5 text-right font-semibold text-gray-800">${Number(item.subtotal).toFixed(2)}</td>
+                          <td className="px-4 py-2.5 font-medium text-stone-800">{item.nombre}</td>
+                          <td className="px-4 py-2.5 text-right text-stone-600">{item.cantidad}</td>
+                          <td className="px-4 py-2.5 text-right text-stone-600">${Number(item.precio_unitario).toFixed(2)}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-stone-800">${Number(item.subtotal).toFixed(2)}</td>
                           <td className="px-4 py-2.5 text-center">{item.entregado ? '✅' : '—'}</td>
                         </tr>
                       ))}
@@ -120,8 +120,8 @@ export default function DetallePedidoModal({ pedidoId, onClose, addToast }) {
               )}
 
               <div className="flex justify-between items-center pt-5 mt-2 border-t">
-                <span className="text-sm font-semibold text-gray-500">Total</span>
-                <span className="text-xl font-bold text-gray-800">${Number(data.pedido.total).toFixed(2)}</span>
+                <span className="text-sm font-semibold text-stone-500">Total</span>
+                <span className="text-xl font-bold text-stone-800">${Number(data.pedido.total).toFixed(2)}</span>
               </div>
             </>
           )}

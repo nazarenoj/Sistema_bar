@@ -328,7 +328,7 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
           {isLibre && (
             <div className="text-center py-10">
               <div className="text-6xl mb-4">🍽️</div>
-              <p className="text-gray-500 mb-8 text-sm">Esta mesa está libre y disponible.</p>
+              <p className="text-stone-500 mb-8 text-sm">Esta mesa está libre y disponible.</p>
               <button onClick={handleAbrirPedido} disabled={submitting}
                 className="bg-emerald-500 text-white px-10 py-3 rounded-xl font-bold text-lg
                   hover:bg-emerald-600 active:scale-95 transition-all disabled:opacity-50">
@@ -347,12 +347,12 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
                   <div className="space-y-4 mb-4">
                     {cuentaData.pedidos.map((pedido, idx) => (
                       <div key={pedido.id} className="rounded-xl border overflow-hidden">
-                        <div className="bg-gray-50 px-4 py-2 flex justify-between items-center text-xs">
-                          <span className="font-bold text-gray-500 uppercase tracking-wider">
+                        <div className="bg-stone-50 px-4 py-2 flex justify-between items-center text-xs">
+                          <span className="font-bold text-stone-500 uppercase tracking-wider">
                             Silla {idx + 1}
                           </span>
                           <div className="flex items-center gap-3">
-                            <label className="flex items-center gap-1.5 text-gray-500 cursor-pointer select-none">
+                            <label className="flex items-center gap-1.5 text-stone-500 cursor-pointer select-none">
                               <input
                                 type="checkbox"
                                 checked={!!pedido.entregado}
@@ -361,18 +361,18 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
                               />
                               Entregado
                             </label>
-                            <span className="text-gray-400">{formatHora(pedido.fecha_creacion)}</span>
+                            <span className="text-stone-400">{formatHora(pedido.fecha_creacion)}</span>
                           </div>
                         </div>
 
                         {pedido.items.length === 0 ? (
-                          <p className="text-gray-400 text-center py-4 text-sm">Sin productos aún.</p>
+                          <p className="text-stone-400 text-center py-4 text-sm">Sin productos aún.</p>
                         ) : (
                           <div className="max-h-40 overflow-y-auto">
                             <table className="w-full text-sm">
                               <tbody className="divide-y">
                                 {pedido.items.map(item => (
-                                  <tr key={item.id} className="hover:bg-gray-50">
+                                  <tr key={item.id} className="hover:bg-stone-50">
                                     <td className="text-center pl-3 pr-1 py-2">
                                       <input
                                         type="checkbox"
@@ -382,8 +382,8 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
                                         onChange={(e) => handleToggleItemEntregado(pedido.id, item.id, e.target.checked)}
                                       />
                                     </td>
-                                    <td className="px-3 py-2 font-medium text-gray-800">{item.nombre}</td>
-                                    <td className="text-center px-3 py-2 text-gray-500">×{item.cantidad}</td>
+                                    <td className="px-3 py-2 font-medium text-stone-800">{item.nombre}</td>
+                                    <td className="text-center px-3 py-2 text-stone-500">×{item.cantidad}</td>
                                     <td className="text-right px-4 py-2 font-semibold">
                                       ${Number(item.subtotal).toFixed(2)}
                                     </td>
@@ -392,7 +392,7 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
                                         onClick={() => handleEliminarItem(pedido.id, item.id)}
                                         disabled={submitting}
                                         title="Quitar producto"
-                                        className="text-gray-300 hover:text-rose-600 transition disabled:opacity-30 disabled:cursor-not-allowed">
+                                        className="text-stone-300 hover:text-rose-600 transition disabled:opacity-30 disabled:cursor-not-allowed">
                                         ✕
                                       </button>
                                     </td>
@@ -403,9 +403,9 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
                           </div>
                         )}
 
-                        <div className="px-4 py-2 bg-gray-50 flex justify-between text-sm border-t">
-                          <span className="text-gray-500">Subtotal pedido</span>
-                          <span className="font-bold text-gray-700">${Number(pedido.subtotal).toFixed(2)}</span>
+                        <div className="px-4 py-2 bg-stone-50 flex justify-between text-sm border-t">
+                          <span className="text-stone-500">Subtotal pedido</span>
+                          <span className="font-bold text-stone-700">${Number(pedido.subtotal).toFixed(2)}</span>
                         </div>
 
                         <div className="p-3 border-t">
@@ -429,8 +429,8 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
                             onClick={() => handleEliminarPedido(pedido, idx + 1)}
                             disabled={submitting}
                             title="Eliminar silla"
-                            className="px-3 py-2 rounded-lg text-xs font-bold text-gray-500 border border-gray-200
-                              hover:bg-gray-100 hover:text-rose-600 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                            className="px-3 py-2 rounded-lg text-xs font-bold text-stone-500 border border-stone-200
+                              hover:bg-stone-100 hover:text-rose-600 transition disabled:opacity-40 disabled:cursor-not-allowed">
                             🗑
                           </button>
                         </div>
@@ -439,8 +439,8 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
                   </div>
 
                   <button onClick={handleNuevoPedido} disabled={submitting}
-                    className="w-full mb-3 border-2 border-dashed border-indigo-300 text-indigo-600
-                      py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-50 transition disabled:opacity-50">
+                    className="w-full mb-3 border-2 border-dashed border-arena-300 text-cafe-800
+                      py-2.5 rounded-xl font-semibold text-sm hover:bg-marca-50 transition disabled:opacity-50">
                     + Agregar otra silla a esta mesa
                   </button>
 
@@ -452,8 +452,8 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
                   </button>
 
                   {/* Total */}
-                  <div className="flex justify-between items-center bg-gray-50 border rounded-xl px-4 py-3 mb-4">
-                    <span className="text-sm font-semibold text-gray-600">Total Acumulado</span>
+                  <div className="flex justify-between items-center bg-stone-50 border rounded-xl px-4 py-3 mb-4">
+                    <span className="text-sm font-semibold text-stone-600">Total Acumulado</span>
                     <span className="text-2xl font-black text-rose-600">
                       ${Number(cuentaData.total_acumulado).toFixed(2)}
                     </span>
@@ -489,7 +489,7 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
         >
           <div className="animate-fade-in bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 text-center">
             <div className="text-5xl mb-3">🧾</div>
-            <p className="font-bold text-gray-800 mb-1">{ticketPrompt.titulo}</p>
+            <p className="font-bold text-stone-800 mb-1">{ticketPrompt.titulo}</p>
 
             {facturaInfo && (
               facturaInfo.estado === 'aprobada' ? (
@@ -510,31 +510,31 @@ export default function ModalPedido({ mesa, productos, onClose, onMesaUpdate, ad
               )
             )}
 
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-stone-500 mb-6">
               {ticketPrompt.cierre
                 ? 'La mesa va a seguir ocupada hasta que imprimas o descargues el ticket.'
                 : '¿Querés imprimir o descargar el ticket?'}
             </p>
             <div className="flex flex-col gap-2">
               <button onClick={handleImprimirTicket} disabled={ticketBusy}
-                className="bg-indigo-600 text-white py-2.5 rounded-xl font-semibold
-                  hover:bg-indigo-700 transition disabled:opacity-50">
+                className="bg-cafe-800 text-white py-2.5 rounded-xl font-semibold
+                  hover:bg-cafe-700 transition disabled:opacity-50">
                 🖨 Imprimir ticket
               </button>
               <button onClick={handleDescargarTicket} disabled={ticketBusy}
-                className="bg-gray-100 text-gray-700 py-2.5 rounded-xl font-semibold
-                  hover:bg-gray-200 transition disabled:opacity-50">
+                className="bg-stone-100 text-stone-700 py-2.5 rounded-xl font-semibold
+                  hover:bg-stone-200 transition disabled:opacity-50">
                 ⬇ Descargar PDF
               </button>
               {facturaInfo?.estado === 'aprobada' && (
                 <button onClick={handleDescargarTicketInterno} disabled={ticketBusy}
-                  className="bg-gray-100 text-gray-700 py-2.5 rounded-xl font-semibold
-                    hover:bg-gray-200 transition disabled:opacity-50">
+                  className="bg-stone-100 text-stone-700 py-2.5 rounded-xl font-semibold
+                    hover:bg-stone-200 transition disabled:opacity-50">
                   🧾 Descargar ticket no fiscal
                 </button>
               )}
               <button onClick={cerrarTicketPrompt}
-                className="text-gray-400 text-sm py-1 hover:text-gray-600 transition">
+                className="text-stone-400 text-sm py-1 hover:text-stone-600 transition">
                 Cerrar
               </button>
             </div>

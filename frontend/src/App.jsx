@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import Sidebar from './components/Sidebar'
+import Layout from './components/layout/Layout'
 import ProductoTabla from './components/productos/ProductoTabla'
 import InsumoTabla from './components/insumos/InsumoTabla'
 import MesaGrid from './components/mesas/MesaGrid'
@@ -105,21 +105,18 @@ export default function App() {
         Sin conexión con el servidor. No se pueden hacer operaciones nuevas hasta que vuelva.
       </div>
     )}
-    <div className="flex flex-1 min-h-0 bg-gray-50 overflow-hidden">
-      <Sidebar
-        vista={vista} setVista={setVista} usuario={usuario} onLogout={handleLogout}
-        onCambiarUsuario={() => setModalUsuario(true)} onCambiarPassword={() => setModalPassword(true)} nuevasNotif={nuevasNotif}
-      />
-
-      <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-        {vista === 'productos' && <ProductoTabla addToast={addToast} confirm={confirm} onProductosChange={fetchProductos} />}
-        {vista === 'insumos' && <InsumoTabla addToast={addToast} confirm={confirm} />}
-        {vista === 'mesas' && <MesaGrid addToast={addToast} confirm={confirm} productos={productos} />}
-        {vista === 'historial' && <HistorialPedidos addToast={addToast} />}
-        {vista === 'notificaciones' && <NotificacionesPanel addToast={addToast} onCambio={setNuevasNotif} />}
-        {vista === 'usuarios' && api.can(usuario, 'usuarios.gestionar') && <UsuariosPanel addToast={addToast} confirm={confirm} usuario={usuario} />}
-      </main>
-
+    <Layout
+      vista={vista} setVista={setVista} usuario={usuario} enLinea={enLinea} nuevasNotif={nuevasNotif}
+      onLogout={handleLogout} onCambiarUsuario={() => setModalUsuario(true)} onCambiarPassword={() => setModalPassword(true)}
+    >
+      {vista === 'productos' && <ProductoTabla addToast={addToast} confirm={confirm} onProductosChange={fetchProductos} />}
+      {vista === 'insumos' && <InsumoTabla addToast={addToast} confirm={confirm} />}
+      {vista === 'mesas' && <MesaGrid addToast={addToast} confirm={confirm} productos={productos} />}
+      {vista === 'historial' && <HistorialPedidos addToast={addToast} />}
+      {vista === 'notificaciones' && <NotificacionesPanel addToast={addToast} onCambio={setNuevasNotif} />}
+      {vista === 'usuarios' && api.can(usuario, 'usuarios.gestionar') && <UsuariosPanel addToast={addToast} confirm={confirm} usuario={usuario} />}
+    </Layout>
+    <div>
       <ToastContainer toasts={toasts} />
       <ConfirmDialog state={confirmState} onResolve={resolveConfirm} />
       {autorizacion && (

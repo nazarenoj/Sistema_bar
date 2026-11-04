@@ -113,7 +113,7 @@ export default function MesaCard({
       className={`relative group rounded-2xl p-3 select-none flex flex-col items-center justify-center
         transition-shadow duration-300 hover:shadow-xl hover:brightness-110 shadow-lg
         ${editMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
-        ${selected ? 'ring-4 ring-indigo-400 ring-offset-2' : ''}`}
+        ${selected ? 'ring-4 ring-marca-500 ring-offset-2' : ''}`}
     >
       {editMode && (
         <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -180,7 +180,7 @@ export default function MesaCard({
           onPointerMove={handleResizeMove}
           onPointerUp={handleResizeUp}
           style={{ touchAction: 'none' }}
-          className="absolute -bottom-1 -right-1 w-4 h-4 bg-white border-2 border-gray-400 rounded-sm
+          className="absolute -bottom-1 -right-1 w-4 h-4 bg-white border-2 border-stone-400 rounded-sm
             cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity"
           title="Redimensionar"
         />

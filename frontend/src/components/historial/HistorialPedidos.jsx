@@ -26,7 +26,7 @@ const comprobanteClase = (p) => {
   if (p.factura_estado === 'aprobada') return 'bg-emerald-50 text-emerald-600'
   if (p.factura_estado === 'rechazada' || p.factura_estado === 'error') return 'bg-rose-50 text-rose-600'
   if (p.factura_estado === 'pendiente') return 'bg-amber-50 text-amber-600'
-  return 'bg-gray-50 text-gray-400'
+  return 'bg-stone-50 text-stone-400'
 }
 
 const LIMIT = 20
@@ -108,25 +108,25 @@ export default function HistorialPedidos({ addToast }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Historial de Pedidos</h1>
+        <h1 className="sr-only">Historial de Pedidos</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setMostrarGraficos(v => !v)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 border ${
-              mostrarGraficos ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'
+              mostrarGraficos ? 'bg-cafe-800 text-white border-cafe-800' : 'bg-white text-cafe-800 border-arena-300 hover:bg-marca-50'
             }`}
           >
             📈 Gráficos de ventas
           </button>
           <button
             onClick={() => setMostrarExportar(true)}
-            className="px-4 py-2 rounded-lg bg-white text-indigo-600 border border-indigo-200 text-sm font-semibold hover:bg-indigo-50 transition flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-white text-cafe-800 border border-arena-300 text-sm font-semibold hover:bg-marca-50 transition flex items-center gap-2"
           >
             📥 Exportar historial filtrado
           </button>
           <button
             onClick={() => setMostrarReporte(true)}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-cafe-800 text-white text-sm font-semibold hover:bg-cafe-700 transition flex items-center gap-2"
           >
             📊 Reporte de ventas facturadas
           </button>
@@ -138,7 +138,7 @@ export default function HistorialPedidos({ addToast }) {
       <div className="bg-white rounded-2xl shadow-sm border p-4 mb-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Desde</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Desde</label>
             <input
               type="date"
               value={filtros.desde}
@@ -148,7 +148,7 @@ export default function HistorialPedidos({ addToast }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Hasta</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Hasta</label>
             <input
               type="date"
               value={filtros.hasta}
@@ -158,7 +158,7 @@ export default function HistorialPedidos({ addToast }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Mesa</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Mesa</label>
             <input
               type="number"
               min="1"
@@ -169,7 +169,7 @@ export default function HistorialPedidos({ addToast }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Método de pago</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Método de pago</label>
             <select
               value={filtros.metodo_pago}
               onChange={(e) => setFiltros(f => ({ ...f, metodo_pago: e.target.value }))}
@@ -180,7 +180,7 @@ export default function HistorialPedidos({ addToast }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Facturación ARCA</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Facturación ARCA</label>
             <select
               value={filtros.con_factura}
               onChange={(e) => setFiltros(f => ({
@@ -196,7 +196,7 @@ export default function HistorialPedidos({ addToast }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Estado comprobante</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Estado comprobante</label>
             <select
               value={filtros.estado_factura}
               disabled={filtros.con_factura === 'no'}
@@ -210,14 +210,14 @@ export default function HistorialPedidos({ addToast }) {
           <div className="flex gap-2">
             <button
               onClick={handleAplicarFiltros}
-              className="px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition"
+              className="px-4 py-1.5 rounded-lg bg-cafe-800 text-white text-sm font-semibold hover:bg-cafe-700 transition"
             >
               Filtrar
             </button>
             {hayFiltrosActivos && (
               <button
                 onClick={handleLimpiarFiltros}
-                className="px-4 py-1.5 rounded-lg border text-gray-600 text-sm font-semibold hover:bg-gray-50 transition"
+                className="px-4 py-1.5 rounded-lg border text-stone-600 text-sm font-semibold hover:bg-stone-50 transition"
               >
                 Limpiar
               </button>
@@ -230,7 +230,7 @@ export default function HistorialPedidos({ addToast }) {
         {loading ? (
           <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : pedidos.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-stone-400">
             <p className="text-5xl mb-3">🧾</p>
             <p>{hayFiltrosActivos ? 'No hay cuentas cerradas que coincidan con los filtros.' : 'Todavía no hay cuentas cerradas.'}</p>
           </div>
@@ -238,32 +238,32 @@ export default function HistorialPedidos({ addToast }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b text-gray-500 text-xs uppercase tracking-wider">
+                <tr className="bg-stone-50 border-b text-stone-500 text-xs uppercase tracking-wider">
                   <th className="text-left px-5 py-3 w-10">#</th>
                   <th className="text-left px-5 py-3">
-                    <button onClick={() => handleSort('numero_mesa')} className="flex items-center hover:text-gray-700">
+                    <button onClick={() => handleSort('numero_mesa')} className="flex items-center hover:text-stone-700">
                       Mesa<FlechaOrden campo="numero_mesa" />
                     </button>
                   </th>
                   <th className="text-left px-5 py-3">
-                    <button onClick={() => handleSort('sesion_apertura')} className="flex items-center hover:text-gray-700">
+                    <button onClick={() => handleSort('sesion_apertura')} className="flex items-center hover:text-stone-700">
                       Apertura mesa<FlechaOrden campo="sesion_apertura" />
                     </button>
                   </th>
                   <th className="text-left px-5 py-3">
-                    <button onClick={() => handleSort('fecha_creacion')} className="flex items-center hover:text-gray-700">
+                    <button onClick={() => handleSort('fecha_creacion')} className="flex items-center hover:text-stone-700">
                       Apertura silla<FlechaOrden campo="fecha_creacion" />
                     </button>
                   </th>
                   <th className="text-left px-5 py-3">
-                    <button onClick={() => handleSort('fecha_cierre')} className="flex items-center hover:text-gray-700">
+                    <button onClick={() => handleSort('fecha_cierre')} className="flex items-center hover:text-stone-700">
                       Cierre silla<FlechaOrden campo="fecha_cierre" />
                     </button>
                   </th>
                   <th className="text-left px-5 py-3">Cierre mesa</th>
                   <th className="text-left px-5 py-3">Comprobante</th>
                   <th className="text-right px-5 py-3">
-                    <button onClick={() => handleSort('total')} className="flex items-center justify-end w-full hover:text-gray-700">
+                    <button onClick={() => handleSort('total')} className="flex items-center justify-end w-full hover:text-stone-700">
                       Total<FlechaOrden campo="total" />
                     </button>
                   </th>
@@ -272,32 +272,32 @@ export default function HistorialPedidos({ addToast }) {
               </thead>
               <tbody className="divide-y">
                 {pedidos.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3.5 text-gray-400">{p.id}</td>
-                    <td className="px-5 py-3.5 font-semibold text-gray-800">Mesa {p.numero_mesa}</td>
-                    <td className="px-5 py-3.5 text-gray-500">{formatHora(p.sesion_apertura)}</td>
-                    <td className="px-5 py-3.5 text-gray-500">{formatHora(p.fecha_creacion)}</td>
-                    <td className="px-5 py-3.5 text-gray-500">{formatHora(p.fecha_cierre)}</td>
-                    <td className="px-5 py-3.5 text-gray-500">{formatHora(p.hora_cierre_mesa)}</td>
+                  <tr key={p.id} className="hover:bg-stone-50 transition-colors">
+                    <td className="px-5 py-3.5 text-stone-400">{p.id}</td>
+                    <td className="px-5 py-3.5 font-semibold text-stone-800">Mesa {p.numero_mesa}</td>
+                    <td className="px-5 py-3.5 text-stone-500">{formatHora(p.sesion_apertura)}</td>
+                    <td className="px-5 py-3.5 text-stone-500">{formatHora(p.fecha_creacion)}</td>
+                    <td className="px-5 py-3.5 text-stone-500">{formatHora(p.fecha_cierre)}</td>
+                    <td className="px-5 py-3.5 text-stone-500">{formatHora(p.hora_cierre_mesa)}</td>
                     <td className="px-5 py-3.5">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${comprobanteClase(p)}`}>
                         {comprobanteLabel(p)}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-right font-bold text-gray-800">
+                    <td className="px-5 py-3.5 text-right font-bold text-stone-800">
                       ${Number(p.total).toFixed(2)}
                     </td>
                     <td className="px-5 py-3.5 text-right space-x-2 whitespace-nowrap">
                       <button
                         onClick={() => setPedidoIdSeleccionado(p.id)}
-                        className="px-3 py-1 rounded-lg border border-indigo-200 text-indigo-600 text-xs font-semibold hover:bg-indigo-50 transition"
+                        className="px-3 py-1 rounded-lg border border-arena-300 text-cafe-800 text-xs font-semibold hover:bg-marca-50 transition"
                       >
                         Ver detalle
                       </button>
                       <button
                         onClick={() => handleDescargarTicket(p)}
                         disabled={descargandoId === p.id}
-                        className="px-3 py-1 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition disabled:opacity-50"
+                        className="px-3 py-1 rounded-lg border border-stone-200 text-stone-600 text-xs font-semibold hover:bg-stone-50 transition disabled:opacity-50"
                       >
                         {descargandoId === p.id
                           ? 'Descargando…'
@@ -312,19 +312,19 @@ export default function HistorialPedidos({ addToast }) {
         )}
 
         {!loading && pedidos.length > 0 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t bg-gray-50 text-sm">
+          <div className="flex items-center justify-between px-5 py-3 border-t bg-stone-50 text-sm">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="px-3 py-1 rounded-lg border text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1 rounded-lg border text-stone-600 hover:bg-stone-100 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               ← Anterior
             </button>
-            <span className="text-gray-500">Página {page} de {totalPaginas}</span>
+            <span className="text-stone-500">Página {page} de {totalPaginas}</span>
             <button
               onClick={() => setPage(p => Math.min(totalPaginas, p + 1))}
               disabled={page >= totalPaginas}
-              className="px-3 py-1 rounded-lg border text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1 rounded-lg border text-stone-600 hover:bg-stone-100 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Siguiente →
             </button>
