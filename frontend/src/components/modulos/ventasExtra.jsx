@@ -34,8 +34,38 @@ export const Reservas = (p) => (
         { titulo: 'Cancelar', estilo: 'rojo', ruta: (f) => `/reservas/${f.id}/cancelar`, mostrar: (f) => ['pendiente', 'confirmada'].includes(f.estado), mensaje: 'Reserva cancelada.', campos: [{ k: 'motivo', etiqueta: 'Motivo', requerido: true }] },
       ],
     },
-    { id: 'turnos', titulo: 'Turnos de servicio', ruta: '/reservas/turnos', filtros: [{ k: 'desde', etiqueta: 'Desde', tipo: 'date', defecto: hoy() }], ver: { titulo: 'Turno', ruta: (f) => `/reservas/turnos/${f.id}` } },
-    { id: 'especiales', titulo: 'Pedidos especiales', ruta: '/reservas/especiales', ver: { titulo: 'Pedido especial', ruta: (f) => `/reservas/especiales/${f.id}` } },
+    {
+      id: 'turnos', titulo: 'Turnos de servicio', ruta: '/reservas/turnos', filtros: [{ k: 'desde', etiqueta: 'Desde', tipo: 'date', defecto: hoy() }],
+      crear: {
+        titulo: 'Nuevo turno', ruta: '/reservas/turnos', mensaje: 'Turno creado.',
+        campos: [
+          { k: 'nombre', etiqueta: 'Nombre', requerido: true }, { k: 'tipo', etiqueta: 'Tipo', tipo: 'select', opciones: [['taller', 'Taller'], ['cata', 'Cata']], requerido: true, defecto: 'taller' },
+          { k: 'fecha_hora', etiqueta: 'Fecha y hora', tipo: 'datetime-local', requerido: true }, { k: 'cupo', etiqueta: 'Cupo', tipo: 'entero', requerido: true }, { k: 'detalle', etiqueta: 'Detalle', tipo: 'textarea' },
+        ],
+        armar: (v) => ({ nombre: v.nombre, tipo: v.tipo, cupo: parseInt(v.cupo, 10), fecha_hora: String(v.fecha_hora).replace('T', ' ') + ':00', ...(v.detalle && { detalle: v.detalle }) }),
+      },
+      acciones: [
+        { titulo: 'Inscribir', ruta: (f) => `/reservas/turnos/${f.id}/inscripciones`, mensaje: 'Inscripto.', campos: [{ k: 'nombre', etiqueta: 'Nombre', requerido: true }, { k: 'telefono', etiqueta: 'Teléfono' }] },
+        { titulo: 'Cancelar', estilo: 'rojo', ruta: (f) => `/reservas/turnos/${f.id}/cancelar`, confirmar: '¿Cancelar el turno?', mensaje: 'Turno cancelado.' },
+      ],
+      ver: { titulo: 'Turno', ruta: (f) => `/reservas/turnos/${f.id}` } },
+    {
+      id: 'especiales', titulo: 'Pedidos especiales', ruta: '/reservas/especiales',
+      crear: {
+        titulo: 'Nuevo pedido especial', ruta: '/reservas/especiales', mensaje: 'Pedido creado.',
+        campos: [
+          { k: 'cliente_nombre', etiqueta: 'Nombre del cliente', requerido: true }, { k: 'cliente_telefono', etiqueta: 'Teléfono' },
+          { k: 'producto_id', etiqueta: 'Producto', tipo: 'select', fuente: { ruta: '/productos', valor: 'id', texto: 'nombre' }, requerido: true }, { k: 'cantidad', etiqueta: 'Cantidad', tipo: 'entero', requerido: true, defecto: 1 },
+          { k: 'fecha_hora', etiqueta: 'Para el día y hora', tipo: 'datetime-local' },
+        ],
+        armar: (v) => ({ cliente_nombre: v.cliente_nombre, ...(v.cliente_telefono && { cliente_telefono: v.cliente_telefono }), ...(v.fecha_hora && { fecha_hora: String(v.fecha_hora).replace('T', ' ') + ':00' }), items: [{ producto_id: Number(v.producto_id), cantidad: parseInt(v.cantidad, 10) }] }),
+      },
+      acciones: [
+        { titulo: 'A cocina', ruta: (f) => `/reservas/especiales/${f.id}/comanda`, mostrar: (f) => f.estado === 'pendiente', mensaje: 'Enviado a cocina.' },
+        { titulo: 'Entregado', ruta: (f) => `/reservas/especiales/${f.id}/entregar`, mostrar: (f) => f.estado !== 'entregado' && f.estado !== 'cancelado', mensaje: 'Pedido entregado.' },
+        { titulo: 'Cancelar', estilo: 'rojo', ruta: (f) => `/reservas/especiales/${f.id}/cancelar`, mostrar: (f) => f.estado !== 'entregado' && f.estado !== 'cancelado', confirmar: '¿Cancelar el pedido?', mensaje: 'Pedido cancelado.' },
+      ],
+      ver: { titulo: 'Pedido especial', ruta: (f) => `/reservas/especiales/${f.id}` } },
   ]} />
 )
 

@@ -5,9 +5,10 @@ import { Campo, Tarjeta } from '../layout/Modal'
 import Spinner from '../Spinner'
 import { dinero, fecha, numeroComprobante } from '../../utils/formato'
 import { descargarArchivo } from '../../utils/ticket'
+import Modulo from '../layout/Modulo'
 
 const ESTADOS = { aprobada: 'bg-marca-600', pendiente: 'bg-amber-500', rechazada: 'bg-rose-400', indeterminada: 'bg-amber-500' }
-const PESTANAS = [['comprobantes', 'Comprobantes'], ['libro', 'Libro IVA'], ['arca', 'Estado de ARCA']]
+const PESTANAS = [['comprobantes', 'Comprobantes'], ['libro', 'Libro IVA'], ['arca', 'Estado de ARCA'], ['numeracion', 'Numeración']]
 
 function Comprobantes({ addToast, puedeReintentar }) {
   const [pagina, setPagina] = useState(1)
@@ -127,7 +128,23 @@ function EstadoArca({ addToast }) {
   )
 }
 
-export default function Facturacion({ addToast, usuario }) {
+const Numeracion = (p) => (
+  <Modulo {...p} tabs={[{
+    id: 'claves', titulo: 'Claves de emisión', ruta: '/facturas/claves', permiso: 'facturacion.claves.ver',
+    ayuda: 'Cada comprobante se pide a ARCA con una clave única, para no emitir dos veces. Si una quedó bloqueada, un supervisor puede liberarla.',
+    crear: { titulo: 'Validar numeración con ARCA', ruta: '/facturas/claves/validar', permiso: 'facturacion.claves.resolver', mensaje: 'Numeración validada.', campos: [{ k: 'tipo_comprobante', etiqueta: 'Tipo de comprobante (código ARCA)', tipo: 'entero', requerido: true, ayuda: '1 = Factura A, 6 = Factura B, 11 = Factura C' }] },
+    acciones: [
+      { titulo: 'Liberar', permiso: 'facturacion.claves.resolver', ruta: () => '/facturas/claves/liberar', mensaje: 'Clave liberada.', campos: [{ k: 'motivo', etiqueta: 'Motivo', requerido: true }], body: (f, v) => ({ clave: f.clave, motivo: v.motivo }) },
+    ],
+  },
+  {
+    id: 'sincronizar', titulo: 'Tras restaurar una copia', ruta: '/facturas/claves', permiso: 'facturacion.claves.ver',
+    ayuda: 'Después de restaurar una copia, hay que sincronizar la numeración con ARCA antes de emitir.',
+    crear: { titulo: 'Sincronizar numeración', ruta: '/facturas/claves/sincronizar', permiso: 'facturacion.claves.resolver', mensaje: 'Numeración sincronizada.', campos: [], armar: () => ({}) },
+  }]} />
+)
+
+export default function Facturacion({ addToast, usuario, confirm }) {
   const [pestana, setPestana] = useState('comprobantes')
   return (
     <div>
@@ -140,6 +157,7 @@ export default function Facturacion({ addToast, usuario }) {
       {pestana === 'comprobantes' && <Comprobantes addToast={addToast} puedeReintentar={api.can(usuario, 'facturacion.reintentar')} />}
       {pestana === 'libro' && <LibroIva addToast={addToast} />}
       {pestana === 'arca' && <EstadoArca addToast={addToast} />}
+      {pestana === 'numeracion' && <Numeracion addToast={addToast} usuario={usuario} confirm={confirm} />}
     </div>
   )
 }

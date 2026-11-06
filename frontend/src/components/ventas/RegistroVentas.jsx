@@ -44,8 +44,10 @@ export default function RegistroVentas({ addToast, usuario }) {
   const devolverTodo = async (e) => {
     e.preventDefault()
     try {
-      await api.llamar('/devoluciones', { method: 'POST', body: { venta_id_global: detalle.id_global, todo: true, motivo: devolucion.motivo, reingreso: devolucion.reingreso } })
-      addToast('Venta anulada y devolución registrada.')
+      const items = Object.entries(devolucion.cantidades ?? {}).filter(([, c]) => Number(c) > 0).map(([linea, c]) => ({ linea: Number(linea), cantidad: Number(c) }))
+      if (devolucion.parcial && !items.length) return addToast('Indicá la cantidad a devolver de al menos un producto.', 'error')
+      await api.llamar('/devoluciones', { method: 'POST', body: { venta_id_global: detalle.id_global, motivo: devolucion.motivo, reingreso: devolucion.reingreso, ...(devolucion.parcial ? { items } : { todo: true }) } })
+      addToast(devolucion.parcial ? 'Devolución registrada.' : 'Venta anulada y devolución registrada.')
       setDetalle(null); cargar()
     } catch (err) { addToast(err.message, 'error') }
   }
@@ -138,9 +140,20 @@ export default function RegistroVentas({ addToast, usuario }) {
             {devoluciones.length > 0 && <div><p className="font-semibold text-stone-700 mb-1">Devoluciones</p><Detalle datos={devoluciones} /></div>}
             {api.can(usuario, 'ventas.devoluciones.crear') && detalle.estado !== 'anulada' && (
               devolucion === null
-                ? <button onClick={() => setDevolucion({ motivo: '', reingreso: 'reingreso' })} className="btn btn-rojo">Anular / devolver toda la venta</button>
+                ? <div className="flex gap-2"><button onClick={() => setDevolucion({ motivo: '', reingreso: 'reingreso', parcial: false })} className="btn btn-rojo">Anular toda la venta</button><button onClick={() => setDevolucion({ motivo: '', reingreso: 'reingreso', parcial: true, cantidades: {} })} className="btn bg-amber-500 hover:bg-amber-600">Devolver productos</button></div>
                 : (
                   <form onSubmit={devolverTodo} className="grid grid-cols-2 gap-3 border-t pt-3">
+                    {devolucion.parcial && (
+                      <div className="col-span-2 space-y-1">
+                        <p className="text-sm text-stone-600">Cantidad a devolver de cada producto:</p>
+                        {detalle.detalle.map((l, i) => (
+                          <label key={i} className="flex items-center justify-between gap-3 text-sm">
+                            <span>{l.nombre} <span className="text-stone-400">(vendidos: {l.cantidad})</span></span>
+                            <input type="number" min="0" max={l.cantidad} step="any" value={devolucion.cantidades[i] ?? ''} onChange={e => setDevolucion({ ...devolucion, cantidades: { ...devolucion.cantidades, [i]: e.target.value } })} className="campo w-24" />
+                          </label>
+                        ))}
+                      </div>
+                    )}
                     <Campo etiqueta="Motivo" className="col-span-2"><input required value={devolucion.motivo} onChange={e => setDevolucion({ ...devolucion, motivo: e.target.value })} className="campo w-full" /></Campo>
                     <Campo etiqueta="Mercadería"><select value={devolucion.reingreso} onChange={e => setDevolucion({ ...devolucion, reingreso: e.target.value })} className="campo w-full"><option value="reingreso">Vuelve al stock</option><option value="merma">Se da de baja (merma)</option></select></Campo>
                     <div className="flex items-end gap-2"><button className="btn btn-rojo">Confirmar</button><button type="button" onClick={() => setDevolucion(null)} className="btn bg-stone-400 hover:bg-stone-500">Cancelar</button></div>

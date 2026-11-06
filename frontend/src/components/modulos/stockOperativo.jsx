@@ -146,6 +146,16 @@ export const Proveedores = (p) => (
       acciones: [{ titulo: 'Descartar', estilo: 'rojo', ruta: (f) => `/stock-ingresos/fotos/${f.id}/descartar`, mostrar: (f) => !['confirmado', 'descartado'].includes(f.estado), confirmar: '¿Descartar la foto?', mensaje: 'Descartada.' }],
     },
     { id: 'devoluciones', titulo: 'Devoluciones a proveedor', ruta: '/stock-ingresos/devoluciones-proveedor', ver: { titulo: 'Devolución a proveedor', ruta: (f) => `/stock-ingresos/devoluciones-proveedor/${f.id}` } },
-    { id: 'claves', titulo: 'Comprobantes de terceros', ruta: '/comprobantes-terceros', ver: { titulo: 'Comprobante', ruta: (f) => `/comprobantes-terceros/${f.id}` }, ayuda: 'Claves que evitan cargar dos veces el mismo comprobante de un proveedor.' },
+    {
+      id: 'claves', titulo: 'Comprobantes de terceros', ruta: '/comprobantes-terceros',
+      crear: {
+        titulo: 'Registrar comprobante', ruta: '/comprobantes-terceros/reservar', mensaje: 'Comprobante registrado.',
+        campos: [
+          { k: 'cuit', etiqueta: 'CUIT del emisor', requerido: true },
+          { k: 'clase', etiqueta: 'Clase', tipo: 'select', opciones: [['FACTURA', 'Factura'], ['NOTA_CREDITO', 'Nota de crédito'], ['NOTA_DEBITO', 'Nota de débito'], ['REMITO', 'Remito'], ['TICKET', 'Ticket'], ['RECIBO', 'Recibo'], ['OTRO', 'Otro']], requerido: true, defecto: 'FACTURA' },
+          { k: 'tipo', etiqueta: 'Letra (A, B, C…)', defecto: 'A' }, { k: 'punto_venta', etiqueta: 'Punto de venta', tipo: 'entero', requerido: true }, { k: 'numero', etiqueta: 'Número', tipo: 'entero', requerido: true },
+        ],
+      },
+      ver: { titulo: 'Comprobante', ruta: (f) => `/comprobantes-terceros/${f.id}` }, ayuda: 'Claves que evitan cargar dos veces el mismo comprobante de un proveedor.' },
   ]} />
 )
