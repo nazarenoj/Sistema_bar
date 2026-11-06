@@ -128,9 +128,11 @@ export const Calidad = (p) => (
       id: 'imprimir', titulo: 'Etiquetas por artículo', ruta: '/productos', permiso: 'stock.etiquetas.gestionar',
       ayuda: 'Generá la etiqueta de góndola o la de un elaborado con su lote.',
       ocultar: ['descripcion', 'imagen', 'categoria_id', 'tipo', 'created_at'],
+      crear: { titulo: 'Prefijo de etiquetas de peso', ruta: '/etiquetas/prefijo', metodo: 'PUT', mensaje: 'Prefijo guardado.', campos: [{ k: 'prefijo', etiqueta: 'Prefijo propio (2 dígitos)', requerido: true }], armar: (v) => ({ prefijo: String(v.prefijo) }) },
       acciones: [
         { titulo: 'Góndola', ruta: (f) => `/etiquetas/articulos/${f.id}/gondola`, mensaje: 'Etiqueta de góndola generada.', campos: [{ k: 'impresora', etiqueta: 'Impresora (opcional)' }] },
         { titulo: 'Elaborado', ruta: (f) => `/etiquetas/articulos/${f.id}/elaborado`, mensaje: 'Etiqueta de elaborado generada.', campos: [{ k: 'lote', etiqueta: 'Lote', requerido: true }, { k: 'impresora', etiqueta: 'Impresora (opcional)' }] },
+        { titulo: 'Etiqueta de peso', ruta: (f) => `/etiquetas/articulos/${f.id}/peso`, mensaje: (r) => `Código de la etiqueta: ${r.codigo}`, campos: [{ k: 'peso', etiqueta: 'Peso en la unidad base (entero, ej. gramos)', tipo: 'number', requerido: true }], body: (f, v) => ({ peso: Number(v.peso) }) },
         { titulo: 'Código', ruta: (f) => `/etiquetas/articulos/${f.id}/codigo`, metodo: 'PUT', mensaje: 'Código asignado.', campos: [{ k: 'codigo', etiqueta: 'Código de barras', requerido: true }] },
       ],
     },
@@ -141,10 +143,6 @@ export const Calidad = (p) => (
 
 export const Proveedores = (p) => (
   <Modulo {...p} tabs={[
-    {
-      id: 'fotos', titulo: 'Ingresos por foto', ruta: '/stock-ingresos/fotos', ver: { titulo: 'Ingreso por foto', ruta: (f) => `/stock-ingresos/fotos/${f.id}` },
-      acciones: [{ titulo: 'Descartar', estilo: 'rojo', ruta: (f) => `/stock-ingresos/fotos/${f.id}/descartar`, mostrar: (f) => !['confirmado', 'descartado'].includes(f.estado), confirmar: '¿Descartar la foto?', mensaje: 'Descartada.' }],
-    },
     { id: 'devoluciones', titulo: 'Devoluciones a proveedor', ruta: '/stock-ingresos/devoluciones-proveedor', ver: { titulo: 'Devolución a proveedor', ruta: (f) => `/stock-ingresos/devoluciones-proveedor/${f.id}` } },
     {
       id: 'claves', titulo: 'Comprobantes de terceros', ruta: '/comprobantes-terceros',
@@ -156,6 +154,7 @@ export const Proveedores = (p) => (
           { k: 'tipo', etiqueta: 'Letra (A, B, C…)', defecto: 'A' }, { k: 'punto_venta', etiqueta: 'Punto de venta', tipo: 'entero', requerido: true }, { k: 'numero', etiqueta: 'Número', tipo: 'entero', requerido: true },
         ],
       },
-      ver: { titulo: 'Comprobante', ruta: (f) => `/comprobantes-terceros/${f.id}` }, ayuda: 'Claves que evitan cargar dos veces el mismo comprobante de un proveedor.' },
+      ver: { titulo: 'Comprobante', ruta: (f) => `/comprobantes-terceros/${f.id_clave}` },
+      acciones: [{ titulo: 'Vincular a factura', permiso: 'usuarios.gestionar', ruta: () => '/comprobantes-terceros/vincular-remito', mensaje: 'Remito vinculado a la factura.', campos: [{ k: 'id_factura', etiqueta: 'N.º interno de la factura (columna Id clave)', ayuda: 'Solo para remitos: la factura que lo cubre, de la misma empresa emisora.', tipo: 'number', requerido: true }], body: (f, v) => ({ id_remito: f.id_clave, id_factura: Number(v.id_factura) }) }], ayuda: 'Claves que evitan cargar dos veces el mismo comprobante de un proveedor.' },
   ]} />
 )

@@ -87,13 +87,17 @@ const verificarSolicitud = async (id) => {
 }
 
 const request = async (path, options = {}) => {
-  const { body, reintento, solicitud, ...rest } = options
+  const { body, archivo, reintento, solicitud, ...rest } = options // `archivo`: un File que viaja tal cual (imagen o PDF)
   const idSolicitud = (rest.method || 'GET') === 'GET' ? null : (solicitud || nuevaSolicitud())
   if (!enLinea) throw new Error('Sin conexión con el servidor. No se pueden hacer operaciones hasta que vuelva.')
   const enviar = () => fetch(`/api${path}`, {
     ...rest,
-    headers: { ...cabeceras(), ...(idSolicitud && { 'X-ID-Solicitud': idSolicitud }) },
-    ...(body !== undefined && { body: JSON.stringify(body) }),
+    headers: {
+      ...cabeceras(),
+      ...(archivo && { 'Content-Type': archivo.type, 'X-Nombre-Archivo': encodeURIComponent(archivo.name) }),
+      ...(idSolicitud && { 'X-ID-Solicitud': idSolicitud }),
+    },
+    ...(archivo ? { body: archivo } : body !== undefined && { body: JSON.stringify(body) }),
   })
   let res
   try {

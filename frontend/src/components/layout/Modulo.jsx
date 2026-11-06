@@ -12,7 +12,7 @@ import { descargarArchivo } from '../../utils/ticket'
 // campo: { k, etiqueta, tipo?: text|number|date|datetime-local|select|checkbox|textarea, opciones?: [[valor, texto]], fuente?: { ruta, valor, texto, filas? },
 //          requerido?, defecto?, ayuda? }
 // crear: { titulo, ruta | ruta(valores), metodo?, campos, armar?(valores) }
-// acciones: [{ titulo, ruta(fila), metodo?, campos?, body?(fila, valores), confirmar?, mostrar?(fila), permiso?, estilo?, mensaje? }]
+// acciones: [{ titulo, ruta(fila), metodo?, campos?, body?(fila, valores), confirmar?, mostrar?(fila), permiso?, estilo?, mensaje?(texto o función de la respuesta) }]
 // ver: { titulo?, ruta(fila) }   descargas: [{ titulo, ruta(filtros), nombre }]
 
 export const primeraLista = (d) => (Array.isArray(d) ? d : Object.values(d ?? {}).find(Array.isArray) ?? [])
@@ -129,8 +129,8 @@ function Pestana({ tab, addToast, usuario, confirm }) {
     try {
       if (a.confirmar && !(await confirm(typeof a.confirmar === 'function' ? a.confirmar(f) : a.confirmar, { title: a.titulo }))) return
       const body = a.body ? a.body(f, valores) : (a.campos ? limpiar(valores, a.campos) : undefined)
-      await api.llamar(a.ruta(f), { method: a.metodo ?? 'POST', ...(body !== undefined && { body }) })
-      addToast(a.mensaje ?? 'Listo.')
+      const r = await api.llamar(a.ruta(f), { method: a.metodo ?? 'POST', ...(body !== undefined && { body }) })
+      addToast(typeof a.mensaje === 'function' ? a.mensaje(r) : (a.mensaje ?? 'Listo.'))
       setModal(null)
       cargar()
     } catch (err) { addToast(err.message, 'error') }

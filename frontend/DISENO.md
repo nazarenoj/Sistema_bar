@@ -45,9 +45,10 @@ Los colores con significado no se tocan: verde / rojo / ámbar para estados (lib
 | Cocina (tablero de comandas, se renueva cada 10 s) | `ventas/Cocina.jsx` | `ventas.pedidos.operar` |
 | Precios y pagos (formas de pago, listas, promociones, monedas) | `ventas/ConfigVentas.jsx` | `ventas.catalogo.ver` |
 | Stock (existencias, kardex, ingresos y egresos, valorizado, vencimientos, reposición, depósitos) | `stock/Existencias.jsx` | `stock.movimientos.ver` |
+| Ingreso por foto, Alérgenos por artículo | `stock/IngresoFoto.jsx`, `stock/Alergenos.jsx` | `stock.movimientos.ver` |
 | Clientes y cuentas (búsqueda, ficha, movimientos, informes de deuda) | `clientes/Clientes.jsx` | `clientes.ver` |
 
-| Producción (órdenes, informe), Inventario (tomas y diferencias), Proveedores (fotos, devoluciones, claves), Calidad y trazabilidad (alérgenos, temperaturas, series, etiquetas) | `modulos/stockOperativo.jsx` | los de cada pestaña |
+| Producción (órdenes, informe), Inventario (tomas y diferencias), Proveedores (devoluciones, claves y vínculo de remitos), Calidad y trazabilidad (alérgenos, temperaturas, series, etiquetas) | `modulos/stockOperativo.jsx` | los de cada pestaña |
 | Reservas, Comisiones, Carta y modificadores | `modulos/ventasExtra.jsx` | `ventas.pedidos.operar` / `ventas.catalogo.ver` |
 | Recibos y remitos, Fidelización | `modulos/clientesExtra.jsx` | `clientes.ver` |
 | Copias, Correo, Consulta de CUIT, Sucursales, Verificación en dos pasos | `modulos/sistema.jsx` | los de cada pestaña |
@@ -56,4 +57,14 @@ Los colores con significado no se tocan: verde / rojo / ámbar para estados (lib
 ## Pantallas por configuración
 Las pantallas de `components/modulos/` son archivos de configuración sobre `layout/Modulo.jsx`: cada pestaña declara su ruta, filtros, alta, acciones por fila y detalle. Si una respuesta no tiene un formato propio, `TablaAuto` arma las columnas con las claves. Una pantalla nueva de este tipo es una entrada en esos archivos más su registro en `pantallas.jsx`, `vistas.js` y `Menu.jsx`.
 
-Sin interfaz propia todavía (existen en la API): subida de la foto de un ingreso y su lectura, declaración y baja de alérgenos por artículo, peso de las etiquetas por balanza, vínculo de comprobantes con remitos y mantenimiento del padrón de ARCA. El resto de las operaciones de los módulos tiene pantalla.
+Un tipo de pestaña se puede ampliar sin tocar el motor: `mensaje` de una acción puede ser una función de la respuesta (así se muestra el código de una etiqueta recién generada).
+
+## Pantallas a medida
+Cuando una operación no cabe en el motor (subir un archivo, revisar línea por línea) va en su propio componente:
+- `stock/Existencias.jsx`: stock, kardex, ingresos y egresos, valorizado, vencimientos, reposición y depósitos.
+- `stock/Alergenos.jsx`: declaración de alérgenos por producto o insumo (Contiene / Trazas / No tiene).
+- `stock/IngresoFoto.jsx`: sube la foto o el PDF de un comprobante de proveedor (`api.llamar(..., { archivo })` lo envía tal cual), permite cargar los datos a mano si no se pudo leer, asociar cada línea a un artículo y confirmar el ingreso.
+- `layout/Contencion.jsx`: si una pantalla falla al dibujarse, muestra un cuadro con el detalle en vez de dejar la página en blanco; se renueva al cambiar de pantalla.
+
+## Operaciones sin interfaz
+Ya tienen pantalla todas las operaciones de la API salvo el mantenimiento del padrón de ARCA, que no existe como operación: el padrón solo se consulta (Consulta de CUIT). El peso de las etiquetas, el prefijo propio, el vínculo de remitos con facturas de proveedor y el ingreso por foto se hacen desde Calidad y trazabilidad, Proveedores e Ingreso por foto.

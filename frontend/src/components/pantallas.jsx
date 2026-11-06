@@ -8,6 +8,7 @@ import { Reservas, Comisiones, Carta } from './modulos/ventasExtra'
 import { Cobranzas, Fidelizacion } from './modulos/clientesExtra'
 import { Copias, Correo, Padron, Consolidacion, Seguridad } from './modulos/sistema'
 import Alergenos from './stock/Alergenos'
+import IngresoFoto from './stock/IngresoFoto'
 import Inicio from './Inicio'
 import Cocina from './ventas/Cocina'
 import ConfigVentas from './ventas/ConfigVentas'
@@ -19,6 +20,7 @@ export const PANTALLAS = {
   clientes: Clientes,
   inicio: Inicio,
   alergenos: Alergenos,
+  'ingreso-foto': IngresoFoto,
   copias: Copias,
   correo: Correo,
   padron: Padron,
