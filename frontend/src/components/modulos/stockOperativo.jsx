@@ -91,7 +91,50 @@ export const Calidad = (p) => (
       acciones: [{ titulo: 'Registrar', permiso: 'stock.temperaturas.registrar', ruta: (f) => `/temperaturas/puntos/${f.id}/registros`, mensaje: 'Temperatura registrada.', campos: [{ k: 'valor', etiqueta: 'Temperatura (°C)', tipo: 'number', requerido: true }] }],
     },
     { id: 'registros', titulo: 'Registros de temperatura', ruta: '/temperaturas/registros', permiso: 'stock.trazabilidad.ver' },
-    { id: 'series', titulo: 'Series vigentes', ruta: '/series/vigentes', permiso: 'stock.series.gestionar' },
+    {
+      id: 'series', titulo: 'Series', ruta: '/series/vigentes', permiso: 'stock.series.gestionar',
+      ayuda: 'Números de serie en stock. Para ver una sola mercadería, usá el buscador de la tabla.',
+      crear: {
+        titulo: 'Ingresar series', ruta: (v) => `/series/${v.producto_id}/ingresos`, mensaje: 'Series ingresadas.',
+        campos: [
+          { k: 'producto_id', etiqueta: 'Producto', tipo: 'select', fuente: PRODUCTOS, requerido: true },
+          { k: 'deposito_id', etiqueta: 'Depósito', tipo: 'select', fuente: DEPOSITOS },
+          { k: 'series', etiqueta: 'Números de serie (uno por línea)', tipo: 'textarea', requerido: true },
+          { k: 'costo_unitario', etiqueta: 'Costo unitario', tipo: 'number' }, { k: 'proveedor', etiqueta: 'Proveedor' },
+        ],
+        armar: (v) => ({
+          series: String(v.series).split(/[\n,]+/).map(s => s.trim()).filter(Boolean),
+          ...(v.deposito_id && { deposito_id: Number(v.deposito_id) }), ...(v.costo_unitario && { costo_unitario: Number(v.costo_unitario) }), ...(v.proveedor && { proveedor: v.proveedor }),
+        }),
+      },
+      acciones: [
+        {
+          titulo: 'Dar de baja', estilo: 'rojo', permiso: 'stock.series.baja', ruta: (f) => `/series/${f.producto_id}/baja`, mensaje: 'Serie dada de baja.',
+          campos: [{ k: 'motivo', etiqueta: 'Motivo', requerido: true }], body: (f, v) => ({ series: [f.numero_serie ?? f.numero], motivo: v.motivo }),
+        },
+      ],
+    },
+    {
+      id: 'lotes', titulo: 'Lotes por vencer', ruta: '/lotes/vencimientos', permiso: 'stock.movimientos.ver',
+      filtros: [{ k: 'dias', etiqueta: 'Vencen en los próximos (días)', tipo: 'number', defecto: 30 }],
+      ocultar: ['insumo_id', 'producto_id', 'deposito_id'],
+      crear: { titulo: 'Dar de baja lo vencido hoy', ruta: '/lotes/merma-fin-dia', permiso: 'stock.movimientos.registrar', mensaje: 'Merma de fin de día registrada.', campos: [], armar: () => ({}) },
+      acciones: [
+        { titulo: 'Bloquear', estilo: 'rojo', permiso: 'stock.movimientos.registrar', ruta: (f) => `/lotes/${f.id}/bloqueo`, metodo: 'PUT', mostrar: (f) => !f.bloqueado, mensaje: 'Lote bloqueado.', campos: [{ k: 'motivo', etiqueta: 'Motivo', requerido: true }], body: (f, v) => ({ bloqueado: true, motivo: v.motivo }) },
+        { titulo: 'Liberar', permiso: 'stock.movimientos.registrar', ruta: (f) => `/lotes/${f.id}/bloqueo`, metodo: 'PUT', mostrar: (f) => !!f.bloqueado, mensaje: 'Lote liberado.', body: () => ({ bloqueado: false }) },
+      ],
+    },
+    {
+      id: 'imprimir', titulo: 'Etiquetas por artículo', ruta: '/productos', permiso: 'stock.etiquetas.gestionar',
+      ayuda: 'Generá la etiqueta de góndola o la de un elaborado con su lote.',
+      ocultar: ['descripcion', 'imagen', 'categoria_id', 'tipo', 'created_at'],
+      acciones: [
+        { titulo: 'Góndola', ruta: (f) => `/etiquetas/articulos/${f.id}/gondola`, mensaje: 'Etiqueta de góndola generada.', campos: [{ k: 'impresora', etiqueta: 'Impresora (opcional)' }] },
+        { titulo: 'Elaborado', ruta: (f) => `/etiquetas/articulos/${f.id}/elaborado`, mensaje: 'Etiqueta de elaborado generada.', campos: [{ k: 'lote', etiqueta: 'Lote', requerido: true }, { k: 'impresora', etiqueta: 'Impresora (opcional)' }] },
+        { titulo: 'Código', ruta: (f) => `/etiquetas/articulos/${f.id}/codigo`, metodo: 'PUT', mensaje: 'Código asignado.', campos: [{ k: 'codigo', etiqueta: 'Código de barras', requerido: true }] },
+      ],
+    },
+
     { id: 'etiquetas', titulo: 'Etiquetas desactualizadas', ruta: '/etiquetas/desactualizadas', permiso: 'stock.etiquetas.gestionar', ayuda: 'Etiquetas de góndola impresas a un precio que ya no rige.', formato: { precio: (f) => dinero(f.precio) } },
   ]} />
 )
