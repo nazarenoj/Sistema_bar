@@ -9,7 +9,7 @@ export default function Modal({ titulo, onClose, ancho = 'max-w-2xl', children, 
   }, [onClose])
   return (
     <div className="fixed inset-0 z-40 bg-cafe-900/40 flex items-start justify-center p-4 overflow-y-auto" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`w-full ${ancho} bg-white rounded-2xl shadow-xl border border-stone-200 mt-10`}>
+      <div className={`animate-fade-in w-full ${ancho} bg-white rounded-2xl shadow-xl border border-stone-200 mt-10`}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200">
           <h2 className="font-semibold text-stone-800">{titulo}</h2>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-700 text-xl leading-none" aria-label="Cerrar">×</button>

@@ -3,7 +3,9 @@
 @tailwind utilities;
 
 @layer base {
-  body { @apply antialiased bg-crema; }
+  body { @apply antialiased bg-crema font-sans text-stone-800 text-[15px]; }
+  h1, h2 { @apply font-titulo; }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
   ::-webkit-scrollbar        { @apply w-1.5; }
   ::-webkit-scrollbar-track  { @apply bg-transparent; }
   ::-webkit-scrollbar-thumb  { @apply bg-stone-300 rounded-full; }

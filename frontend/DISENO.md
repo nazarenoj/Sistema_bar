@@ -19,6 +19,11 @@ Referencia visual: panel de administración clásico (barra lateral, título con
 
 Los colores con significado no se tocan: verde / rojo / ámbar para estados (libre, ocupado, error, advertencia) y los colores de ventana y mostrador del dibujo del salón.
 
+## Tipografía y movimiento
+- **Texto:** Source Sans 3 (clara y legible). **Títulos** (`h1`, `h2`): Lora, serif, para un tono tradicional. Se cargan de Google Fonts desde `index.html`; sin conexión caen a la fuente del sistema y a Georgia.
+- **Movimiento:** contenido. Las ventanas entran en 0,15 s, los avisos se deslizan y se van solos, y no hay animaciones decorativas. Con «reducir movimiento» activado en el sistema, todo se apaga.
+- **Tablas automáticas:** los títulos de columna salen en español (diccionario en `TablaAuto.jsx`) y nunca se muestran los ID globales ni los `algo_id` que ya traen el nombre.
+
 ## Componentes y clases
 - `DataTable` (`components/layout/DataTable.jsx`): todo listado largo lo usa. Trae «Mostrar N registros», buscador, orden por columna y paginado en el navegador. Las columnas se declaran con `key`, `titulo`, `render`, `valor`, `align`; las acciones por fila, con `acciones`.
 - Clases en `index.css`: `btn` + `btn-azul` (principal, marrón) / `btn-verde` (oliva) / `btn-rojo`; `btn-chico` para botones de fila; `campo` para entradas y selects; `etiqueta` para estados; `paginador`.
@@ -51,4 +56,4 @@ Los colores con significado no se tocan: verde / rojo / ámbar para estados (lib
 ## Pantallas por configuración
 Las pantallas de `components/modulos/` son archivos de configuración sobre `layout/Modulo.jsx`: cada pestaña declara su ruta, filtros, alta, acciones por fila y detalle. Si una respuesta no tiene un formato propio, `TablaAuto` arma las columnas con las claves. Una pantalla nueva de este tipo es una entrada en esos archivos más su registro en `pantallas.jsx`, `vistas.js` y `Menu.jsx`.
 
-Sin interfaz propia todavía (existen en la API): alta de recibos de cobro, notas de débito y crédito, apertura y cierre de cuentas corrientes, remitos nuevos y facturación agrupada, series por producto (ingreso, venta y baja), etiquetas (peso, góndola, elaborado), alta de ingresos por foto (subida de imagen), alérgenos por artículo, lotes (bloqueo y merma de fin de día), alta de turnos y pedidos especiales, activación del segundo factor, comprobantes de terceros (reserva y vínculo) y mantenimiento de padrón y numeración de ARCA.
+Sin interfaz propia todavía (existen en la API): subida de la foto de un ingreso y su lectura, declaración y baja de alérgenos por artículo, peso de las etiquetas por balanza, vínculo de comprobantes con remitos y mantenimiento del padrón de ARCA. El resto de las operaciones de los módulos tiene pantalla.

@@ -3,6 +3,10 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['"Source Sans 3"', 'system-ui', 'Segoe UI', 'sans-serif'],
+        titulo: ['Lora', 'Georgia', 'serif'],
+      },
       colors: {
         crema: '#F5F0E6',
         arena: { 300: '#C8B48A', 400: '#b9a273' },
@@ -20,7 +24,7 @@ export default {
         },
       },
       animation: {
-        'fade-in':  'fadeIn 0.2s ease-out forwards',
+        'fade-in':  'fadeIn 0.15s ease-out forwards',
         'slide-in': 'slideIn 0.25s ease-out forwards',
       },
     },
