@@ -1,4 +1,6 @@
+import * as api from '../../api'
 import Modulo from '../layout/Modulo'
+import SegundoFactor from './SegundoFactor'
 
 export const Copias = (p) => (
   <Modulo {...p} tabs={[
@@ -52,8 +54,16 @@ export const Consolidacion = (p) => (
 )
 
 export const Seguridad = (p) => (
-  <Modulo {...p} tabs={[
-    { id: 'estado', titulo: 'Mi verificación en dos pasos', ruta: '/2fa', ayuda: 'Estado de tu segundo factor de autenticación.' },
-    { id: 'roles', titulo: 'Roles que la exigen', ruta: '/2fa/roles', permiso: 'usuarios.roles.gestionar' },
-  ]} />
+  <div className="space-y-8">
+    <SegundoFactor addToast={p.addToast} />
+    {api.can(p.usuario, 'usuarios.roles.gestionar') && (
+      <div>
+        <h2 className="font-semibold text-stone-700 mb-2">Roles que exigen la verificación</h2>
+        <Modulo {...p} tabs={[{
+          id: 'roles', titulo: 'Roles', ruta: '/2fa/roles',
+          crear: { titulo: 'Cambiar los roles', ruta: '/2fa/roles', metodo: 'PUT', mensaje: 'Roles actualizados.', campos: [{ k: 'roles', etiqueta: 'Códigos de rol, separados por coma', ayuda: 'Ej.: administrador, gerente' }], armar: (v) => ({ roles: String(v.roles ?? '').split(',').map(x => x.trim()).filter(Boolean) }) },
+        }]} />
+      </div>
+    )}
+  </div>
 )
