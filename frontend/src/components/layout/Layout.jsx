@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Menu, { TITULOS } from './Menu'
+import Contencion from './Contencion'
 
 // Armazón de todas las pantallas: barra lateral cálida, barra superior clara, título con migas de pan y contenido en tarjeta.
 export default function Layout({ vista, setVista, usuario, enLinea, nuevasNotif, onLogout, onCambiarUsuario, onCambiarPassword, children }) {
@@ -50,7 +51,7 @@ export default function Layout({ vista, setVista, usuario, enLinea, nuevasNotif,
             </nav>
           </div>
           <div className="px-5 pb-6">
-            <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-5">{children}</div>
+            <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-5"><Contencion key={vista}>{children}</Contencion></div>
           </div>
           <footer className="px-5 py-3 text-xs text-stone-500 border-t border-stone-200 flex justify-between">
             <span>Sistema Chepola</span>

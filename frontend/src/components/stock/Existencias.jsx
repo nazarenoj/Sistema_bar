@@ -102,7 +102,7 @@ export default function Existencias({ addToast, usuario }) {
       if (pestana === 'vencimientos') setDatos(await api.llamar(`/lotes/vencimientos${api.qs({ dias })}`))
       if (pestana === 'reposicion') setDatos(await api.llamar(`/inventario/reposicion${api.qs({ deposito_id: filtro.deposito_id })}`))
       if (pestana === 'depositos') setDatos(depositos)
-    } catch (err) { addToast(err.message, 'error'); setDatos([]) }
+    } catch (err) { addToast(err.message, 'error'); setDatos(pestana === 'valorizado' ? { items: [], total: 0, metodo: '—' } : []) }
   }, [pestana, filtro, dias, depositos, addToast])
   useEffect(() => { cargar() }, [cargar])
 
@@ -118,7 +118,7 @@ export default function Existencias({ addToast, usuario }) {
     <div>
       <div className="flex flex-wrap gap-1 border-b border-stone-200 mb-4">
         {PESTANAS.map(([id, t]) => (
-          <button key={id} onClick={() => setPestana(id)}
+          <button key={id} onClick={() => { setDatos(null); setPestana(id) }}
             className={`px-4 py-2 text-sm -mb-px border-b-2 ${pestana === id ? 'border-cafe-800 text-cafe-800 font-semibold' : 'border-transparent text-stone-500 hover:text-stone-800'}`}>{t}</button>
         ))}
       </div>
@@ -143,7 +143,7 @@ export default function Existencias({ addToast, usuario }) {
 
       {!datos ? <div className="flex justify-center py-12"><Spinner size="lg" /></div> : (
         <>
-          {pestana === 'existencias' && (
+          {pestana === 'existencias' && Array.isArray(datos) && (
             <DataTable filas={datos.map((d, i) => ({ id: i, ...d }))} vacio="No hay existencias registradas."
               columnas={[
                 { key: 'nombre', titulo: 'Ítem' }, { key: 'tipo', titulo: 'Tipo' }, { key: 'deposito', titulo: 'Depósito' }, { key: 'unidad', titulo: 'Unidad' },
@@ -153,13 +153,13 @@ export default function Existencias({ addToast, usuario }) {
               ]}
               acciones={d => <button onClick={() => setKardex(d)} className="btn btn-azul btn-chico">Kardex</button>} />
           )}
-          {pestana === 'valorizado' && (
+          {pestana === 'valorizado' && !Array.isArray(datos) && (
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
                 <Tarjeta titulo="Valor del inventario" valor={dinero(datos.total)} />
                 <Tarjeta titulo="Método de valuación" valor={datos.metodo} />
               </div>
-              <DataTable filas={datos.items.map(d => ({ id: `${d.tipo}${d.item_id}`, ...d }))} vacio="Sin inventario."
+              <DataTable filas={(datos.items ?? []).map(d => ({ id: `${d.tipo}${d.item_id}`, ...d }))} vacio="Sin inventario."
                 columnas={[
                   { key: 'nombre', titulo: 'Ítem' }, { key: 'tipo', titulo: 'Tipo' },
                   { key: 'cantidad', titulo: 'Cantidad', align: 'right', render: d => num(d.cantidad) },
@@ -168,7 +168,7 @@ export default function Existencias({ addToast, usuario }) {
                 ]} />
             </>
           )}
-          {pestana === 'vencimientos' && (
+          {pestana === 'vencimientos' && Array.isArray(datos) && (
             <DataTable filas={datos.map((d, i) => ({ id: i, ...d }))} vacio="No hay lotes por vencer en ese plazo."
               columnas={[
                 { key: 'nombre', titulo: 'Ítem' }, { key: 'codigo', titulo: 'Lote' }, { key: 'deposito', titulo: 'Depósito' },
@@ -177,8 +177,8 @@ export default function Existencias({ addToast, usuario }) {
                 { key: 'estado', titulo: 'Estado', align: 'center', valor: d => (d.vencido ? 'Vencido' : d.bloqueado ? 'Bloqueado' : 'Por vencer'), render: d => <span className={`etiqueta ${d.vencido ? 'bg-rose-400' : d.bloqueado ? 'bg-stone-400' : 'bg-amber-500'}`}>{d.vencido ? 'Vencido' : d.bloqueado ? 'Bloqueado' : 'Por vencer'}</span> },
               ]} />
           )}
-          {pestana === 'reposicion' && <TablaAuto filas={datos} vacio="No hay nada para reponer." />}
-          {pestana === 'depositos' && <TablaAuto filas={datos} ocultar={['created_at', 'updated_at']} vacio="No hay depósitos." />}
+          {pestana === 'reposicion' && Array.isArray(datos) && <TablaAuto filas={datos} vacio="No hay nada para reponer." />}
+          {pestana === 'depositos' && Array.isArray(datos) && <TablaAuto filas={datos} ocultar={['created_at', 'updated_at']} vacio="No hay depósitos." />}
         </>
       )}
 

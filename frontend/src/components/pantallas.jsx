@@ -7,6 +7,7 @@ import { Produccion, Inventario, Calidad, Proveedores } from './modulos/stockOpe
 import { Reservas, Comisiones, Carta } from './modulos/ventasExtra'
 import { Cobranzas, Fidelizacion } from './modulos/clientesExtra'
 import { Copias, Correo, Padron, Consolidacion, Seguridad } from './modulos/sistema'
+import Alergenos from './stock/Alergenos'
 import Inicio from './Inicio'
 import Cocina from './ventas/Cocina'
 import ConfigVentas from './ventas/ConfigVentas'
@@ -17,6 +18,7 @@ export const PANTALLAS = {
   stock: Existencias,
   clientes: Clientes,
   inicio: Inicio,
+  alergenos: Alergenos,
   copias: Copias,
   correo: Correo,
   padron: Padron,
