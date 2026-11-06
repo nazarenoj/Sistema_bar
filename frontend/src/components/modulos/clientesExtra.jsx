@@ -68,6 +68,7 @@ export const Cobranzas = (p) => (
     },
     {
       id: 'pendientes', titulo: 'Remitos por facturar', ruta: '/cuentas-corrientes/remitos-pendientes', permiso: 'clientes.ver',
+      ayuda: 'Indicá el número de cliente para ver sus remitos pendientes.', filtros: [{ k: 'cliente_id', etiqueta: 'N.º de cliente', tipo: 'number', requerido: true }],
       crear: {
         titulo: 'Facturar remitos de un cliente', ruta: '/remitos/facturar', permiso: 'ventas.remitos.facturar', mensaje: 'Facturación hecha.',
         campos: [{ k: 'cliente_id', etiqueta: 'N.º de cliente', tipo: 'entero', requerido: true }, { k: 'remitos', etiqueta: 'N.º de remitos (separados por coma)', requerido: true }, { k: 'previa', etiqueta: 'Solo vista previa, sin emitir', tipo: 'checkbox' }],

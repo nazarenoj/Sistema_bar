@@ -69,9 +69,14 @@ export const Reservas = (p) => (
   ]} />
 )
 
+// Mes en curso, para los listados que piden un rango de fechas.
+const ahora = new Date()
+const isoFecha = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+const MES = [{ k: 'desde', etiqueta: 'Desde', tipo: 'date', defecto: isoFecha(new Date(ahora.getFullYear(), ahora.getMonth(), 1)) }, { k: 'hasta', etiqueta: 'Hasta', tipo: 'date', defecto: isoFecha(ahora) }]
+
 export const Comisiones = (p) => (
   <Modulo {...p} tabs={[
-    { id: 'mias', titulo: 'Mis comisiones', ruta: '/comisiones/mias', filtros: [{ k: 'desde', etiqueta: 'Desde', tipo: 'date' }, { k: 'hasta', etiqueta: 'Hasta', tipo: 'date' }] },
+    { id: 'mias', titulo: 'Mis comisiones', ruta: '/comisiones/mias', filtros: MES },
     {
       id: 'reglas', titulo: 'Reglas', ruta: '/comisiones/reglas', permiso: 'ventas.comisiones.gestionar',
       crear: {

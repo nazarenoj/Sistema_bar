@@ -76,6 +76,7 @@ const obtener = async (id) => {
   return vista(c);
 };
 const deCliente = async (clienteId) => {
+  if (!Number.isInteger(clienteId) || clienteId <= 0) throw invalida('Indicá el cliente (cliente_id).');
   const c = await Clientes.resolver(clienteId);
   if (!c) throw invalida('Cliente no encontrado.', 404);
   const filas = (await pool.query('SELECT * FROM cuentas_corrientes WHERE cliente_id = ? ORDER BY moneda', [c.id]))[0];
@@ -327,6 +328,7 @@ const facturarAgrupado = async ({ cliente_id: clienteId, remitos, aceptar_difere
 
 // Remitos pendientes de facturar de un cliente: la lista de trabajo (RF21).
 const remitosPendientes = async (clienteId) => {
+  if (!Number.isInteger(clienteId) || clienteId <= 0) throw invalida('Indicá el cliente (cliente_id).');
   const c = await Clientes.resolver(clienteId);
   if (!c) throw invalida('Cliente no encontrado.', 404);
   return (await pool.query(

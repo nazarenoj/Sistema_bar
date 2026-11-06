@@ -2,6 +2,11 @@ import * as api from '../../api'
 import Modulo from '../layout/Modulo'
 import SegundoFactor from './SegundoFactor'
 
+// Mes en curso, para los informes que piden un rango de fechas.
+const hoy = new Date()
+const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+const MES = [{ k: 'desde', etiqueta: 'Desde', tipo: 'date', defecto: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)) }, { k: 'hasta', etiqueta: 'Hasta', tipo: 'date', defecto: iso(hoy) }]
+
 export const Copias = (p) => (
   <Modulo {...p} tabs={[
     {
@@ -48,8 +53,8 @@ export const Consolidacion = (p) => (
       acciones: [{ titulo: 'Activar / desactivar', ruta: (f) => `/consolidacion/sucursales/${f.codigo}/activa`, metodo: 'PUT', body: (f) => ({ activa: !f.activa }), permiso: 'usuarios.consolidacion.gestionar', mensaje: 'Sucursal actualizada.' }] },
     { id: 'paquetes', titulo: 'Paquetes recibidos', ruta: '/consolidacion/paquetes', permiso: 'usuarios.consolidacion.ver' },
     { id: 'control', titulo: 'Control', ruta: '/consolidacion/control', permiso: 'usuarios.consolidacion.ver' },
-    { id: 'ventas', titulo: 'Ventas consolidadas', ruta: '/consolidacion/informes/ventas', permiso: 'usuarios.consolidacion.ver', filtros: [{ k: 'desde', etiqueta: 'Desde', tipo: 'date' }, { k: 'hasta', etiqueta: 'Hasta', tipo: 'date' }] },
-    { id: 'stock', titulo: 'Stock consolidado', ruta: '/consolidacion/informes/stock', permiso: 'usuarios.consolidacion.ver' },
+    { id: 'ventas', titulo: 'Ventas consolidadas', ruta: '/consolidacion/informes/ventas', permiso: 'usuarios.consolidacion.ver', filtros: MES },
+    { id: 'stock', titulo: 'Stock consolidado', ruta: '/consolidacion/informes/stock', permiso: 'usuarios.consolidacion.ver', filtros: MES },
   ]} />
 )
 

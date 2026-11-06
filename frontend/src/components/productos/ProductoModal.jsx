@@ -3,7 +3,9 @@ import * as api from '../../api'
 import Spinner from '../Spinner'
 import BuscadorInsumo from './BuscadorInsumo'
 
-const EMPTY = { nombre: '', precio: '', descripcion: '', stock: '' }
+const EMPTY = { nombre: '', precio: '', descripcion: '', stock: '', tipo: 'estandar', alicuota_iva: '21' }
+const TIPOS = [['estandar', 'Estándar (se vende tal cual, con su propio stock)'], ['elaborado', 'Elaborado (descuenta los insumos de su receta)'], ['servicio', 'Servicio (sin stock)']]
+const IVA = ['0', '2.5', '5', '10.5', '21', '27']
 
 export default function ProductoModal({ producto, insumos, onClose, onSaved, addToast, confirm }) {
   const editing = !!producto
@@ -19,6 +21,8 @@ export default function ProductoModal({ producto, insumos, onClose, onSaved, add
         precio:      producto.precio      ?? '',
         descripcion: producto.descripcion ?? '',
         stock:       producto.stock       ?? '',
+        tipo:        producto.tipo        ?? 'estandar',
+        alicuota_iva: String(Number(producto.alicuota_iva ?? 21)),
       })
     }
   }, [producto])
@@ -90,6 +94,8 @@ export default function ProductoModal({ producto, insumos, onClose, onSaved, add
       nombre:      form.nombre.trim(),
       precio:      parseFloat(form.precio),
       descripcion: form.descripcion.trim() || null,
+      tipo:        form.tipo,
+      alicuota_iva: Number(form.alicuota_iva),
       // El stock solo se define al crear el producto; luego solo se descuenta
       // automáticamente al cerrar cuentas, no se edita a mano.
       ...(!editing && { stock: form.stock !== '' ? parseInt(form.stock) : 0 }),
@@ -158,6 +164,21 @@ export default function ProductoModal({ producto, insumos, onClose, onSaved, add
               {editing && (
                 <p className="text-xs text-stone-400 mt-1">Se actualiza solo al cerrar cuentas.</p>
               )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Tipo</label>
+              <select value={form.tipo} onChange={set('tipo')} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500">
+                {[...TIPOS, ...(TIPOS.some(([v]) => v === form.tipo) ? [] : [[form.tipo, form.tipo]])].map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">IVA (%)</label>
+              <select value={form.alicuota_iva} onChange={set('alicuota_iva')} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-500">
+                {IVA.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
             </div>
           </div>
 
