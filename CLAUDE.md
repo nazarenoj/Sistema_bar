@@ -42,6 +42,15 @@ Fase A completa, v6.0.0).
 - **Evolutivo, no reescritura**: se evoluciona el código actual en lugar de rehacerlo según el plan
   (TypeScript/NestJS). TypeScript, si se usa, se suma de a poco. Se reconsidera solo si un módulo
   se vuelve inmanejable.
+- **Límites del plan de Hostinger (confirmados)**: 5 apps Node, 150 bases de datos y 100 dominios.
+  Con una sola app para todos los clientes alcanza una app de producción (las otras quedan para
+  pruebas). El tope práctico son **150 instancias** (una por cliente de una sucursal, una por
+  sucursal en los demás), menos las de prueba y la Casa Central de quien consolide; los 100
+  dominios alcanzan para un dominio por cliente, pero la tienda online se publica como **subruta**
+  (`<dominio>/<codigo-de-la-tienda>`), sin dominio propio.
+- **Módulos opcionales**: Contable se puede instalar en cualquier momento, como los demás, pero
+  sin contabilidad retroactiva (parte de su fecha de inicio, con asiento de apertura). Ventas
+  Online cobra con Mercado Pago y no integra transportistas (retiro y delivery propio).
 - **Una sola app para todos los clientes**: la app resuelve a qué base conectarse según el cliente
   de cada request (pool de conexiones por cliente), en vez de desplegar una app por cliente.
 
@@ -84,17 +93,18 @@ Fase A completa, v6.0.0).
 
 ## Alcance y prioridad
 Se desarrollan **en su totalidad**, según `SPECS/`, estos módulos y en este orden de importancia:
-**Ventas, Usuarios y Auditoría, Stock, Clientes y CC**. Financiero, Compras, Contable y Ventas
-Online no se construyen por ahora: se tratan como puertos con implementación nula (la venta
-funciona igual sin ellos). El plan de trabajo, con checkpoints y criterios de aceptación, está en
-`plan-checkpoints.md`; es la referencia para saber qué sigue. Los SPECS están en `SPECS/`
+**Ventas, Usuarios y Auditoría, Stock, Clientes y CC** (Fases A a F, hechas). Después se
+desarrollan, en este orden, **Financiero, Compras, Ventas Online y Contable** (Fases G a J);
+mientras un módulo no esté instalado se trata como puerto con implementación nula (la venta
+funciona igual sin él). El plan de trabajo, con checkpoints y criterios de aceptación, está en
+`plan-checkpoints.md` (Fases A a F) y `plan-checkpoints-opcionales.md` (Fases G a J); son la
+referencia para saber qué sigue. Los SPECS están en `SPECS/`
 (`00-indice-y-decisiones.md` trae el catálogo de funciones, los perfiles de rubro, las capas, los
 puertos, los eventos y la lista cerrada de llamadas entre módulos). Los números RF/RN/EX nunca se
 renumeran: se citan siempre por módulo y número (ej. `Ventas RN12`).
 
 ## Decisiones técnicas pendientes (no asumir, consultar antes)
-- Límites del plan de Hostinger: cantidad de bases de datos y de apps Node permitidas, y versión
-  exacta de MySQL/MariaDB. Confirmar antes de comprometer un número de clientes.
+- Versión exacta de MySQL/MariaDB del plan de Hostinger.
 - Prueba de campo de los periféricos con el equipo real del cliente piloto (checkpoint B0): si la
   balanza no habla por puerto serie, se reabre la decisión de periféricos.
 
@@ -128,3 +138,11 @@ Reglas:
   `package.json`, no hardcodeado).
 - Cada vez que se haga un cambio que corresponda a una de estas categorías, hay que actualizar
   `package.json` (raíz) como parte del mismo commit.
+
+
+## Frontend
+-Proposito y audiencia: Debe ser amigable e intuitiva, pensada para personas sin experiencia, debe transmitir orden
+-Tono:Tradicional y contraste medio
+-Fuentes:una fuente de letra clara y legible, una mas imponente para titulares
+-Colores:colores neutros calidos con un color de acento que destaque
+-Filosofia de movimiento: contenido,con salidas rapidas.

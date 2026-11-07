@@ -9,7 +9,7 @@ Base: `SPECS/00-indice-y-decisiones.md` (anexos A, B y C), `SPECS/04-usuarios-au
 - **Mensajería**: bandeja de salida en la misma base, con un trabajador dentro de la misma app, sin broker externo.
 - **Arquitectura** (de `CLAUDE.md`): evolutivo sobre el código actual, MySQL, una base por instancia (ver pendiente 1), una sola app para todos.
 - **Decisiones fundacionales del índice (F1 a F4)**: servidor en la nube por cliente y sistema puramente online, `ID_Global` para todo documento, intento/efecto con `Reemplaza_A`, y reservar–confirmar–vencer. Ya están reflejadas en A1, A3, A9, A10 y A11.
-- **Fuera de alcance**: Financiero, Compras, Contable y Ventas Online no existen. Se tratan como piden los SPECS: **puertos con implementación nula** (Ventas RN01). La venta funciona igual sin ellos.
+- **Fuera de este plan**: Financiero, Compras, Contable y Ventas Online se planifican en `plan-checkpoints-opcionales.md` (Fases G a J). Hasta que se instalen se tratan como piden los SPECS: **puertos con implementación nula** (Ventas RN01). La venta funciona igual sin ellos.
 
 ## Decisiones técnicas cerradas
 
@@ -317,7 +317,7 @@ Revisión de dependencias entre fases (A a F) hecha contra el código al cerrar 
 | 11 | Compromiso de venta solo al cerrar | B3, C3, C5 | No se toma «al enviar la comanda». |
 | 12 | Pruebas contra servicios reales | B0, B7, B8, B12, F8 | Periféricos del cliente piloto (B0), ARCA real (padrón, CAEA, consulta de comprobantes) y SMTP con STARTTLS solo se probaron con simulaciones. |
 | 13 | Sin pantallas | A a F | Todo se probó por la API; el frontend sigue siendo el de antes de la plataforma. |
-| 14 | Módulos no construidos | — | Financiero, Compras, Contable y Ventas Online son puertos nulos; las llamadas n.º 5, 7 a 10, 14 a 16 y 18 a 21 existen solo en el registro. |
+| 14 | Módulos no construidos | — | Financiero, Compras, Contable y Ventas Online son puertos nulos; las llamadas n.º 5, 7 a 10, 14 a 16 y 18 a 21 existen solo en el registro. Se resuelven en las Fases G a J de `plan-checkpoints-opcionales.md`. |
 
 Dependencias entre fases comprobadas en el código: D11 con F2, C2 con F6, C16 con F7 y F6, E8 con F2, E9 con C10, y las llamadas n.º 1, 2, 12 y 13 con sus puertos y su política de falla.
 

@@ -1,0 +1,137 @@
+# Plan de checkpoints: Financiero, Compras, Ventas Online y Contable
+
+Base: `SPECS/05-financiero.md` (28 RF, 46 RN, 33 EX), `SPECS/07-compras.md` (25 RF, 40 RN, 24 EX), `SPECS/08-ventas-online.md` (29 RF, 56 RN, 38 EX) y `SPECS/06-contable.md` (26 RF, 38 RN, 24 EX), más `SPECS/00-indice-y-decisiones.md` (Anexo A catálogo de funciones, B.2 puertos, B.5 llamadas, Anexo C costos). Continúa `plan-checkpoints.md` (Fases A a F, cerradas hasta la v63.2.0): mismas reglas, mismo formato, mismas convenciones de código. Este plan **cambia el alcance** de `CLAUDE.md` («Financiero, Compras, Contable y Ventas Online no se construyen por ahora»); al aprobarlo hay que actualizar esa sección y la brecha 14 de `plan-checkpoints.md`.
+
+## Decisiones tomadas / a confirmar
+
+- **Orden propuesto**: Financiero → Compras → Ventas Online → Contable. Sigue las capas del índice (N2, N3, N4) y el valor para el piloto: la caja y el turno son lo que más falta hoy en el local; Compras cierra costos y proveedores; Ventas Online es un canal nuevo; Contable consume los eventos de todos los demás y se vende aparte; como ya no exige instalarse en la puesta en marcha, va al final sin riesgo (solo contabiliza desde su fecha de inicio).
+- **Cada módulo** es un módulo más de `src/modulos/catalogo.js` (hoy `noConstruido: true`): se instala por `POST /api/modulos/<nombre>/instalar`, con sus archivos de migración, permisos y funciones. Sin instalar, el puerto nulo sigue valiendo y la venta no se rompe (Ventas RN01).
+- **Reglas de los módulos ya hechos que se mantienen**: dinero `DECIMAL`, migraciones idempotentes, `ID_Global`, mensajes por bandeja de salida dentro de la transacción del documento, receptores idempotentes, `requierePermiso`, `auditar`, idempotencia por `X-ID-Solicitud`, llamadas solo por `llamar(n, ...)` o un puerto, prueba de arquitectura.
+- **Decisiones del usuario (7/11/2026)**:
+  1. **El piloto usa caja y turno**: Financiero va primero (Fase G) y Ventas pasa a exigir turno abierto para cobrar en efectivo (configurable por instancia). Conviene avisar a los empleados antes de prenderlo.
+  2. **Pasarela: Mercado Pago. Sin transportista**: `ONL-PASARELA` queda con Mercado Pago detrás de una interfaz interna (`Pago_Online` es la frontera); `ONL-ENVIOS-TRANSPORTISTA` queda apagada y la tienda ofrece retiro en barra y delivery propio. Hace falta una cuenta de prueba de Mercado Pago antes de I6.
+  3. **La tienda se publica como subruta** de la app (`<dominio>/<codigo-de-la-tienda>`), no como dominio propio. La app resuelve la instancia por la subruta. Límites de Hostinger confirmados: 5 apps Node, 150 bases y 100 dominios. Una sola app de producción alcanza (la tienda corre en la misma app); el tope son 150 instancias. Los 100 dominios permitirían dominio propio por cliente, pero se mantiene la subruta.
+  4. **Contable se puede instalar después, como cualquier módulo, pero sin contabilidad retroactiva**: contabiliza desde la fecha de inicio que se elige al instalar, con asiento de apertura. Se modificaron los SPECS (`00` índice y decisión 1 de «Para confirmar», `01`, `04` RN31/RF13/RN47, `05`, `06` RF13/RN01/RN18/RN31, `07`). Queda abierto qué pasa si se desinstala y se reinstala (anotado en Contable RN18).
+- **Sigue a confirmar**: moneda extranjera y consolidación (`FIN-MONEDA-EXT`, `CON-CONSOL`, `USU-CONSOL`), solo si hay un cliente con varias sucursales.
+
+## Reglas para todos los checkpoints
+
+Las de `plan-checkpoints.md` (prueba automática por cada RN/EX, migración numerada, versión en `package.json`, trazabilidad, commits chicos), más:
+1. **Primer paso de cada CP**: listar las RN y EX de los RF que cubre (están en las secciones 5 y 6 del SPEC) y crear un test con el ID (ej. `Financiero.RN07`). Este plan cita los RF; las RN/EX se enumeran al abrir el CP.
+2. Las migraciones siguen desde la `072`. Toda migración sube el MAJOR (desde la v64.0.0); el backend sin esquema, el MINOR; las pantallas, el PATCH.
+3. Cada CP que implementa un puerto o una llamada del Anexo B.5 reemplaza la implementación nula **y** conserva la política de falla escrita en la tabla (cerrar, abrir con autorización o degradar), con un test que apague el módulo.
+4. Cada función activable del módulo ya está en `src/funciones/catalogo.js`; el CP que la implementa solo la conecta (validar que apagarla oculta la pantalla y detiene la lógica).
+5. Cada pantalla va en `frontend/src/components/modulos/` con los permisos de `PERMISO_VISTA` y se oculta si la función está apagada (como en la v63.1.1).
+
+## Orden de ejecución
+
+| Etapa | Fase | Contenido | Capa | Depende de |
+|-------|------|-----------|------|-----------|
+| 1 | **G** | Financiero | N2 | Ventas, Usuarios |
+| 2 | **H** | Compras | N3 | Stock; Financiero opcional |
+| 3 | **I** | Ventas Online | N4 | Ventas, Stock, Clientes; Financiero solo para marketplaces |
+| 4 | **J** | Contable | N4 | Eventos de todos los demás (instalable en cualquier momento; contabiliza desde su fecha de inicio) |
+
+```
+G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9
+                       ↓ (cobros y turno disponibles)
+H1 → H2 → H3 → H4 → H5 → H6 → H7 → H8 → H9    (H5 usa G; H6 usa Stock C2/C14)
+                       ↓
+I1 → I2 → I3 → I4 → I5 → I6 → I7 → I8 → I9 → I10 → I11
+                       ↓ (todas las fuentes publicando)
+J1 → J2 → J3 → J4 → J5 → J6 → J7 → J8 → J9
+```
+
+---
+
+## Fase G: Financiero (`SPECS/05-financiero.md`)
+
+Hoy el puerto `cobros` es nulo y no hay turno de caja en Ventas. Esta fase los implementa. Cierra las llamadas n.º 5, 16 y 20 (Ventas consulta el turno abierto, Financiero consulta cobros con integración pendiente, Ventas consulta el saldo de caja antes de una devolución en efectivo).
+
+| CP | Qué se construye | Referencias | Criterio de aceptación |
+|----|------------------|-------------|------------------------|
+| **G1** | **Instalación y cajas/cuentas**: módulo `financiero` instalable, `Configuracion_Financiero`, cajas (barra, salón, reparto, fuerte) y cuentas (banco, billetera, procesador), moneda por caja, categorías en árbol y su catálogo inicial por perfil de rubro | RF01, RF11, RF23 (configuración) | Una caja no se borra con movimientos; las categorías no forman ciclos; instalar y desinstalar no deja filas huérfanas |
+| **G2** | **Formas de pago ↔ destino**: asignar cada forma de pago de Ventas (y luego de Clientes y Compras) a una caja o cuenta; implementa el puerto `cobros` (`registrarCobro`) | RF02, RF17 (registro de cobros), RF27 | Un cobro de Ventas llega a su caja una sola vez aunque el mensaje se duplique (`ID_Operacion`); sin destino configurado el cobro queda en «Pendiente de imputar», nunca se pierde |
+| **G3** | **Turnos de servicio y de caja**: apertura con fondo de cambio contado, terminal y usuario, un turno abierto por caja y terminal; implementa la llamada n.º 5 (Ventas RN43): con Financiero caído, el cobro en efectivo pide supervisor y queda «turno no verificado» | RF03; llamada n.º 5 | **El piloto lo exige**: no se cobra en efectivo sin turno abierto (parámetro por instancia); con el módulo apagado la venta sigue; el turno de otro usuario no se usa |
+| **G4** | **Arqueo y cierre** (con `FIN-CIERRE-CIEGO`), cobros de integración pendiente al cerrar (llamada n.º 16), diferencia de caja, evento «Cierre de turno» | RF04, RF28; llamada n.º 16 | El cierre ciego no muestra el esperado antes de contar; un cobro con integración incompleta obliga a motivo y supervisor y deja el turno marcado; el evento se publica una sola vez |
+| **G5** | **Reapertura autorizada de un turno cerrado**, con motivo y auditoría; lo ya informado se corrige con ajustes en la fecha actual (evento «Reapertura de turno») | RF18 | Sin supervisor no reabre; ningún movimiento ya publicado se edita; el ajuste lleva la fecha de hoy |
+| **G6** | **Transferencias, retiros a caja fuerte y acreditaciones de tarjetas/billeteras** con liquidación y comisión | RF05, RF06 | Una transferencia mueve ambos lados o ninguno; una liquidación cierra las acreditaciones pendientes que cubre y informa la diferencia |
+| **G7** | **Gastos y gastos recurrentes** (`FIN-GASTOS-REC`), gasto con comprobante fiscal (evento), carga por foto (`FIN-FOTO-GASTOS`) | RF10, RF12, RF23 (comisiones de vendedores, `VEN-COMISIONES`) | El gasto recurrente genera una sola ocurrencia por período; el pago de comisiones sale de la caja elegida y marca la liquidación de Ventas como pagada |
+| **G8** | **Cheques y conciliación** (`FIN-CHEQUES`, `FIN-CONCILIACION`): cartera, depósito, endoso, rechazo con evento «Cheque rechazado» (lo consume Clientes E4 para reabrir deuda), extractos y conciliación | RF07, RF08, RF09; Clientes RF06, RF17, RF19 | Un cheque rechazado revierte el recibo en Clientes sin tocar el número del recibo; una línea de extracto se concilia contra un solo movimiento |
+| **G9** | **Informes y proyección**: flujo de fondos, balance de actividad, diferencia de cambio (`FIN-MONEDA-EXT`, que además habilita `VEN-DIVISA`), consultas con CSV/Excel, indicadores del tablero, paquete de consolidación y saldo de caja para devoluciones en efectivo (llamada n.º 20) | RF13, RF14, RF15, RF16, RF24 (pasarelas, se completa en I8), RF25, RF26; llamada n.º 20 | El balance cuadra con los movimientos; una devolución en efectivo mayor al saldo de la caja pide supervisor |
+
+---
+
+## Fase H: Compras (`SPECS/07-compras.md`)
+
+Implementa los puertos `costoReposicion` (Ventas) y `plazosEntrega` (Stock) y las llamadas n.º 14 y 15. Parte de lo que ya existe en Stock: remitos de proveedor, ingreso por foto, series, devolución a proveedor.
+
+| CP | Qué se construye | Referencias | Criterio de aceptación |
+|----|------------------|-------------|------------------------|
+| **H1** | **Instalación y proveedores**: ficha (CUIT con verificador, condición de IVA, padrón por la llamada n.º 14, rubro, datos de entrega), configuración del módulo | RF01, RF17, RF23; llamada n.º 14 | CUIT duplicado bloqueado; padrón caído permite carga manual y deja «pendiente de constatar» |
+| **H2** | **Comprobantes de compra** (facturas, ND, NC) con reserva de clave (llamada n.º 10), borrador/confirmado, líneas con presentación de Stock (llamada n.º 15, falla: línea sin confirmar) | RF03, RF15, RF18 (unidades de compra, `CMP-UNIDADES-COMPRA`); llamadas n.º 10 y 15 | Un comprobante repetido del mismo proveedor no se confirma (casi duplicado pide revisión); sin Stock la línea no se confirma |
+| **H3** | **Vínculo con ingresos de Stock**: una sola carga física; el comprobante se vincula al ingreso ya hecho (o lo genera con mensaje), lotes y vencimientos en la recepción (`CMP-RECEPCION-LOTES`) y series | RF04, RF19, RF24; Stock RN07 | Un ingreso nunca se cuenta dos veces; si la recepción es parcial el comprobante queda con saldo por recibir |
+| **H4** | **Cuenta corriente de proveedor y vencimientos** (saldo derivado, no editable), antigüedad y vencimientos a pagar publicados a Financiero | RF02, RF05 | El saldo coincide con la suma de movimientos; un vencimiento pagado no figura como pendiente |
+| **H5** | **Órdenes de pago, anticipos, pagos programados y retenciones practicadas** (`CMP-PAGOS-PROGRAMADOS`, `CMP-RETENCIONES`); con Financiero, usa el registro de pagos y de cheques propios; sin él, los pagos quedan como datos propios | RF06, RF07, RF08, RF09 | Una orden de pago aplica a comprobantes sin superar su saldo; anularla restituye el saldo; sin Financiero el módulo opera igual |
+| **H6** | **Listas de proveedor y costo de reposición**: implementa el puerto `costoReposicion` (precios por costo con margen, `VEN-PRECIO-COSTO`), evento «Costo de reposición actualizado» | RF10, RF11, RF21 (Anexo C: el CR no es costo de inventario) | Cambiar una lista actualiza el CR por evento a la copia local de Ventas; el CR nunca modifica el costo de inventario |
+| **H7** | **Pedidos a proveedores** (`CMP-PEDIDOS`, envío por correo) y pedido sugerido desde la reposición de Stock (`CMP-PEDIDO-SUGERIDO`, `STK-REPO-AUTO`); implementa el puerto `plazosEntrega` | RF12, RF17, RF20 | Un pedido enviado no se edita (se reemplaza); el plazo del proveedor alimenta la reposición sugerida de Stock |
+| **H8** | **Libro IVA Compras y controles contra ARCA** (`CMP-CONTROL-ARCA`, constatación del CAE, llamada n.º 14) y carga por foto (`CMP-FOTO`) | RF13, RF14 | El libro cuadra con los comprobantes del período; sin ARCA el comprobante queda «pendiente de constatar» |
+| **H9** | **Devolución a proveedor y nota de crédito**, consultas, indicadores del tablero | RF25, RF16, RF22 | La NC no supera el comprobante; el evento «Devolución a proveedor» baja el stock una vez |
+
+---
+
+## Fase I: Ventas Online (`SPECS/08-ventas-online.md`)
+
+Módulo más grande y el único con una parte pública. Cierra las llamadas n.º 7, 8, 9, 19 y 21. La tienda y su conector corren en la misma app que el resto (sin sincronización nube-local).
+
+| CP | Qué se construye | Referencias | Criterio de aceptación |
+|----|------------------|-------------|------------------------|
+| **I1** | **Instalación, tienda y rutas públicas**: `Tienda`, configuración, **subruta** por instancia (`/<codigo-de-la-tienda>`, resuelta por la app), rutas sin sesión con límite de pedidos por IP y sin exponer datos internos | RF01, RF28 (config); decisión 3 | Una ruta pública nunca devuelve datos de otra instancia; sin la tienda activa responde 404 |
+| **I2** | **Publicación del catálogo, precios online y sincronización**: qué se publica, lista Online (Ventas RN32, índice 2.4), disponibilidad desde Stock | RF02, RF03, RF04, RF21 | Un producto sin stock disponible no se vende; el precio publicado es el de la lista Online salvo la regla del cliente |
+| **I3** | **Navegación, búsqueda, alérgenos y modificadores** en la ficha y el checkout | RF05, RF22 | Los alérgenos del ítem y de sus modificadores se muestran antes de pagar |
+| **I4** | **Carrito, cupones y cuentas de cliente** (`ONL-CUPONES`, `ONL-CUENTA-CLIENTE`); cliente online enlazado a Clientes con alias | RF06, RF07, RF08 | El carrito no conserva precios vencidos; un cupón vencido o agotado se rechaza |
+| **I5** | **Checkout y reserva de stock** antes de abrir la pasarela, vigencia 15 min (llamada n.º 7); veredicto/reserva de crédito (n.º 8) y retención de vales (n.º 9); canje de vales, gift cards y puntos; disponibilidad de elaborados (n.º 21) | RF09, RF24; RN06, RN07, RN45; llamadas n.º 7, 8, 9, 21 | Dos checkouts no reservan más que el stock; una reserva vencida se libera sola; sin Clientes no se ofrece cuenta corriente ni vales |
+| **I6** | **Pagos por pasarela** (`ONL-PASARELA`, **Mercado Pago** detrás de una interfaz interna; Checkout Pro, webhooks con firma HMAC, reintegros por API; pruebas con tarjetas de prueba): registro técnico del pago (`Pago_Online`), webhooks idempotentes y firmados, reintegros; el cobro lo registra Ventas (RN44), no Financiero | RF10; RN44 | El mismo webhook dos veces no cobra dos veces; un pago acreditado sin pedido genera alerta, no se descarta |
+| **I7** | **Envíos propios y retiro** (`ONL-ENVIOS-TRANSPORTISTA` **apagada**, sin transportistas): reglas de envío gratis, zonas y costos fijos de delivery propio, retiro en barra, franjas; los transportistas quedan como ampliación futura | RF11, RF26 | Con la función apagada solo se ofrece retiro y delivery propio; un envío no se despacha sin pago acreditado |
+| **I8** | **Gestión de pedidos, cocina/barra y notificaciones al cliente**; el pedido entra a la pantalla de Cocina (RF25 usa la pantalla existente) | RF12, RF13, RF25, RF16 (elaborados por encargo) | Estados válidos únicamente en orden; cada cambio notifica una vez |
+| **I9** | **Facturación del pedido** por el servicio de Ventas y alineación cobrado / reintegrado / facturado (llamada n.º 19); pesaje real y aceptación de la diferencia | RF14, RF29; RN50 a RN52; llamada n.º 19 | El invariante cobrado = reintegrado + facturado neto se cumple o queda «No verificado»; el pesable se factura después del pesaje |
+| **I10** | **Cancelaciones, devoluciones y arrepentimiento** (10 días), ajustes del pedido | RF15 | Un arrepentimiento dentro del plazo reintegra y repone stock; fuera de plazo se rechaza |
+| **I11** | **Marketplaces y reservas** (`ONL-MARKETPLACES`, `ONL-RESERVAS`): conectores, pedidos de plataforma, comisiones y liquidaciones hacia Financiero (G9), reservas de mesa; informes | RF17, RF18, RF19, RF20, RF27 (café en grano y packs, puede ir antes si el piloto lo pide) | La liquidación de plataforma concilia contra los pedidos; sin Financiero el conector no se activa |
+
+---
+
+## Fase J: Contable (`SPECS/06-contable.md`)
+
+Se vende aparte y se instala en cualquier momento (RN01, RN18, modificados): la contabilidad arranca en la fecha de inicio elegida, con un asiento de apertura que toma los saldos de los módulos instalados (llamada n.º 18), y no hay generación retroactiva. Consume eventos; no define puertos ni es llamado (RN31).
+
+| CP | Qué se construye | Referencias | Criterio de aceptación |
+|----|------------------|-------------|------------------------|
+| **J1** | **Instalación, licencia y plan de cuentas** con plantillas por perfil de rubro | RF01, RF13 (inicio) | Instalar con módulos ya operando funciona; la fecha de inicio no puede ser anterior a hoy; los movimientos anteriores no se contabilizan y quedan en «Movimientos anteriores al inicio» (EX11); las cuentas no se borran con asientos |
+| **J2** | **Ejercicios y períodos, y reglas de imputación** («asignación de formularios») configurables | RF02, RF03 | Un período cerrado no admite asientos; una regla sin cuentas válidas no se activa |
+| **J3** | **Asientos automáticos** desde Ventas (comprobantes, notas, cobros por forma de pago), con asientos resumidos por día (`CON-ASIENTOS-RESUMIDOS`) y reprocesamiento | RF04, RF14, RF26 | Cada evento genera un asiento una sola vez; el asiento cuadra (debe = haber); las ventas no fiscales se contabilizan al regularizarse (índice 2.4) |
+| **J4** | **Pendientes de imputar** y asientos manuales | RF05, RF15 | Un evento sin regla va a pendientes con responsable y plazo y no frena a la fuente |
+| **J5** | **Libros y balance**: diario, mayor, sumas y saldos | RF06, RF07, RF08 | El balance suma cero; el mayor concilia con el diario |
+| **J6** | **Imputación de conceptos del rubro**: gift cards y vales, comisiones de vendedores y plataformas, costo de producción y mermas, reapertura de turno, remitos a facturar | RF17 a RF21, RF24, RF25 | Cada concepto se imputa solo si su módulo fuente publica (sin Financiero no hay RF21) |
+| **J7** | **Controles cruzados** (`CON-CONTROLES-CRUZADOS`, llamada n.º 18), saldos iniciales y navegación al documento de origen | RF11, RF13; llamada n.º 18 | Un módulo caído muestra «no disponible» y no frena la contabilidad |
+| **J8** | **Cierre y apertura de ejercicio, revaluación** (`CON-REVALUACION`) y exportación al estudio (`CON-EXPORT-PLANTILLAS`) | RF09, RF10, RF12 | El cierre genera el asiento de apertura del ejercicio siguiente; la exportación coincide con el diario |
+| **J9** | **Consolidación en Casa Central** (`CON-CONSOL`, `USU-CONSOL`): paquete, importación y balance consolidado | RF22, RF23 | Un paquete repetido no duplica saldos; solo si hay un cliente con varias sucursales |
+
+---
+
+## Trazabilidad entre módulos
+
+| Necesita | De | Se cierra en |
+|----------|----|--------------|
+| Puerto `cobros`, turno abierto, saldo de caja (n.º 5 y 20) | Ventas | G2, G3, G9 |
+| Cheque rechazado, recibos con cheques | Clientes E4 | G8 |
+| `VEN-DIVISA`, `VEN-COMISIONES` (pago) | Ventas | G7, G9 |
+| Puerto `costoReposicion`, `VEN-PRECIO-COSTO`, margen y comisiones | Ventas | H6 |
+| Puerto `plazosEntrega`, `STK-REPO-AUTO` | Stock | H7 |
+| Presentaciones vigentes (n.º 15), clave de comprobante (n.º 10) | Stock, Usuarios | H2 |
+| Reserva de stock, crédito, vales (n.º 7, 8, 9, 21) | Stock, Clientes | I5 |
+| Alineación del pedido (n.º 19) | Ventas | I9 |
+| Liquidaciones de pasarela y plataforma | Financiero | I6, I11 → G9 |
+| Pasivo de gift cards y puntos (`CLI-FIDEL`), retenciones sufridas (`CLI-RETENCIONES`) | Clientes | J6 |
+| Notas fiscales de Clientes fuera de `facturas` (brecha 3) | Clientes | J3 (se resuelve dentro de Contable, como decidió el plan anterior) |
+
+Tabla de trazabilidad por checkpoint (RN/EX → archivo de pruebas): se completa a medida que se cierran, como en `plan-checkpoints.md`.

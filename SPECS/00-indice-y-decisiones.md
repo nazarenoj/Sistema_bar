@@ -9,7 +9,7 @@ Versión del 22/10/2026 (incorpora las decisiones fundacionales F1 a F4). Los SP
 | 03 | Clientes y Cuentas Corrientes | `03-clientes-cuentas-corrientes.md` | Opcional |
 | 04 | Usuarios y Auditoría (+ Servicios de Plataforma) | `04-usuarios-auditoria.md` | Base (obligatorio) |
 | 05 | Financiero | `05-financiero.md` | Opcional |
-| 06 | Contable | `06-contable.md` | Opcional, **se vende aparte** y solo en la puesta en marcha |
+| 06 | Contable | `06-contable.md` | Opcional, **se vende aparte** y se puede instalar en cualquier momento, sin contabilidad retroactiva |
 | 07 | Compras | `07-compras.md` | Opcional |
 | 08 | Ventas Online | `08-ventas-online.md` | Opcional |
 | D | Matriz de cobertura por tipo de artículo y rubro | `anexo-d-matriz-de-cobertura.md` | Anexo |
@@ -61,7 +61,7 @@ El detalle de lo que cambió en cada SPEC está en `cambios-aplicados.md`.
 | Alcance contable | Contabilidad completa con exportación, sin estados contables formales ni ajuste por inflación | Contable |
 | Canal online | Tienda propia que corre en el mismo servidor de la instancia, con pasarela de pago y transportistas integrados. Marketplaces y plataformas de delivery como función opcional | Ventas Online |
 | Turno de caja cerrado | **Se puede reabrir con autorización de un supervisor**, con motivo y auditoría. Lo ya informado a otros módulos se corrige con ajustes en la fecha actual | Financiero RN07, RF18 y EX13 |
-| Instalación de Contable | **Se vende aparte y no admite instalación posterior ni generación retroactiva.** Debe contratarse en la puesta en marcha y la contabilidad arranca con un asiento de apertura | Contable RF13, RN01 y RN18, Usuarios RN31 |
+| Instalación de Contable | **Se vende aparte y se puede instalar en cualquier momento, como los demás módulos, pero sin generación retroactiva.** La contabilidad arranca en la fecha de inicio que elige el Administrador al instalar (hoy o una fecha futura, nunca anterior) con un asiento de apertura | Contable RF13, RN01 y RN18, Usuarios RN31 |
 | Permisos de Administrador | **Los Administradores pueden darse permisos a sí mismos** y a otros, incluso permisos que no tengan. Los demás usuarios no. Todo cambio queda auditado | Usuarios RN07 |
 | Mejoras opcionales | Las 12 mejoras forman parte del producto y están incluidas en los SPECS como funciones activables. Nacen desactivadas y **las activa o desactiva un Administrador en cualquier momento**, sin reinstalar | Anexo A, Usuarios RF18, RN24, RN46 y RN47 |
 | Integración entre módulos (1.1) | Un protocolo único: cada efecto sobre otro módulo es un mensaje con clave de idempotencia, grabado en la misma transacción que el documento de origen, con reintentos escalonados, bandeja de pendientes y conciliación diaria. La venta no se revierte si falla un efecto | Usuarios RF25 y RN48 a RN60; todos los módulos |
@@ -370,7 +370,7 @@ Se creó `01-ventas.md` a partir del documento original, que no se modificó. Co
 
 ## Para confirmar
 
-1. **Contable (directiva de instalación).** Interpreté "no instalación posterior, vendido aparte" así: licencia independiente, contratada en la puesta en marcha, sin generación retroactiva. Si lo que se busca es que pueda instalarse más adelante pero solo con asientos desde esa fecha, hay que cambiar Contable RF13, RN01 y RN18, y Usuarios RN31.
+1. **Contable (directiva de instalación).** Resuelta: Contable es licencia independiente y puede instalarse en cualquier momento, como los demás módulos; la contabilidad empieza en la fecha de inicio elegida al instalar, con asiento de apertura, y no genera asientos de fechas anteriores (Contable RF13, RN01 y RN18; Usuarios RN31). Queda abierto qué pasa al desinstalar y volver a instalar (ver Contable RN18).
 2. **Reapertura de turno.** Un turno solo se puede reabrir dentro de los 7 días (parametrizable, Antiguedad_Maxima_Reapertura); pasado ese plazo el ajuste se registra en el turno actual.
 3. **Promociones y descuentos.** Las promociones aprobadas se aplican sin el permiso de "aplicar descuentos". El permiso se exige al crearlas y para los descuentos manuales sobre un ítem con promoción.
 4. **Gift cards.** El tratamiento fiscal y contable queda parametrizable y a validar con el contador. Propinas y señas quedan fuera del alcance: el sistema no las maneja.
