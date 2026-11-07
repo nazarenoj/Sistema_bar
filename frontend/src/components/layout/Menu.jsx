@@ -1,4 +1,5 @@
-import { can } from '../../api'
+import { useState, useEffect } from 'react'
+import { can, getFunciones } from '../../api'
 import { PERMISO_VISTA } from '../../utils/vistas'
 
 const Ico = ({ d }) => (
@@ -24,12 +25,25 @@ const GRUPOS = [
   { grupo: 'Sistema', items: [{ id: 'copias', titulo: 'Copias de seguridad' }, { id: 'correo', titulo: 'Correo' }, { id: 'consolidacion', titulo: 'Sucursales' }] },
 ]
 
+// Pantallas que solo existen si alguna de estas funciones está activa (el resto del menú no depende de funciones).
+const FUNCION_VISTA = {
+  cocina: ['VEN-KDS'], reservas: ['VEN-RESERVAS'], comisiones: ['VEN-COMISIONES'], produccion: ['STK-PRODUCCION'],
+  alergenos: ['STK-ALERGENOS'], calidad: ['STK-LOTES', 'STK-TRAZA', 'STK-TEMP', 'STK-ETIQUETAS'], fidelizacion: ['CLI-FIDEL'],
+  seguridad: ['USU-2FA'], correo: ['USU-CORREO'], consolidacion: ['USU-CONSOL'],
+}
+
 export const TITULOS = Object.fromEntries(
   GRUPOS.flatMap(g => g.items.map(i => [i.id, { titulo: i.titulo, grupo: g.grupo, icono: ICONOS[i.id] ?? PUNTO }]))
 )
 
 export default function Menu({ vista, setVista, usuario, enLinea, nuevasNotif }) {
   const nombre = usuario?.nombre || usuario?.username
+  // Se vuelve a consultar al cambiar de pantalla, así un cambio en Funciones se nota sin recargar. Si falla, se muestra todo.
+  const [activas, setActivas] = useState(null)
+  useEffect(() => {
+    getFunciones().then(r => setActivas(new Set(r.funciones.filter(f => f.activa).map(f => f.id)))).catch(() => {})
+  }, [vista])
+  const visible = (id) => !activas || !FUNCION_VISTA[id] || FUNCION_VISTA[id].some(f => activas.has(f))
   return (
     <aside className="w-60 shrink-0 bg-cafe-800 text-stone-300 flex flex-col">
       <div className="h-[50px] text-arena-300 font-semibold tracking-[0.25em] grid place-items-center border-b border-white/10">CHEPOLA</div>
@@ -47,7 +61,7 @@ export default function Menu({ vista, setVista, usuario, enLinea, nuevasNotif })
 
       <nav className="flex-1 overflow-y-auto pb-4">
         {GRUPOS.map(g => {
-          const items = g.items.filter(i => PERMISO_VISTA[i.id] === undefined || can(usuario, PERMISO_VISTA[i.id]))
+          const items = g.items.filter(i => visible(i.id) && (PERMISO_VISTA[i.id] === undefined || can(usuario, PERMISO_VISTA[i.id])))
           if (items.length === 0) return null
           return (
             <div key={g.grupo}>
