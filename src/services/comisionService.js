@@ -208,6 +208,11 @@ const liquidar = async ({ tipo, desde, hasta }, { userId } = {}) => {
 const obtener = async (id) => {
   const [[l]] = await pool.query('SELECT * FROM comision_liquidaciones WHERE id = ?', [id]);
   if (!l) return null;
+  // Pagada «pendiente de registro» hasta que Financiero confirma el egreso (Financiero RF23).
+  if (l.estado === 'pagada_pendiente_registro') {
+    const [[m]] = await pool.query("SELECT estado FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'pago_comision' ORDER BY id DESC LIMIT 1", [l.id_global]);
+    if (m?.estado === 'confirmado') { await pool.query("UPDATE comision_liquidaciones SET estado = 'pagada' WHERE id = ?", [id]); l.estado = 'pagada'; }
+  }
   const [items] = await pool.query('SELECT user_id, tipo, venta_id, devolucion_id, regla_id, base, costo, comision, nota FROM comision_items WHERE liquidacion_id = ? ORDER BY user_id, id', [id]);
   const conv = items.map((i) => ({ ...i, base: Number(i.base), costo: i.costo === null ? null : Number(i.costo), comision: Number(i.comision) }));
   const f = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d);
@@ -216,7 +221,7 @@ const obtener = async (id) => {
 const listar = async () => (await pool.query('SELECT id, id_global, tipo, desde, hasta, estado, total, pagada_at FROM comision_liquidaciones ORDER BY id DESC LIMIT 200'))[0].map((l) => ({ ...l, total: Number(l.total) }));
 
 // Marca la liquidación como pagada. Con Financiero el pago sale como egreso de la caja o cuenta elegida; sin él se marca a mano (RN38).
-const pagar = async (id, { medio_pago } = {}, { userId } = {}) => {
+const pagar = async (id, { medio_pago, cuenta_id } = {}, { userId } = {}) => {
   const l = await obtener(id);
   if (!l) throw invalida('Liquidación no encontrada.', 404);
   if (l.estado !== 'cerrada') throw invalida('La liquidación ya está pagada.', 409);
@@ -225,7 +230,7 @@ const pagar = async (id, { medio_pago } = {}, { userId } = {}) => {
   try {
     await conn.beginTransaction();
     const msg = await M.publicar(conn, { origen: 'ventas', destino: 'financiero', tipo: 'pago_comision', docTipo: 'liquidacion_comision', docIdGlobal: l.id_global, userId,
-      contenido: { total: l.total, medio_pago: medio_pago ?? null, desde: l.desde, hasta: l.hasta } });
+      contenido: { total: l.total, medio_pago: medio_pago ?? null, cuenta_id: cuenta_id ?? null, desde: l.desde, hasta: l.hasta } });
     if (msg) estado = 'pagada_pendiente_registro'; // Financiero lo registra por la bandeja de salida; se confirma cuando lo aplique
     await conn.query('UPDATE comision_liquidaciones SET estado = ?, medio_pago = ?, pagada_at = NOW() WHERE id = ?', [estado, medio_pago ?? null, id]);
     await conn.commit();

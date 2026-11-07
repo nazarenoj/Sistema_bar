@@ -51,6 +51,7 @@ const finCuentaRoutes = require('./routes/finCuentaRoutes');
 const finDestinoRoutes = require('./routes/finDestinoRoutes');
 const finTurnoRoutes = require('./routes/finTurnoRoutes');
 const finTransferenciaRoutes = require('./routes/finTransferenciaRoutes');
+const finGastoRoutes = require('./routes/finGastoRoutes');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
 const comprobanteTerceroRoutes = require('./routes/comprobanteTerceroRoutes');
@@ -91,6 +92,8 @@ require('./stock/destinoEquivalencia');
 require('./clientes/creditoPuerto');
 require('./financiero/cobroReceptor'); // cobros y devoluciones que pide Ventas (G2)
 require('./financiero/cobrosPuerto'); // Financiero implementa el puerto de cobros de Ventas (G3)
+require('./financiero/comisionReceptor'); // pago de liquidaciones de comisiones (G7)
+const mantenimientoFinanciero = require('./financiero/mantenimientoFinanciero');
 require('./clientes/cuentaReceptor');
 require('./clientes/fidelizacionReceptor'); // acumulación, canje y emisión de instrumentos que pide Ventas (E7)
 require('./clientes/indicadoresClientes'); // deuda de clientes para el tablero (E5) // débitos, remitos y anulaciones que pide Ventas (E2) // Clientes implementa el puerto de crédito (E1)
@@ -237,6 +240,7 @@ app.use('/api/financiero', finCuentaRoutes);
 app.use('/api/financiero', finDestinoRoutes);
 app.use('/api/financiero', finTurnoRoutes);
 app.use('/api/financiero', finTransferenciaRoutes);
+app.use('/api/financiero', finGastoRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);
@@ -290,6 +294,7 @@ if (process.env.NODE_ENV !== 'test') {
         mantenimientoStock.iniciar(); // alertas de stock y diferencias de integración (C6)
         require('./clientes/mantenimientoClientes').iniciar(); // bloqueo automático por mora (E3)
         mantenimientoVentas.iniciar(); // reservas vencidas, recordatorios y pedidos especiales (D8)
+        mantenimientoFinanciero.iniciar(); // recordatorios de gastos recurrentes (G7)
       });
     })
     .catch(async (err) => {
