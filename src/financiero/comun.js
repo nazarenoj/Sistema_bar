@@ -19,11 +19,11 @@ const manejar = (fn) => async (req, res, next) => {
 const movimiento = async (conn, m) => {
   const [r] = await conn.query(
     `INSERT INTO fin_movimientos (id_global, cuenta_id, turno_id, tipo, importe, moneda, importe_divisa, cotizacion, categoria_id, forma_pago, referencia_externa,
-       id_operacion, linea, doc_id_global, vinculo_id, motivo, marcas, en_espera, user_id, fecha_ms)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       id_operacion, linea, doc_id_global, vinculo_id, motivo, marcas, en_espera, user_id, fecha_ms, terminal_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [await idGlobal(), m.cuentaId, m.turnoId ?? null, m.tipo, r2(m.importe), m.moneda ?? 'ARS', m.importeDivisa ?? null, m.cotizacion ?? null, m.categoriaId ?? null,
       m.formaPago ?? null, m.referenciaExterna ?? null, m.idOperacion ?? null, m.linea ?? 0, m.docIdGlobal ?? null, m.vinculoId ?? null,
-      m.motivo ? String(m.motivo).slice(0, 255) : null, m.marcas ?? null, m.enEspera ? 1 : 0, m.userId ?? null, m.fechaMs ?? Date.now()]
+      m.motivo ? String(m.motivo).slice(0, 255) : null, m.marcas ?? null, m.enEspera ? 1 : 0, m.userId ?? null, m.fechaMs ?? Date.now(), m.terminalId ?? null]
   );
   return r.insertId;
 };

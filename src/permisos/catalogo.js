@@ -72,6 +72,7 @@ const PERMISOS = [
   { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },
   { id: 'financiero.turnos.operar', modulo: 'financiero', descripcion: 'Abrir y cerrar turnos de caja' },
   { id: 'financiero.movimientos.registrar', modulo: 'financiero', descripcion: 'Registrar ingresos y retiros manuales de caja, con motivo' },
+  { id: 'financiero.diferencias.autorizar', modulo: 'financiero', descripcion: 'Autorizar un cierre de turno con diferencia mayor a la tolerancia' },
   { id: 'financiero.cajas.configurar', modulo: 'financiero', descripcion: 'Crear y modificar cajas, cuentas, categorías y la configuración de Financiero' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

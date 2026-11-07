@@ -52,7 +52,7 @@ const servicioDe = async (fecha = new Date(), db = pool) => {
 
 // ---- Turnos de caja ----
 
-const vista = async (t, { verTeorico = false, ciego = false } = {}) => {
+const vista = async (t, { verTeorico = false } = {}) => {
   const [[c]] = await pool.query('SELECT nombre, tipo, moneda, fondo_cambio, tope_efectivo, cierre_ciego FROM fin_cuentas WHERE id = ?', [t.cuenta_id]);
   const [[u]] = await pool.query('SELECT username FROM users WHERE id = ?', [t.user_id]);
   const [[s]] = t.turno_servicio_id ? await pool.query('SELECT nombre FROM fin_turnos_servicio WHERE id = ?', [t.turno_servicio_id]) : [[null]];
@@ -62,7 +62,10 @@ const vista = async (t, { verTeorico = false, ciego = false } = {}) => {
     cerrado_ms: t.cerrado_ms === null ? null : Number(t.cerrado_ms), reaperturas: t.reaperturas, version_config: t.version_config,
     funciones: t.funciones ? t.funciones.split(',') : [],
   };
-  // El saldo teórico solo lo ve quien tiene el permiso; en un cierre ciego tampoco se ve mientras se cuenta (RN06).
+  // El saldo teórico solo lo ve quien tiene el permiso; en un cierre ciego tampoco se ve mientras se cuenta (RN06), según la función vigente al abrir (RN39).
+  const ciego = !!c.cierre_ciego && (t.funciones ?? '').split(',').includes('FIN-CIERRE-CIEGO');
+  v.cierre_ciego = ciego;
+  if (verTeorico && t.estado === 'cerrado') v.cierre = await require('./cierreService').cierreDe(t.id).catch(() => null);
   if (verTeorico && !(ciego && t.estado === 'abierto')) {
     const teorico = await Cuentas.saldoDe(t.cuenta_id);
     v.saldo_teorico = teorico;
@@ -94,7 +97,10 @@ const listar = async ({ estado, cuentaId, terminalId, desde, hasta, limite = 100
 };
 
 // El fondo que se propone al abrir: el que quedó al último cierre de la caja o, si no hubo, el parametrizado en la caja (RF03).
-const fondoPropuesto = async (db, cuenta) => Number(cuenta.fondo_cambio);
+const fondoPropuesto = async (db, cuenta) => {
+  const [[c]] = await db.query('SELECT c.fondo_siguiente FROM fin_cierres c JOIN fin_turnos t ON t.id = c.turno_id WHERE t.cuenta_id = ? ORDER BY c.id DESC LIMIT 1', [cuenta.id]);
+  return c ? Number(c.fondo_siguiente) : Number(cuenta.fondo_cambio);
+};
 
 // Abre un turno con el fondo de cambio contado (RF03). El fondo propuesto es el que quedó al último cierre o el de la caja.
 const abrir = async ({ cuentaId, fondo, userId, terminalId = null }) => {
@@ -128,7 +134,7 @@ const abrir = async ({ cuentaId, fondo, userId, terminalId = null }) => {
     // Si lo contado no coincide con lo que la caja debería tener, la diferencia queda como un ajuste del turno (nada se edita, RN02).
     const saldo = await Cuentas.saldoDe(cuenta.id, conn);
     if (r2(contado - saldo) !== 0)
-      await movimiento(conn, { cuentaId: cuenta.id, turnoId: id, tipo: 'ajuste', importe: contado - saldo, moneda: cuenta.moneda, motivo: `Diferencia del fondo de cambio al abrir (contado ${contado}, esperado ${saldo})`, userId });
+      await movimiento(conn, { cuentaId: cuenta.id, turnoId: id, tipo: 'ajuste', importe: contado - saldo, moneda: cuenta.moneda, motivo: `Diferencia del fondo de cambio al abrir (contado ${contado}, esperado ${saldo})`, userId, terminalId: terminalId ?? cuenta.terminal_id });
     // Lo que quedó en espera por no haber turno abierto se incorpora a este turno (RN41, EX30).
     await conn.query('UPDATE fin_movimientos SET turno_id = ?, en_espera = 0 WHERE cuenta_id = ? AND en_espera = 1', [id, cuenta.id]);
     await conn.commit();
@@ -157,7 +163,7 @@ const movimientoManual = async (turnoId, { tipo, importe, motivo, categoria_id: 
     await conn.query('SELECT id FROM fin_cuentas WHERE id = ? FOR UPDATE', [cuenta.id]); // serializa los egresos de la caja
     const saldo = await Cuentas.saldoDe(cuenta.id, conn);
     if (tipo === 'retiro' && saldo - monto < 0) throw invalida(`El retiro dejaría la caja en negativo: el saldo disponible es ${saldo}.`, 409, { codigo: 'SALDO_INSUFICIENTE', detalle: { saldo } });
-    const id = await movimiento(conn, { cuentaId: cuenta.id, turnoId, tipo, importe: tipo === 'retiro' ? -monto : monto, moneda: cuenta.moneda, categoriaId: categoriaId ?? null, motivo: motivo.trim(), userId });
+    const id = await movimiento(conn, { cuentaId: cuenta.id, turnoId, tipo, importe: tipo === 'retiro' ? -monto : monto, moneda: cuenta.moneda, categoriaId: categoriaId ?? null, motivo: motivo.trim(), userId, terminalId: t.terminal_id });
     await conn.commit();
     return { id, saldo: await Cuentas.saldoDe(cuenta.id) };
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }

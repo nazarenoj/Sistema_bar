@@ -1,8 +1,9 @@
 const { Router } = require('express');
 const Turnos = require('../financiero/turnoService');
+const Cierres = require('../financiero/cierreService');
 const { manejar, puede } = require('../financiero/comun');
 const requiereModulo = require('../middleware/requiereModulo');
-const { requierePermiso } = require('../middleware/requierePermiso');
+const { requierePermiso, validarAutorizacion } = require('../middleware/requierePermiso');
 const { auditar } = require('../utils/auditar');
 
 // Turnos de servicio y de caja (Financiero RF03). El saldo teórico solo lo ve quien tiene permiso (RN17).
@@ -40,5 +41,22 @@ router.post('/turnos/:id/movimientos', requierePermiso('financiero.movimientos.r
   await auditar(req, { modulo: 'financiero', accion: `${req.body.tipo}_manual`, entidad: 'fin_turno', entidad_id: req.params.id, detalle: `${req.body.importe}: ${req.body.motivo}` });
   res.status(201).json(r);
 }));
+
+// Arqueo y cierre (RF04). El cierre ciego no muestra el teórico mientras se cuenta; la diferencia se ve recién al confirmar (RN06).
+router.post('/turnos/:id/arqueos', OPERAR, manejar(async (req, res) => {
+  const r = await Cierres.arquear(Number(req.params.id), { conteo: req.body.conteo ?? { efectivo: req.body.efectivo }, nota: req.body.nota }, req.usuario.sub);
+  await auditar(req, { modulo: 'financiero', accion: 'arqueo_parcial', entidad: 'fin_turno', entidad_id: req.params.id });
+  res.status(201).json(r);
+}));
+router.get('/turnos/:id/pendientes', VER, manejar(async (req, res) => res.json(await Cierres.listaPendientes(Number(req.params.id)))));
+router.post('/turnos/:id/cerrar', OPERAR, manejar(async (req, res) => {
+  const id = Number(req.params.id);
+  const c = await Cierres.cerrar(id, req.body, { userId: req.usuario.sub, autorizar: () => validarAutorizacion(req, 'financiero.diferencias.autorizar') });
+  await auditar(req, { modulo: 'financiero', accion: 'cerrar_turno', entidad: 'fin_turno', entidad_id: String(id), detalle: `diferencia ${c.diferencia}${c.motivo ? `: ${c.motivo}` : ''}${c.pendientes_no_verificados ? ' (pendientes no verificados)' : ''}` });
+  res.json(c);
+}));
+router.get('/turnos/:id/cierre', VER, manejar(async (req, res) => res.json(await Cierres.cierreDe(Number(req.params.id), req.query.version ? Number(req.query.version) : null))));
+router.get('/turnos/:id/cierres', requierePermiso('financiero.saldos.ver'), manejar(async (req, res) => res.json(await Cierres.cierres(Number(req.params.id)))));
+router.get('/turnos/:id/cierre/imprimir', VER, manejar(async (req, res) => res.type('html').send(await Cierres.imprimible(Number(req.params.id)))));
 
 module.exports = router;

@@ -3,6 +3,7 @@ const Notificacion = require('../models/notificacionModel');
 const Destinos = require('./destinoService');
 const Cuentas = require('./cuentaService');
 const Turnos = require('./turnoService');
+const Cierres = require('./cierreService');
 const { movimiento, r2 } = require('./comun');
 
 // Financiero como receptor de los cobros y devoluciones que registra Ventas (Financiero RF17, RF27, RN29 a RN32, RN41, RN42, RN46). Cada mensaje se aplica una
@@ -47,9 +48,11 @@ M.registrarReceptor('financiero', 'cobro_registrado', async (conn, c, ctx) => {
     await controlarReferencia(conn, { referencia: p.referencia, docIdGlobal: ctx.docIdGlobal, cuenta });
     // Un cobro de un turno que ya se cerró nunca lo modifica: va como ajuste al turno actual de la caja, o queda en espera (RN41, EX30).
     const t = await Turnos.paraCobro(conn, cuenta, { fechaMs: c.fecha_ms ?? null });
+    if (t.ajuste && p.forma === 'efectivo') // el cobro ya explicaba una diferencia del cierre de su turno (RN41 b)
+      await Cierres.compensarCierre(conn, { ref: ctx.docIdGlobal, cuentaId: cuenta.id, efecto: monto.importe, turnoId: t.turnoId, enEspera: t.enEspera, docIdGlobal: ctx.docIdGlobal, userId: null });
     ids.push(await movimiento(conn, {
       cuentaId: cuenta.id, turnoId: t.turnoId, tipo: t.ajuste ? 'ajuste' : 'cobro', ...monto, formaPago: p.forma, referenciaExterna: p.referencia ?? null,
-      idOperacion: ctx.idOperacion, linea, docIdGlobal: ctx.docIdGlobal, enEspera: t.enEspera,
+      idOperacion: ctx.idOperacion, linea, docIdGlobal: ctx.docIdGlobal, enEspera: t.enEspera, terminalId: c.terminal_id ?? null,
       marcas: marcasDe(c.no_fiscal && 'venta_no_fiscal', c.turno_no_verificado && 'turno_no_verificado', t.ajuste && 'cobro_posterior_al_cierre'), // RN46, RN04, RN41
     }));
   }
@@ -71,7 +74,7 @@ M.registrarReceptor('financiero', 'cobro_revertido', async (conn, c, ctx) => {
     const t = await Turnos.paraContramovimiento(conn, cuenta);
     const id = await movimiento(conn, {
       cuentaId: cuenta.id, turnoId: t.turnoId, tipo: 'devolucion', importe: -importe, moneda: cuenta.moneda, formaPago: r.forma, idOperacion: ctx.idOperacion, linea,
-      docIdGlobal: c.venta_id_global, vinculoId: orig[0]?.id ?? null, motivo: c.motivo ?? null, enEspera: t.enEspera,
+      docIdGlobal: c.venta_id_global, vinculoId: orig[0]?.id ?? null, motivo: c.motivo ?? null, enEspera: t.enEspera, terminalId: c.terminal_id ?? null,
     });
     ids.push(id);
     if (Cuentas.ES_CAJA(cuenta.tipo)) {
