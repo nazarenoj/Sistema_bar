@@ -82,6 +82,7 @@ test('Ventas.RN42: con Stock y STK-ALERGENOS suma los derivados por receta y los
   const vegetal = await insumo('Leche de soja');
   await api('PUT', `/api/alergenos/item/insumo/${harina.id}`, { token, body: { alergenos: [{ alergeno_id: await stockAlergeno('gluten'), tipo: 'contiene' }] } });
   await api('PUT', `/api/alergenos/item/insumo/${vegetal.id}`, { token, body: { alergenos: [{ alergeno_id: await stockAlergeno('soja'), tipo: 'contiene' }] } });
+  for (const i of [harina, vegetal]) await api('POST', '/api/stock/ingresos', { token, body: { motivo: 'compra', lineas: [{ item: { tipo: 'insumo', id: i.id }, cantidad: 10, costo_unitario: 1 }] } }); // el pedido ya controla existencias al agregar
   const torta = await producto('Torta', { tipo: 'elaborado' });
   assert.equal((await api('PUT', `/api/recetas/${torta.id}`, { token, body: { lineas: [{ insumo_id: harina.id, cantidad_consumida: 1 }] } })).status, 200);
   const g = (await api('POST', '/api/modificadores', { token, body: { nombre: `Base ${++n}`, aplica_a: [{ producto_id: torta.id }], opciones: [{ nombre: 'Común' }, { nombre: 'Con soja' }] } })).json;

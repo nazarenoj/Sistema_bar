@@ -181,6 +181,18 @@ const _resolverYAgregarProductos = async (pedido_id, productosConDatos, res, adv
       return res.status(400).json({ error: 'No se pueden añadir productos: la mesa de este pedido ya está libre.' });
     }
 
+    // Avisa ya, al agregar, si las existencias no alcanzan para la receta; el cierre vuelve a controlar y compromete (RN63).
+    // Si Stock no responde no se bloquea acá: el cierre decide.
+    const previos = await Pedido.getItems(pedido_id, conn);
+    const v = await (await puertos.obtener('stock')).verificar([...previos, ...productosConDatos]).catch(() => ({ ok: true }));
+    if (!v.ok) {
+      await conn.rollback();
+      return res.status(409).json({
+        error: `Sin disponible: ${v.sin_disponible.map((x) => `${x.nombre} (${x.deposito}): quedan ${x.disponible}, hacen falta ${x.requerido}`).join('; ')}.`,
+        codigo: 'SIN_DISPONIBLE', detalle: v.sin_disponible,
+      });
+    }
+
     await Pedido.addProductos(pedido_id, productosConDatos, conn);
     await conn.commit();
 

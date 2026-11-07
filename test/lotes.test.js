@@ -85,6 +85,7 @@ test('Stock.EX57: un lote indicado no disponible se rechaza en el compromiso; si
   await api('PUT', `/api/stock/configuracion/producto/${p.id}`, { token, body: { permite_negativo: false } });
   await ingreso(p, 10, { codigo: 'BUENO', fecha_vencimiento: dia(20) });
   await ingreso(p, 10, { codigo: 'VIEJO', fecha_vencimiento: dia(-2) });
+  await ingreso(p, 10, { codigo: 'OTRO', fecha_vencimiento: dia(30) }); // con el lote bloqueado y el otro vencido, sin este el pedido ya no deja agregar el ítem (no hay existencias útiles)
   const bloqueado = (await lotes(p)).find((l) => l.codigo === 'BUENO');
   for (const [codigo, motivo] of [['NOEXISTE', /inexistente/], ['VIEJO', /vencido/]]) {
     const r = await vender(p, 1, codigo);

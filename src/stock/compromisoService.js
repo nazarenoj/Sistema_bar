@@ -50,6 +50,28 @@ const bloqueante = async (conn, e) => {
 const reservasDe = async (idCompromiso, conn = pool) =>
   (await conn.query("SELECT * FROM reservas WHERE tipo = 'compromiso_stock' AND contenido LIKE ? ORDER BY creada_ms, id_reserva", [`%"compromiso":"${idCompromiso}"%`]))[0];
 
+// Lo que no alcanza entre los ítems bloqueantes (disponible = físico − comprometido).
+const faltantes = async (bloqueantes) => {
+  const faltan = [];
+  for (const b of bloqueantes) {
+    const disponible = (await fisico(pool, b.tipo, b.id, b.deposito_id)) - (await comprometido(pool, recursoDe(b.tipo, b.id, b.deposito_id)));
+    if (b.cantidad > disponible + 1e-9) faltan.push({ tipo: b.tipo, id: b.id, nombre: b.nombre, deposito: b.deposito, requerido: b.cantidad, disponible: Math.max(disponible, 0) });
+  }
+  return faltan;
+};
+
+// Consulta sin reservar nada: ¿alcanzan las existencias para estas líneas? Se usa al agregar al pedido; el compromiso
+// firme sigue siendo el del cierre (RN63).
+const verificar = async (lineas) => {
+  const bloqueantes = [];
+  for (const e of (await requerimientos(pool, lineas)).values()) {
+    const b = await bloqueante(pool, e);
+    if (b) bloqueantes.push(b);
+  }
+  const faltan = await faltantes(bloqueantes);
+  return faltan.length ? { ok: false, sin_disponible: faltan } : { ok: true };
+};
+
 // Pide el compromiso. Devuelve { ok: true, id_compromiso, vence_ms } (id nulo si ningún ítem bloquea) o { ok: false, sin_disponible:
 // [{ nombre, deposito, requerido, disponible }] con lo que no alcanza. Con la misma idSolicitud devuelve el mismo compromiso.
 // `reemplazaA`: el compromiso anterior (cambió la cantidad o venció) se libera y se toma el nuevo.
@@ -80,11 +102,7 @@ const comprometer = async ({ idSolicitud, lineas, reemplazaA = null, userId = nu
 
   if (reemplazaA) await liberar(reemplazaA);
   // Primero se mira todo, para informar cuánto hay de cada ítem que no alcanza (EX41); después se compromete con el candado.
-  const faltan = [];
-  for (const b of bloqueantes) {
-    const disponible = (await fisico(pool, b.tipo, b.id, b.deposito_id)) - (await comprometido(pool, recursoDe(b.tipo, b.id, b.deposito_id)));
-    if (b.cantidad > disponible + 1e-9) faltan.push({ tipo: b.tipo, id: b.id, nombre: b.nombre, deposito: b.deposito, requerido: b.cantidad, disponible: Math.max(disponible, 0) });
-  }
+  const faltan = await faltantes(bloqueantes);
   if (faltan.length) return { ok: false, sin_disponible: faltan };
 
   const idCompromiso = await idGlobal();
@@ -138,4 +156,4 @@ const comprometidos = async () => {
   return new Map(rows.map((r) => [r.recurso, Number(r.t)]));
 };
 
-module.exports = { comprometer, renovar, liberar, consumir, comprometidos, recursoDe };
+module.exports = { verificar, comprometer, renovar, liberar, consumir, comprometidos, recursoDe };

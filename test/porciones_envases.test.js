@@ -135,10 +135,12 @@ test('Stock.RF32: el artículo sin lo necesario se marca agotado en Ventas en me
   assert.equal(await marca(), 1);
   assert.ok(Date.now() - t0 < 5000);
   assert.deepEqual((await api('GET', '/api/venta-stock/agotados', { token })).json.map((a) => a.producto_id), [capu.id]);
-  // La marca informa a la cocina y no impide cargar el artículo en un pedido (RN01).
+  // La marca solo informa a la cocina; lo que impide cargar el artículo es el control de existencias al agregar al pedido (el insumo no admite negativo).
   const mesa = (await api('POST', '/api/mesas', { token, body: { numero_mesa: ++n, salon_id: 1 } })).json;
   const pedido = (await api('POST', '/api/pedidos', { token, body: { mesa_id: mesa.id } })).json;
-  assert.equal((await api('POST', `/api/pedidos/${pedido.id}/productos`, { token, body: { productos: [{ producto_id: capu.id, cantidad: 1 }] } })).status, 201);
+  const sinStock = await api('POST', `/api/pedidos/${pedido.id}/productos`, { token, body: { productos: [{ producto_id: capu.id, cantidad: 1 }] } });
+  assert.equal(sinStock.status, 409);
+  assert.equal(sinStock.json.codigo, 'SIN_DISPONIBLE');
   await api('POST', '/api/stock/ingresos', { token, body: { motivo: 'compra', lineas: [{ item: { tipo: 'insumo', id: leche.id }, cantidad: 10, costo_unitario: 1 }] } });
   await esperarMensajes(pool);
   assert.equal(await marca(), 0);
