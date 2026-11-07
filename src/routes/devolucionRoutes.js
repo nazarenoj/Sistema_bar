@@ -22,7 +22,7 @@ router.post('/', requierePermiso('ventas.devoluciones.crear'), async (req, res, 
       autorizadoPor = a.supervisor.id;
     }
     const r = await Devolucion.devolver(id, { items, todo: todo === true, motivo, reingreso, reintegro, series, cliente_id: req.body.cliente_id },
-      { idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub, autorizadoPor });
+      { idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub, autorizadoPor, terminalId: req.usuario?.terminal_id ?? null, autorizar: () => validarAutorizacion(req, 'ventas.devoluciones.crear') });
     res.status(201).json(r);
   } catch (err) {
     if (err instanceof Devolucion.DevolucionInvalida) return res.status(err.status || 400).json({ error: err.message, codigo: 'DEVOLUCION_INVALIDA' });

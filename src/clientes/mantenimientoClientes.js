@@ -22,6 +22,7 @@ const vuelta = async () => {
         await Ajustes.diario(); // propuestas de intereses por mora (RF10)
         await Informes.alertasCiclo(); // fecha de facturación de los mayoristas (RF21)
         await Informes.recordatorios(); // alertas y avisos de vencimientos próximos o vencidos (RF16)
+        await require('./vencimientosService').publicar(); // la foto diaria de los vencimientos por cobrar para Financiero (RF13)
       } catch (err) {
         logger.error(`[clientes] instancia ${inst.codigo}: ${err.message}`);
       }

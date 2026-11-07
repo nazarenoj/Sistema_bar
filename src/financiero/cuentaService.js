@@ -209,6 +209,7 @@ const config = async (db = pool) => {
     antiguedad_max_reapertura_dias: c.antiguedad_max_reapertura_dias, tolerancia_diferencia: Number(c.tolerancia_diferencia),
     exigir_turno_efectivo: !!c.exigir_turno_efectivo, retencion_solicitudes_dias: c.retencion_solicitudes_dias,
     plazo_presentacion_cheque_dias: c.plazo_presentacion_cheque_dias, conciliacion_dias: c.conciliacion_dias,
+    cotizacion_vencida: c.cotizacion_vencida, divisas_tolerancia_pct: Number(c.divisas_tolerancia_pct),
   };
 };
 
@@ -225,7 +226,11 @@ const actualizarConfig = async (d) => {
   const ventana = d.conciliacion_dias !== undefined ? Number(d.conciliacion_dias) : actual.conciliacion_dias;
   if (!Number.isInteger(plazo) || plazo < 1 || plazo > 365) throw invalida('El plazo de presentación de cheques es un entero de días entre 1 y 365.');
   if (!Number.isInteger(ventana) || ventana < 0 || ventana > 30) throw invalida('La ventana de la conciliación automática es un entero de días entre 0 y 30.');
-  await pool.query('UPDATE fin_config SET antiguedad_max_reapertura_dias = ?, tolerancia_diferencia = ?, exigir_turno_efectivo = ?, retencion_solicitudes_dias = ?, plazo_presentacion_cheque_dias = ?, conciliacion_dias = ? WHERE id = 1', [dias, tol, exigir, ret, plazo, ventana]);
+  const vencida = d.cotizacion_vencida ?? actual.cotizacion_vencida;
+  const tolDivisa = d.divisas_tolerancia_pct !== undefined ? Number(d.divisas_tolerancia_pct) : actual.divisas_tolerancia_pct;
+  if (!['advertir', 'bloquear'].includes(vencida)) throw invalida('Con la cotización vencida se puede advertir o bloquear.');
+  if (!(tolDivisa >= 0 && tolDivisa <= 100)) throw invalida('La tolerancia de la cotización pactada es un porcentaje entre 0 y 100.');
+  await pool.query('UPDATE fin_config SET antiguedad_max_reapertura_dias = ?, tolerancia_diferencia = ?, exigir_turno_efectivo = ?, retencion_solicitudes_dias = ?, plazo_presentacion_cheque_dias = ?, conciliacion_dias = ?, cotizacion_vencida = ?, divisas_tolerancia_pct = ? WHERE id = 1', [dias, tol, exigir, ret, plazo, ventana, vencida, tolDivisa]);
   return config();
 };
 

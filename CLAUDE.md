@@ -14,7 +14,11 @@ Mesas/salones/sillas, pedidos y cierre de cuenta con método de pago, carta de p
 recetas (descuento de stock al cerrar), facturación electrónica ARCA/AFIP con CAE (A/B/C, PDF y QR),
 tickets, historial paginado con gráficos y reportes (CSV/Excel/PDF/JSON), usuarios con sesiones, terminales, roles y
 permisos reales, auditoría, funciones activables y varias instancias en la misma app (plataforma de la
-Fase A completa, v6.0.0).
+Fase A completa, v6.0.0). Los módulos Ventas, Usuarios, Stock y Clientes están hechos (Fases A a F) y
+**Financiero** también (Fase G de `plan-checkpoints-opcionales.md`, v72.0.0): cajas y cuentas, turnos de caja
+con arqueo, cierre y reapertura, destinos de cobro, transferencias, acreditaciones y liquidaciones, gastos,
+cheques, conciliación bancaria, flujo de fondos, moneda extranjera e informes. Siguen Compras (H), Ventas
+Online (I) y Contable (J).
 
 ## Dirección del producto
 - **Plan de referencia**: `plan-tecnico-desarrollo.md` (basado en los SPECS 00 a 08 y Anexos). Es la

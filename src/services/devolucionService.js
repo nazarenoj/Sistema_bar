@@ -5,6 +5,7 @@ const Mensajeria = require('../mensajeria/servicio');
 const Parametro = require('../models/parametroModel');
 const Factura = require('../models/facturaModel');
 const puertos = require('../modulos/puertos');
+const llamar = require('../modulos/llamar');
 const Funciones = require('../funciones/servicio');
 const afipService = require('./afipService');
 const Venta = require('./ventaService');
@@ -46,7 +47,7 @@ const yaDevuelto = async (conn, ventaId) => {
 };
 
 // items: [{ linea, cantidad }] o `todo: true` para anular lo que quede.
-const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reingreso', reintegro, series = [], cliente_id: clienteVale = null }, { idSolicitud, userId, autorizadoPor } = {}) => {
+const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reingreso', reintegro, series = [], cliente_id: clienteVale = null }, { idSolicitud, userId, autorizadoPor, terminalId = null, autorizar = null } = {}) => {
   if (typeof motivo !== 'string' || !motivo.trim()) throw new DevolucionInvalida('El motivo es obligatorio.');
   if (!['reingreso', 'merma'].includes(reingreso)) throw new DevolucionInvalida('"reingreso" debe ser reingreso o merma.');
   const venta = await Venta.obtener(idGlobalVenta);
@@ -93,6 +94,23 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
     }
     if (reintegros.reduce((a, r) => a + centavos(r.importe), 0) !== centavos(total))
       throw new DevolucionInvalida(`El reintegro (${reintegros.reduce((a, r) => a + Number(r.importe), 0)}) debe sumar lo devuelto (${total}).`);
+
+    // Antes de entregar efectivo se consulta el saldo de la caja (llamada n.º 20, Financiero RN45). Si no alcanza, o Financiero no responde, el efectivo solo sale con la autorización
+    // de un supervisor en ese momento y la devolución queda marcada «saldo negativo autorizado» o «saldo no verificado» (Ventas EX58, Financiero RN42).
+    let saldoAutorizadoPor = null, saldoNoVerificado = false;
+    const enEfectivo = reintegros.filter((r) => r.forma === 'efectivo').reduce((a, r) => a + centavos(r.importe), 0) / 100;
+    if (enEfectivo > 0) {
+      const c = await llamar(20, 'ventas', async () => (await puertos.obtener('cobros')).saldoCaja({ terminalId }));
+      if (!(c.fallo && c.degradado && /no instalado/.test(c.motivo ?? ''))) { // sin Financiero no hay caja que consultar
+        const noResponde = !!c.fallo;
+        const saldo = c.valor?.saldo;
+        if (noResponde || (saldo !== null && saldo !== undefined && saldo < enEfectivo)) {
+          const a = autorizar ? await autorizar() : { ok: false, status: 403 };
+          if (!a.ok) throw Object.assign(new DevolucionInvalida(noResponde ? 'Financiero no responde: la devolución en efectivo necesita la autorización de un supervisor.' : `La caja tiene ${saldo} y la devolución en efectivo es ${enEfectivo}: necesita la autorización de un supervisor.`), { status: a.status ?? 403, codigo: a.codigo });
+          saldoAutorizadoPor = a.supervisor.id; saldoNoVerificado = noResponde;
+        }
+      }
+    }
 
     const restante = venta.detalle.reduce((a, l, i) => a + l.cantidad - (devuelto.get(i) ?? 0), 0);
     for (const i of itemsDev.filter((x) => x.serie)) {
@@ -161,7 +179,7 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
     // Confirmado (Financiero RN31). Si el cobro nunca se le informó (se instaló después de la venta), no hay nada que revertir.
     const [[cobroInformado]] = await conn.query("SELECT 1 AS si FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'cobro_registrado' AND modulo_destino = 'financiero' LIMIT 1", [idGlobalVenta]);
     if (cobroInformado) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'financiero', tipo: 'cobro_revertido', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud,
-      contenido: { ...contenido, motivo: motivo.trim(), devolucion_id_global: id_global, saldo_autorizado_por: null } });
+      contenido: { ...contenido, motivo: motivo.trim(), devolucion_id_global: id_global, saldo_autorizado_por: saldoAutorizadoPor, saldo_no_verificado: saldoNoVerificado, terminal_id: terminalId } });
     if (venta.condicion_fiscal !== 'no_fiscal') await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_devuelta', docTipo: 'devolucion', docIdGlobal: id_global, userId, solicitud: idSolicitud, contenido });
     await conn.commit();
     devolucion = { id: r.insertId, id_global, tipo, total, reingreso };

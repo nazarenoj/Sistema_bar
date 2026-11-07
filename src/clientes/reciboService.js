@@ -192,6 +192,7 @@ const registrar = async (d, { userId = null, idOperacion } = {}) => {
     if (imputacion !== 'ninguna') await imputarEn(conn, { cuentaId: cuenta.id, credito: mov.insertId, modo: imputacion, items: d.imputaciones ?? [], userId });
     await conn.commit();
     if (retenciones.length || valores.some((v) => FORMAS_PROPIAS.includes(v.forma))) Mensajeria.despertar();
+    require('./vencimientosService').publicar().catch(() => {}); // la proyección de fondos de Financiero se suscribe a los vencimientos por cobrar
     return { ...(await obtener(r.insertId)), ...(avisoCotizacion && { aviso: avisoCotizacion }) };
   } catch (err) {
     await conn.rollback().catch(() => {});

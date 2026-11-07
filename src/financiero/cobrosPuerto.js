@@ -8,6 +8,11 @@ const Destinos = require('./destinoService');
 puertos.registrar('cobros', {
   registrarCobro: async () => null, // los cobros viajan por la bandeja de salida (cobro_registrado)
   turnoAbierto: ({ terminalId }) => Turnos.turnoDeTerminal(terminalId),
-  saldoCaja: async () => null, // llamada n.º 20, se completa en G9
+  // Llamada n.º 20 (RN45): el efectivo disponible de la caja de la terminal, antes de entregar una devolución en efectivo.
+  saldoCaja: async ({ terminalId }) => {
+    const t = await Turnos.turnoDeTerminal(terminalId);
+    if (t.sinCaja) return { saldo: null, sinCaja: true };
+    return { saldo: await require('./cuentaService').saldoDe(t.caja_id), caja_id: t.caja_id };
+  },
   destinoDe: async (forma, terminalId) => { try { await Destinos.resolver(pool, forma, terminalId); return { asignado: true }; } catch { return { asignado: false }; } },
 });

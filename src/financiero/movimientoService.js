@@ -22,4 +22,18 @@ const listar = async ({ cuentaId, tipo, desde, hasta, turnoId, docIdGlobal, limi
   }));
 };
 
-module.exports = { listar };
+// Ratifica una devolución en efectivo que dejó la caja en negativo sin una autorización previa (Financiero EX31): otro usuario con el permiso, con su credencial.
+const ratificar = async (id, { autorizar }) => {
+  const { invalida } = require('./comun');
+  const Notificacion = require('../models/notificacionModel');
+  const [[m]] = await pool.query('SELECT id, marcas FROM fin_movimientos WHERE id = ?', [id]);
+  if (!m) throw invalida('Movimiento no encontrado.', 404);
+  if (!/^saldo_negativo_sin_autorizacion/.test(m.marcas ?? '')) throw invalida('El movimiento no está pendiente de ratificación.', 409, { codigo: 'NO_PENDIENTE' });
+  const a = await autorizar();
+  if (!a?.ok) throw invalida(a?.error ?? 'La ratificación necesita la credencial de otro usuario con el permiso.', a?.status ?? 403, { codigo: a?.codigo ?? 'REQUIERE_AUTORIZACION' });
+  await pool.query('UPDATE fin_movimientos SET marcas = ? WHERE id = ?', [m.marcas.replace('sin_autorizacion', 'ratificado'), id]);
+  await Notificacion.resolverPorClave(`saldo-negativo:${id}`, `Ratificado por ${a.supervisor.username}`);
+  return { id, marcas: m.marcas.replace('sin_autorizacion', 'ratificado'), autorizante: a.supervisor.username };
+};
+
+module.exports = { listar, ratificar };

@@ -58,6 +58,8 @@ const validarPagos = async (conn, pagos, total) => {
     let vuelto = 0;
     if (f.moneda && f.moneda !== 'ARS') {
       if (!(await Funciones.estaActiva('VEN-DIVISA', conn))) throw new PagoInvalido(`"${f.nombre}" es en moneda extranjera y VEN-DIVISA está inactiva.`);
+      const dest = await (await puertos.obtener('cobros')).destinoDe(f.codigo);
+      if (!dest.asignado) throw Object.assign(new PagoInvalido(`"${f.nombre}" no tiene una caja o cuenta de destino en ${f.moneda}: cobrá con otra forma de pago.`), { codigo: 'SIN_DESTINO_DIVISA' });
       const cot = await cotizacionDeCobro(f.moneda, p.cotizacion_id);
       if (p.importe_divisa !== undefined && p.importe_divisa !== null) {
         if (!(Number(p.importe_divisa) > 0)) throw new PagoInvalido(`El importe en ${f.moneda} de "${f.nombre}" debe ser mayor a cero.`);

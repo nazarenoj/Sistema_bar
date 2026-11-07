@@ -81,6 +81,8 @@ const PERMISOS = [
   { id: 'financiero.gastos.anular', modulo: 'financiero', descripcion: 'Anular un gasto (con motivo)' },
   { id: 'financiero.cheques.gestionar', modulo: 'financiero', funcion: 'FIN-CHEQUES', descripcion: 'Registrar, depositar, endosar, acreditar y rechazar cheques' },
   { id: 'financiero.conciliar', modulo: 'financiero', funcion: 'FIN-CONCILIACION', descripcion: 'Importar extractos, conciliar y cerrar la conciliación de un período' },
+  { id: 'financiero.informes.ver', modulo: 'financiero', descripcion: 'Ver y exportar los informes de Financiero (flujo de fondos, balance de actividad, turnos)' },
+  { id: 'financiero.divisas.operar', modulo: 'financiero', funcion: 'FIN-MONEDA-EXT', descripcion: 'Comprar y vender moneda extranjera entre cajas y cuentas' },
   { id: 'financiero.cajas.configurar', modulo: 'financiero', descripcion: 'Crear y modificar cajas, cuentas, categorías y la configuración de Financiero' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

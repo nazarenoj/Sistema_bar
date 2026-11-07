@@ -86,7 +86,7 @@ M.registrarReceptor('financiero', 'cobro_revertido', async (conn, c, ctx) => {
       const saldo = await Cuentas.saldoDe(cuenta.id, conn);
       if (saldo < 0) {
         const marca = c.saldo_autorizado_por ? 'saldo_negativo_autorizado' : 'saldo_negativo_sin_autorizacion';
-        await conn.query('UPDATE fin_movimientos SET marcas = ? WHERE id = ?', [`${marca}:${saldo}`, id]);
+        await conn.query('UPDATE fin_movimientos SET marcas = ? WHERE id = ?', [`${marca}:${saldo}${c.saldo_no_verificado ? ',saldo_no_verificado' : ''}`, id]);
         if (!c.saldo_autorizado_por) await Notificacion.crear({
           modulo: 'financiero', tipo: 'saldo_negativo_sin_autorizacion', severidad: 'critica', roles: ROLES, clave: `saldo-negativo:${id}`,
           mensaje: `La devolución del movimiento ${id} dejó "${cuenta.nombre}" con saldo ${saldo} sin autorización previa: ratificala con un supervisor.`,

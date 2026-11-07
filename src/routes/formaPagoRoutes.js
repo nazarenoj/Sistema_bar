@@ -35,11 +35,19 @@ router.get('/', requierePermiso('ventas.cuenta.cobrar'), async (req, res, next) 
       if (!cot.has(f.moneda)) cot.set(f.moneda, await Monedas.vigente(f.moneda).catch(() => null));
       const c = cot.get(f.moneda);
       if (!c || c.vencida) { f.disponible = false; f.motivo_no_disponible = `No hay una cotización de ${f.moneda} vigente: cobrá en pesos.`; }
+      else if (await sinDestino(f.codigo, f.moneda)) { f.disponible = false; f.motivo_no_disponible = 'La forma de pago no tiene una caja o cuenta de destino en esa moneda: cobrá en pesos.'; }
       else f.cotizacion = c.comprador;
     }
     res.json(formas);
   } catch (err) { next(err); }
 });
+
+// Con Financiero instalado, una forma de pago en divisa necesita una caja o cuenta de destino en esa moneda; sin ella no se guarda activa ni se ofrece (Financiero RN34, EX24, EX25).
+const sinDestino = async (codigo, moneda) => {
+  if (!moneda || moneda === 'ARS') return null;
+  const d = await (await puertos.obtener('cobros')).destinoDe(codigo);
+  return d.asignado ? null : `La forma de pago "${codigo}" es en ${moneda} y no tiene una caja o cuenta de destino en esa moneda: asignala en Financiero (podés guardar la forma desactivada).`;
+};
 
 // La moneda de una forma de pago: la local, o una extranjera activa y solo con VEN-DIVISA.
 const validarMoneda = async (moneda) => {
@@ -56,10 +64,12 @@ router.post('/', requierePermiso('ventas.catalogo.editar'), async (req, res, nex
   const b = req.body;
   const errMoneda = await validarMoneda(b.moneda);
   if (errMoneda) return res.status(409).json({ error: errMoneda });
+  const activa = b.activa === false || b.activa === 0 ? 0 : 1;
+  if (activa) { const e = await sinDestino(b.codigo, b.moneda); if (e) return res.status(409).json({ error: e, codigo: 'SIN_DESTINO_EN_MONEDA' }); }
   try {
     const [r] = await pool.query(
-      'INSERT INTO formas_pago (codigo, nombre, requiere_referencia, admite_vuelto, orden, moneda) VALUES (?, ?, ?, ?, ?, ?)',
-      [b.codigo, b.nombre.trim(), flag(b.requiere_referencia), flag(b.admite_vuelto), Number.isInteger(b.orden) ? b.orden : 0, b.moneda ?? 'ARS']);
+      'INSERT INTO formas_pago (codigo, nombre, requiere_referencia, admite_vuelto, orden, moneda, activa) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [b.codigo, b.nombre.trim(), flag(b.requiere_referencia), flag(b.admite_vuelto), Number.isInteger(b.orden) ? b.orden : 0, b.moneda ?? 'ARS', activa]);
     res.status(201).json((await pool.query(FORMA, [r.insertId]))[0][0]);
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Ya existe una forma de pago con ese código.' });
@@ -80,6 +90,9 @@ router.put('/:id', requierePermiso('ventas.catalogo.editar'), async (req, res, n
       const errMoneda = await validarMoneda(b.moneda);
       if (errMoneda) return res.status(409).json({ error: errMoneda });
     }
+    const activaNueva = !(b.activa === false || b.activa === 0);
+    const monedaNueva = b.moneda ?? actual?.moneda ?? 'ARS';
+    if (actual && activaNueva) { const e = await sinDestino(actual.codigo, monedaNueva); if (e) return res.status(409).json({ error: e, codigo: 'SIN_DESTINO_EN_MONEDA' }); }
     const [r] = await pool.query(
       'UPDATE formas_pago SET nombre = ?, activa = ?, requiere_referencia = ?, admite_vuelto = ?, orden = ?, moneda = ? WHERE id = ?',
       [b.nombre.trim(), b.activa === false || b.activa === 0 ? 0 : 1, flag(b.requiere_referencia), flag(b.admite_vuelto), Number.isInteger(b.orden) ? b.orden : 0, b.moneda ?? actual?.moneda ?? 'ARS', req.params.id]);
