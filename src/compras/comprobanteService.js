@@ -228,6 +228,7 @@ const registrar = async (d, ctx = {}) => {
     for (const l of lins) await conn.query(
       'INSERT INTO cmp_comprobante_lineas (comprobante_id, linea, tipo, item_tipo, item_id, descripcion, categoria, cantidad, unidad, presentacion_id, factor_aplicado, precio_unitario, bonificacion_pct, importe, costo_unidad_base) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [r.insertId, l.linea, l.tipo, l.item_tipo, l.item_id, l.descripcion, l.categoria, l.cantidad, l.unidad, l.presentacion_id, l.factor_aplicado, l.precio_unitario, l.bonificacion_pct, l.importe, l.costo_unidad_base]);
+    if (!borrador) for (const h of hooksRegistro) await h(conn, { id: r.insertId, id_global: idG, clase, proveedor_id: prov.id, total, fecha }, d);
     if (!borrador) {
       if (reserva.id_reserva) await Claves.publicarConfirmacion(conn, { idReserva: reserva.id_reserva, idDocumento: idG, modulo: 'compras', rol: 'registro_fiscal', userId: ctx.userId, docTipo: 'comprobante' });
       else if (reserva.estado === 'vinculable') await Claves.vincular({ id_clave: reserva.id_clave, modulo: 'compras', id_documento: idG, rol: 'registro_fiscal', userId: ctx.userId });
@@ -263,6 +264,13 @@ const confirmarBorrador = async (id, ctx) => {
   }
 };
 
+// ---- Ganchos (cada parte de Compras que cuelga de un comprobante: cuotas, pagos, ingresos) ----
+
+const hooksRegistro = [];
+const alRegistrar = (fn) => hooksRegistro.push(fn);
+const hooksAnulado = [];
+const alAnulado = (fn) => hooksAnulado.push(fn);
+
 // ---- Anulación (RN08) ----
 
 // Cada parte de Compras que ata a un comprobante (pagos, ingresos de Stock) suma su control: devuelve el motivo por el que no se puede anular, o null.
@@ -277,6 +285,7 @@ const anular = async (id, { motivo }, ctx = {}) => {
   for (const control of controlesAnulacion) { const m = await control(c); if (m) throw invalida(m.mensaje ?? m, 409, { codigo: m.codigo ?? 'NO_SE_PUEDE_ANULAR' }); }
   // La clave se libera para que el comprobante pueda volver a cargarse: el anulado conserva la suya aparte.
   await pool.query("UPDATE cmp_comprobantes SET estado = 'anulado', motivo_anulacion = ?, clave_anterior = clave, clave = NULL WHERE id = ? AND estado <> 'anulado'", [motivo.trim().slice(0, 255), id]);
+  for (const h of hooksAnulado) await h(c);
   if (c.clave) await Claves.anular({ modulo: 'compras', id_documento: c.id_global }).catch(() => {}); // la clave queda liberada: el comprobante puede volver a cargarse
   // Un contramovimiento hacia Contable con la fecha actual, nunca hacia atrás (RN28).
   const conn = await pool.getConnection();
@@ -312,4 +321,4 @@ const leerQr = async (texto) => {
   return propuesta(r);
 };
 
-module.exports = { CLASES, periodoImputable, periodos, cerrarPeriodo, cerradoEs, obtener, fila, listar, registrar, confirmarBorrador, alAnular, anular, leerFoto, leerQr, cts };
+module.exports = { alRegistrar, alAnulado, CLASES, periodoImputable, periodos, cerrarPeriodo, cerradoEs, obtener, fila, listar, registrar, confirmarBorrador, alAnular, anular, leerFoto, leerQr, cts };

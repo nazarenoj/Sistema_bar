@@ -78,6 +78,8 @@ const PERMISOS = [
   { id: 'compras.periodos.cerrar', modulo: 'compras', descripcion: 'Cerrar un período de IVA de compras' },
   { id: 'compras.ingresos.vincular', modulo: 'compras', descripcion: 'Vincular una factura con ingresos de Stock o generar el ingreso desde la factura' },
   { id: 'compras.lotes.cargar', modulo: 'compras', descripcion: 'Cargar lotes y vencimientos al recibir la mercadería de una factura' },
+  { id: 'compras.cuentas.ver', modulo: 'compras', descripcion: 'Ver la cuenta corriente de los proveedores, la deuda y la agenda de vencimientos' },
+  { id: 'compras.vencimientos.editar', modulo: 'compras', descripcion: 'Cambiar las cuotas de un comprobante y emitir los avisos de vencimiento' },
   { id: 'financiero.cajas.ver', modulo: 'financiero', descripcion: 'Ver las cajas y cuentas (sin saldos)' },
   { id: 'financiero.saldos.ver', modulo: 'financiero', descripcion: 'Ver saldos de cajas y cuentas y el saldo teórico de un turno' },
   { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },

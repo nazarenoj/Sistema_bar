@@ -56,6 +56,8 @@ const finBancoRoutes = require('./routes/finBancoRoutes');
 const finInformeRoutes = require('./routes/finInformeRoutes');
 const cmpProveedorRoutes = require('./routes/cmpProveedorRoutes');
 const cmpComprobanteRoutes = require('./routes/cmpComprobanteRoutes');
+const cmpCuentaRoutes = require('./routes/cmpCuentaRoutes');
+const mantenimientoCompras = require('./compras/mantenimientoCompras');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
 const comprobanteTerceroRoutes = require('./routes/comprobanteTerceroRoutes');
@@ -253,6 +255,7 @@ app.use('/api/financiero', finBancoRoutes);
 app.use('/api/financiero', finInformeRoutes);
 app.use('/api/compras', cmpProveedorRoutes);
 app.use('/api/compras', cmpComprobanteRoutes);
+app.use('/api/compras', cmpCuentaRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);
@@ -307,6 +310,7 @@ if (process.env.NODE_ENV !== 'test') {
         require('./clientes/mantenimientoClientes').iniciar(); // bloqueo automático por mora (E3)
         mantenimientoVentas.iniciar(); // reservas vencidas, recordatorios y pedidos especiales (D8)
         mantenimientoFinanciero.iniciar(); // recordatorios de gastos recurrentes (G7)
+        mantenimientoCompras.iniciar(); // avisos de vencimientos de proveedores (H4)
       });
     })
     .catch(async (err) => {

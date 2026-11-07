@@ -1,6 +1,7 @@
 const express = require('express');
 const Comprobantes = require('../compras/comprobanteService');
 const Ingresos = require('../compras/ingresoService');
+const Vencimientos = require('../compras/vencimientoService');
 const { manejar, puede } = require('../compras/comun');
 const requiereModulo = require('../middleware/requiereModulo');
 const { requierePermiso } = require('../middleware/requierePermiso');
@@ -34,6 +35,7 @@ router.post('/comprobantes', REGISTRAR, manejar(async (req, res) => {
   await conPermisoDeParecido(req);
   const c = await Comprobantes.registrar(req.body, await contexto(req));
   await auditar(req, { modulo: 'compras', accion: 'registrar_comprobante', entidad: 'cmp_comprobante', entidad_id: String(c.id), detalle: `${c.clase} ${c.tipo} ${c.punto_venta}-${c.numero} ${c.total} (${c.estado})` });
+  Vencimientos.publicar().catch(() => {}); // la proyección de fondos de Financiero se suscribe a los vencimientos a pagar
   res.status(201).json(c);
 }));
 router.post('/comprobantes/foto', REGISTRAR, archivo, manejar(async (req, res) => res.json(await Comprobantes.leerFoto({ imagen: req.body, tipo: req.get('Content-Type') }))));
@@ -47,6 +49,7 @@ router.post('/comprobantes/:id/confirmar', REGISTRAR, manejar(async (req, res) =
 router.post('/comprobantes/:id/anular', requierePermiso('compras.comprobantes.anular'), manejar(async (req, res) => {
   const c = await Comprobantes.anular(Number(req.params.id), req.body, { userId: req.usuario.sub });
   await auditar(req, { modulo: 'compras', accion: 'anular_comprobante', entidad: 'cmp_comprobante', entidad_id: String(c.id), detalle: req.body.motivo });
+  Vencimientos.publicar().catch(() => {});
   res.json(c);
 }));
 
