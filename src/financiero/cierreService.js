@@ -5,6 +5,7 @@ const llamar = require('../modulos/llamar');
 const Integracion = require('../services/integracionVentasService');
 const Cuentas = require('./cuentaService');
 const Turnos = require('./turnoService');
+const Transferencias = require('./transferenciaService');
 const { invalida, r2, cts, movimiento } = require('./comun');
 
 // Arqueo y cierre de turno (Financiero RF04, RF28, RN05, RN06, RN41). El efectivo teórico de la caja es su saldo derivado; la diferencia con lo contado se
@@ -111,6 +112,7 @@ const cerrar = async (turnoId, body, ctx) => {
   const explicado = r2(lista._completos.reduce((a, i) => a + i.efecto_efectivo, 0));
 
   const config = await Cuentas.config();
+  let transferenciaHecha = null;
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -145,6 +147,11 @@ const cerrar = async (turnoId, body, ctx) => {
         motivo: motivo ?? 'Diferencia de cierre', marcas: explicado !== 0 ? `explica_pendientes:${explicado}` : null, userId: ctx.userId, terminalId: turno.terminal_id,
       });
     }
+    // «Propone transferir el resto a la caja central» (RF04): si se pidió, se hace en esta misma transacción, antes de cerrar el turno de la caja.
+    if (body.transferir_a) {
+      const resto = r2(conteo.efectivo - fondo);
+      if (resto > 0) transferenciaHecha = await Transferencias.transferirTx(conn, { origenId: cuenta.id, destinoId: Number(body.transferir_a), importe: resto, motivo: 'Resto del cierre de turno a caja central', userId: ctx.userId, terminalId: turno.terminal_id, turnoOrigenId: turnoId });
+    }
     if (conteo.cupones !== undefined) conteo.cupones_teorico = await cuponesTeoricos(turno, hasta, conn);
     const [[{ v }]] = await conn.query('SELECT COALESCE(MAX(version), 0) + 1 AS v FROM fin_cierres WHERE turno_id = ?', [turnoId]);
     const decididos = lista._completos.map((i) => ({ ...i, decision: String(decisiones.get(i.ref).motivo).trim() }));
@@ -160,7 +167,9 @@ const cerrar = async (turnoId, body, ctx) => {
     await conn.commit();
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
   M.despertar();
-  return cierreDe(turnoId);
+  const cierreHecho = await cierreDe(turnoId);
+  if (transferenciaHecha) { delete cierreHecho.propuesta_transferencia; cierreHecho.transferencia = transferenciaHecha; }
+  return cierreHecho;
 };
 
 // RN41(b): el cobro que se confirma después del cierre y que ya explicaba un sobrante o faltante de ese cierre se compensa con un contramovimiento en el turno

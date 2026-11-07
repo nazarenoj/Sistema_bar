@@ -74,6 +74,8 @@ const PERMISOS = [
   { id: 'financiero.movimientos.registrar', modulo: 'financiero', descripcion: 'Registrar ingresos y retiros manuales de caja, con motivo' },
   { id: 'financiero.diferencias.autorizar', modulo: 'financiero', descripcion: 'Autorizar un cierre de turno con diferencia mayor a la tolerancia' },
   { id: 'financiero.turnos.reabrir', modulo: 'financiero', descripcion: 'Reabrir un turno de caja cerrado (con motivo y la autorización de otro usuario con este permiso)' },
+  { id: 'financiero.transferencias.registrar', modulo: 'financiero', descripcion: 'Transferir entre cajas y cuentas y retirar a la caja fuerte' },
+  { id: 'financiero.liquidaciones.registrar', modulo: 'financiero', descripcion: 'Registrar la liquidación del procesador de tarjetas o de la billetera' },
   { id: 'financiero.cajas.configurar', modulo: 'financiero', descripcion: 'Crear y modificar cajas, cuentas, categorías y la configuración de Financiero' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },
