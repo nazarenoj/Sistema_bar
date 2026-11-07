@@ -118,6 +118,12 @@ const cerrar = async (turnoId, body, ctx) => {
     const [[vigente]] = await conn.query("SELECT estado FROM fin_turnos WHERE id = ? FOR UPDATE", [turnoId]);
     if (vigente.estado !== 'abierto') throw invalida('El turno ya está cerrado.', 409);
     const hasta = Date.now();
+    const [[previo]] = await conn.query('SELECT id, version, movimiento_id, diferencia, compensado FROM fin_cierres WHERE turno_id = ? ORDER BY version DESC LIMIT 1', [turnoId]);
+    if (previo?.movimiento_id && !previo.compensado) {
+      await movimiento(conn, { cuentaId: cuenta.id, turnoId, tipo: 'compensacion', importe: -Number(previo.diferencia), moneda: cuenta.moneda, vinculoId: previo.movimiento_id, userId: ctx.userId, terminalId: turno.terminal_id,
+        motivo: `Compensa la diferencia del cierre ${previo.version} al volver a cerrar el turno` });
+      await conn.query('UPDATE fin_cierres SET compensado = 1 WHERE id = ?', [previo.id]);
+    }
     const teorico = await Cuentas.saldoDe(cuenta.id, conn);
     const diferencia = r2(conteo.efectivo - teorico);
     // RN41(a): la diferencia se registra completa, pero la tolerancia se evalúa sin lo que explican los cobros pendientes.

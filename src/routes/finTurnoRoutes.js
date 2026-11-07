@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const Turnos = require('../financiero/turnoService');
 const Cierres = require('../financiero/cierreService');
+const Reaperturas = require('../financiero/reaperturaService');
 const { manejar, puede } = require('../financiero/comun');
 const requiereModulo = require('../middleware/requiereModulo');
 const { requierePermiso, validarAutorizacion } = require('../middleware/requierePermiso');
@@ -58,5 +59,17 @@ router.post('/turnos/:id/cerrar', OPERAR, manejar(async (req, res) => {
 router.get('/turnos/:id/cierre', VER, manejar(async (req, res) => res.json(await Cierres.cierreDe(Number(req.params.id), req.query.version ? Number(req.query.version) : null))));
 router.get('/turnos/:id/cierres', requierePermiso('financiero.saldos.ver'), manejar(async (req, res) => res.json(await Cierres.cierres(Number(req.params.id)))));
 router.get('/turnos/:id/cierre/imprimir', VER, manejar(async (req, res) => res.type('html').send(await Cierres.imprimible(Number(req.params.id)))));
+
+// Reapertura autorizada (RF18): motivo, otro usuario con el permiso y la antigüedad máxima (RN43). Cada intento rechazado queda auditado.
+router.post('/turnos/:id/reabrir', requierePermiso('financiero.turnos.reabrir'), manejar(async (req, res) => {
+  const id = Number(req.params.id);
+  const r = await Reaperturas.reabrir(id, req.body, {
+    userId: req.usuario.sub, autorizar: () => validarAutorizacion(req, 'financiero.turnos.reabrir'),
+    auditarRechazo: (detalle) => auditar(req, { modulo: 'financiero', accion: 'reapertura_rechazada', resultado: 'denegado', entidad: 'fin_turno', entidad_id: String(id), detalle }),
+  });
+  await auditar(req, { modulo: 'financiero', accion: 'reabrir_turno', entidad: 'fin_turno', entidad_id: String(id), detalle: `${req.body.motivo}; autorizó ${r.autorizante}` });
+  res.json(r.turno);
+}));
+router.get('/turnos/:id/reaperturas', requierePermiso('financiero.saldos.ver'), manejar(async (req, res) => res.json(await Reaperturas.historial(Number(req.params.id)))));
 
 module.exports = router;
