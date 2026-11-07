@@ -21,7 +21,7 @@ const PUERTOS = {
       validarEtiqueta: async () => ({ valida: false, motivo: 'Sin Stock no se validan etiquetas propias.' }) },
   },
   // Ventas define; Financiero implementa. Ventas discrimina por forma de pago sin afectar cajas.
-  cobros: { define: 'ventas', implementa: 'financiero', nula: { registrarCobro: async () => null } },
+  cobros: { define: 'ventas', implementa: 'financiero', nula: { registrarCobro: async () => null, turnoAbierto: async () => ({ exigido: false }), saldoCaja: async () => null, destinoDe: async () => ({ asignado: true }) } },
   // Stock define; Compras implementa. El plazo se define por ítem.
   plazosEntrega: { define: 'stock', implementa: 'compras', nula: { plazo: async () => null } },
   // Usuarios define; cada módulo implementa. El módulo no aporta indicadores ni paquetes.

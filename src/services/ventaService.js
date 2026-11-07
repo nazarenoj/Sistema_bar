@@ -225,7 +225,7 @@ const liberarSeries = async (idSolicitud) => { if (idSolicitud) await (await pue
 
 // Registra la venta de una cuenta cerrada. Va con la `conn` de la transacción del cierre: si el cierre
 // se revierte, no queda ni la venta ni sus mensajes. Un efecto que falle después nunca revierte la venta.
-const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null, credito = null, fid = null, clienteId = null }) => {
+const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, idSolicitud, userId, tipoNoFiscal = null, modalidad = 'salon', mozoId = null, idCompromiso = null, credito = null, fid = null, clienteId = null, terminalId = null, turnoNoVerificado = false }) => {
   const id_global = await idGlobal();
   // Un no fiscal tiene numeración propia, diferenciada de la fiscal, y queda "pendiente de facturación" (RF12, RN84).
   const numeroNoFiscal = tipoNoFiscal ? await Caea.siguienteNumero(`NF:${tipoNoFiscal}`, conn) : null;
@@ -246,7 +246,7 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
     if (tipoNoFiscal && e.destino === 'contable') continue; // una venta no fiscal no se informa a Contable (RN84)
     await Mensajeria.publicar(conn, {
       origen: 'ventas', destino: e.destino, tipo: e.tipo, docTipo: 'venta', docIdGlobal: id_global, userId,
-      solicitud: idSolicitud, contenido: { total, pagos, items: detalle },
+      solicitud: idSolicitud, contenido: { total, pagos, items: detalle, terminal_id: terminalId, no_fiscal: !!tipoNoFiscal, turno_no_verificado: !!turnoNoVerificado, fecha_ms: Date.now() },
     });
   }
   await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso, modalidad, seriesRegistradas: true, clienteId: fid?.clienteId ?? credito?.clienteId ?? null }); // el cliente identificado viaja para el alcance de un retiro de lote (Clientes RF30)

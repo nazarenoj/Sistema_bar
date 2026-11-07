@@ -118,12 +118,14 @@ const actualizar = async (id, d) => {
 };
 
 // Una caja o cuenta se desactiva (no se borra) si tiene historia; sin movimientos se puede eliminar.
-const cambiarEstado = async (id, activa) => {
+const cambiarEstado = async (id, activa, { confirmar = false } = {}) => {
   await obtenerFila(id);
   if (!activa) {
-    const bloqueos = [];
-    for (const hook of hooksDesactivar) { const b = await hook(id); if (b) bloqueos.push(b); }
+    // Un control devuelve { bloquea } (no se puede) o { confirma } (se puede, pero hay que confirmar: EX25).
+    const bloqueos = [], avisos = [];
+    for (const hook of hooksDesactivar) { const b = await hook(id); if (b?.bloquea) bloqueos.push(b.bloquea); if (b?.confirma) avisos.push(b.confirma); }
     if (bloqueos.length) throw invalida(bloqueos.join(' '), 409);
+    if (avisos.length && !confirmar) throw invalida(`${avisos.join(' ')} Confirmá para desactivarla.`, 409, { codigo: 'REQUIERE_CONFIRMACION' });
   }
   await pool.query('UPDATE fin_cuentas SET activa = ? WHERE id = ?', [activa ? 1 : 0, id]);
   return obtener(id, { conSaldo: true });

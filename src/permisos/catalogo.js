@@ -69,6 +69,7 @@ const PERMISOS = [
   { id: 'clientes.unificar', modulo: 'clientes', descripcion: 'Unificar fichas de clientes duplicadas' },
   { id: 'financiero.cajas.ver', modulo: 'financiero', descripcion: 'Ver las cajas y cuentas (sin saldos)' },
   { id: 'financiero.saldos.ver', modulo: 'financiero', descripcion: 'Ver saldos de cajas y cuentas y el saldo teórico de un turno' },
+  { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },
   { id: 'financiero.cajas.configurar', modulo: 'financiero', descripcion: 'Crear y modificar cajas, cuentas, categorías y la configuración de Financiero' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

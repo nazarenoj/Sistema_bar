@@ -157,10 +157,12 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
 
     // Efectos en otros módulos: el contramovimiento del cobro y el evento contable (no para una venta no fiscal, RN84).
     const contenido = { venta_id_global: idGlobalVenta, total, tipo, reingreso, reintegros, items: itemsDev };
-    for (const destino of [{ m: 'financiero', t: 'cobro_revertido' }, { m: 'contable', t: 'venta_devuelta' }]) {
-      if (venta.condicion_fiscal === 'no_fiscal' && destino.m === 'contable') continue;
-      await Mensajeria.publicar(conn, { origen: 'ventas', destino: destino.m, tipo: destino.t, docTipo: 'devolucion', docIdGlobal: id_global, userId, solicitud: idSolicitud, contenido });
-    }
+    // El contramovimiento del cobro viaja con la ID_Global de la venta y una secuencia posterior: Financiero lo retiene hasta que el cobro original esté
+    // Confirmado (Financiero RN31). Si el cobro nunca se le informó (se instaló después de la venta), no hay nada que revertir.
+    const [[cobroInformado]] = await conn.query("SELECT 1 AS si FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'cobro_registrado' AND modulo_destino = 'financiero' LIMIT 1", [idGlobalVenta]);
+    if (cobroInformado) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'financiero', tipo: 'cobro_revertido', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud,
+      contenido: { ...contenido, motivo: motivo.trim(), devolucion_id_global: id_global, saldo_autorizado_por: null } });
+    if (venta.condicion_fiscal !== 'no_fiscal') await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_devuelta', docTipo: 'devolucion', docIdGlobal: id_global, userId, solicitud: idSolicitud, contenido });
     await conn.commit();
     devolucion = { id: r.insertId, id_global, tipo, total, reingreso };
   } catch (err) {

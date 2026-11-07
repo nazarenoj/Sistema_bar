@@ -25,7 +25,7 @@ router.put('/cuentas/:id', CONFIGURAR, manejar(async (req, res) => {
 }));
 router.post('/cuentas/:id/activar', CONFIGURAR, manejar(async (req, res) => res.json(await Cuentas.cambiarEstado(Number(req.params.id), true))));
 router.post('/cuentas/:id/desactivar', CONFIGURAR, manejar(async (req, res) => {
-  const c = await Cuentas.cambiarEstado(Number(req.params.id), false);
+  const c = await Cuentas.cambiarEstado(Number(req.params.id), false, { confirmar: req.body?.confirmar === true });
   await auditar(req, { modulo: 'financiero', accion: 'desactivar_cuenta', entidad: 'fin_cuenta', entidad_id: String(c.id) });
   res.json(c);
 }));

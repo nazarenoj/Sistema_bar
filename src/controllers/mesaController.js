@@ -149,7 +149,7 @@ const cerrarCuenta = async (req, res) => {
       mesa_id: id, sesion_apertura: pedidosActivos[0].sesion_apertura, items, total: totalAcumulado, pagos,
       idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, tipoNoFiscal,
       modalidad: pedidosActivos[0].modalidad, mozoId: pedidosActivos[0].mozo_id, idCompromiso, credito,
-      fid: clienteId ? { clienteId, premio: premioAplicado } : null, clienteId,
+      fid: clienteId ? { clienteId, premio: premioAplicado } : null, clienteId, terminalId: req.usuario?.terminal_id ?? null,
     });
     // La mesa sigue "ocupada": recién se libera cuando se confirma que se imprimió/descargó el
     // comprobante (ver confirmarTicket), para no dejar la mesa disponible sin haberlo entregado.

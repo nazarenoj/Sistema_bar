@@ -48,6 +48,7 @@ const remitoRoutes = require('./routes/remitoRoutes');
 const clienteFidelizacionRoutes = require('./routes/clienteFidelizacionRoutes');
 const clienteAjusteRoutes = require('./routes/clienteAjusteRoutes');
 const finCuentaRoutes = require('./routes/finCuentaRoutes');
+const finDestinoRoutes = require('./routes/finDestinoRoutes');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
 const comprobanteTerceroRoutes = require('./routes/comprobanteTerceroRoutes');
@@ -86,6 +87,7 @@ require('./stock/paqueteStock'); // Ventas registra sus indicadores del tablero 
 require('./stock/indicadoresStock');
 require('./stock/destinoEquivalencia');
 require('./clientes/creditoPuerto');
+require('./financiero/cobroReceptor'); // cobros y devoluciones que pide Ventas (G2)
 require('./clientes/cuentaReceptor');
 require('./clientes/fidelizacionReceptor'); // acumulación, canje y emisión de instrumentos que pide Ventas (E7)
 require('./clientes/indicadoresClientes'); // deuda de clientes para el tablero (E5) // débitos, remitos y anulaciones que pide Ventas (E2) // Clientes implementa el puerto de crédito (E1)
@@ -229,6 +231,7 @@ app.use('/api/remitos', remitoRoutes);
 app.use('/api/fidelizacion', clienteFidelizacionRoutes);
 app.use('/api/ajustes-cc', clienteAjusteRoutes);
 app.use('/api/financiero', finCuentaRoutes);
+app.use('/api/financiero', finDestinoRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);
