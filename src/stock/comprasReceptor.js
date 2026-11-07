@@ -16,7 +16,7 @@ const pendientesDeFactura = async ({ cuit, proveedor } = {}) => {
 
 // Lo que entró en un ingreso, por ítem, en la unidad base: la base para comparar con la factura (EX06).
 const detalle = async (idGlobal) => {
-  const [[ing]] = await pool.query('SELECT id_global, deposito_id, proveedor, compras_comprobante FROM stock_ingresos WHERE id_global = ?', [idGlobal]);
+  const [[ing]] = await pool.query('SELECT id_global, deposito_id, proveedor, comprobante_cuit, compras_comprobante FROM stock_ingresos WHERE id_global = ?', [idGlobal]);
   if (!ing) return null;
   const [movs] = await pool.query(
     `SELECT insumo_id, producto_id, SUM(cantidad) AS cantidad, MAX(costo_unitario) AS costo_unitario FROM stock_movimientos WHERE documento_tipo = 'ingreso' AND documento = ? GROUP BY insumo_id, producto_id`, [idGlobal]);
@@ -34,6 +34,15 @@ M.registrarReceptor('stock', 'vincular_ingreso', async (conn, c) => {
   if (ing.compras_comprobante && ing.compras_comprobante !== c.comprobante_id_global) throw new M.RechazoNegocio('El ingreso ya está vinculado a otra factura.'); // EX19
   await conn.query('UPDATE stock_ingresos SET compras_comprobante = ? WHERE id_global = ?', [c.comprobante_id_global, c.ingreso_id_global]);
   return { vinculado: true };
+});
+
+// La nota de credito del proveedor que Compras vinculo con una devolucion (Compras RF25): Stock marca el egreso con la nota.
+M.registrarReceptor('stock', 'nota_credito_devolucion', async (conn, c) => {
+  const [[d]] = await conn.query('SELECT id, estado FROM devoluciones_proveedor WHERE id_global = ? FOR UPDATE', [c.devolucion_id_global]);
+  if (!d) throw new M.RechazoNegocio('La devolucion no existe.');
+  if (d.estado === 'con_nc') return { ya_vinculada: true };
+  await conn.query("UPDATE devoluciones_proveedor SET estado = 'con_nc', nota_credito_clave = ?, nota_credito_importe = ? WHERE id = ?", [c.clave ?? c.comprobante_id_global, c.importe ?? null, d.id]);
+  return { vinculada: true };
 });
 
 M.registrarReceptor('stock', 'desvincular_ingreso', async (conn, c) => {

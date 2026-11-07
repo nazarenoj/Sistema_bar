@@ -104,8 +104,23 @@ const costoDeLinea = (l, c) => {
   return r4(base * (1 + noRecuperable));
 };
 
-Comprobantes.alRegistrar(async (conn, comp) => {
-  if (!['FACTURA', 'TICKET'].includes(comp.clase)) return; // las notas de crédito ajustan el costo por su cuenta (H9, RN38)
+// Una nota de credito por bonificacion o descuento posterior (`ajuste_costo`) baja el costo por unidad de la compra que es la fuente vigente del CR (RN38); la que solo devuelve
+// cantidades al mismo precio no lo cambia. El credito por unidad se resta del CR y se aplica con la regla de RN06 (confirmacion si supera el umbral, EX10).
+const ajustarPorNota = async (conn, comp, d) => {
+  const [[c]] = await conn.query('SELECT * FROM cmp_comprobantes WHERE id = ?', [comp.id]);
+  const [lineas] = await conn.query("SELECT * FROM cmp_comprobante_lineas WHERE comprobante_id = ? AND tipo = 'mercaderia' AND item_id IS NOT NULL", [comp.id]);
+  for (const l of lineas) {
+    const previo = await actual({ tipo: l.item_tipo, id: l.item_id }, conn);
+    if (!previo || previo.fuente !== 'factura' || previo.moneda !== c.moneda || previo.proveedor_principal_id !== c.proveedor_id) continue;
+    const credito = costoDeLinea(l, c);
+    if (credito > 0 && credito < Number(previo.costo)) await proponer(conn, { tipo: l.item_tipo, id: l.item_id }, { costo: Number(previo.costo) - credito, moneda: c.moneda, fuente: 'factura', ref: `NC-${c.punto_venta}-${c.numero}`.slice(0, 60), proveedorId: c.proveedor_id });
+  }
+  void d;
+};
+
+Comprobantes.alRegistrar(async (conn, comp, d) => {
+  if (comp.clase === 'NOTA_CREDITO') { if (d?.ajuste_costo === true) await ajustarPorNota(conn, comp, d); return; }
+  if (!['FACTURA', 'TICKET'].includes(comp.clase)) return;
   const [[c]] = await conn.query('SELECT * FROM cmp_comprobantes WHERE id = ?', [comp.id]);
   const [lineas] = await conn.query("SELECT * FROM cmp_comprobante_lineas WHERE comprobante_id = ? AND tipo = 'mercaderia' AND item_id IS NOT NULL", [comp.id]);
   for (const l of lineas) await proponer(conn, { tipo: l.item_tipo, id: l.item_id }, { costo: costoDeLinea(l, c), moneda: c.moneda, fuente: 'factura', ref: `FC-${c.punto_venta}-${c.numero}`.slice(0, 60), proveedorId: c.proveedor_id });

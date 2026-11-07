@@ -61,6 +61,7 @@ const cmpOrdenPagoRoutes = require('./routes/cmpOrdenPagoRoutes');
 const cmpCostoRoutes = require('./routes/cmpCostoRoutes');
 const cmpPedidoRoutes = require('./routes/cmpPedidoRoutes');
 const cmpArcaRoutes = require('./routes/cmpArcaRoutes');
+const cmpInformeRoutes = require('./routes/cmpInformeRoutes');
 const mantenimientoCompras = require('./compras/mantenimientoCompras');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
@@ -110,6 +111,8 @@ require('./stock/costoReferenciaReceptor'); // referencia de costo en Stock (H6)
 require('./compras/costoService'); // costo de reposición, hook de facturas y puerto (H6)
 require('./stock/pedidoTransitoReceptor'); // pedidos en transito que informa Compras (H7)
 require('./compras/pedidoService'); // pedidos, recepcion y puerto de plazos de entrega (H7)
+require('./compras/devolucionService'); // devoluciones a proveedor que informa Stock (H9)
+require('./compras/informeService'); // indicadores de Compras para el tablero (H9)
 require('./compras/chequeReceptor'); // cheque rechazado que se endosó a un proveedor (H5)
 require('./financiero/chequeService'); // cheques que llegan de Clientes y Compras (G8)
 require('./financiero/indicadoresFinanciero'); // tablero y paquete de consolidación (G9)
@@ -271,6 +274,7 @@ app.use('/api/compras', cmpOrdenPagoRoutes);
 app.use('/api/compras', cmpCostoRoutes);
 app.use('/api/compras', cmpPedidoRoutes);
 app.use('/api/compras', cmpArcaRoutes);
+app.use('/api/compras', cmpInformeRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);
