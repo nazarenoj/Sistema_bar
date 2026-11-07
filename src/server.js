@@ -52,6 +52,7 @@ const finDestinoRoutes = require('./routes/finDestinoRoutes');
 const finTurnoRoutes = require('./routes/finTurnoRoutes');
 const finTransferenciaRoutes = require('./routes/finTransferenciaRoutes');
 const finGastoRoutes = require('./routes/finGastoRoutes');
+const finBancoRoutes = require('./routes/finBancoRoutes');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
 const comprobanteTerceroRoutes = require('./routes/comprobanteTerceroRoutes');
@@ -93,6 +94,7 @@ require('./clientes/creditoPuerto');
 require('./financiero/cobroReceptor'); // cobros y devoluciones que pide Ventas (G2)
 require('./financiero/cobrosPuerto'); // Financiero implementa el puerto de cobros de Ventas (G3)
 require('./financiero/comisionReceptor'); // pago de liquidaciones de comisiones (G7)
+require('./financiero/chequeService'); // cheques que llegan de Clientes y Compras (G8)
 const mantenimientoFinanciero = require('./financiero/mantenimientoFinanciero');
 require('./clientes/cuentaReceptor');
 require('./clientes/fidelizacionReceptor'); // acumulación, canje y emisión de instrumentos que pide Ventas (E7)
@@ -241,6 +243,7 @@ app.use('/api/financiero', finDestinoRoutes);
 app.use('/api/financiero', finTurnoRoutes);
 app.use('/api/financiero', finTransferenciaRoutes);
 app.use('/api/financiero', finGastoRoutes);
+app.use('/api/financiero', finBancoRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);

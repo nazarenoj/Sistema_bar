@@ -181,13 +181,17 @@ const registrar = async (d, { userId = null, idOperacion } = {}) => {
     for (const v of valores)
       await conn.query('INSERT INTO recibo_valores (recibo_id, forma, importe, recibido, vuelto, moneda, cotizacion, importe_original, referencia, cheque_banco, cheque_numero, cheque_fecha_pago, cheque_cuit_librador) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [r.insertId, v.forma, v.importe, v.recibido, v.vuelto, v.moneda, v.cotizacion ?? null, v.importe_original ?? null, v.referencia, v.cheque.banco ?? null, v.cheque.numero ?? null, v.cheque.fecha_pago ?? null, v.cheque.cuit_librador ?? null]);
+    for (const [i, v] of valores.entries()) { // el cheque viaja a Financiero, que lo registra en su cartera si FIN-CHEQUES está activa (RF07, RN27)
+      if (FORMAS_PROPIAS.includes(v.forma)) await Mensajeria.publicar(conn, { origen: 'clientes', destino: 'financiero', tipo: 'cheque_recibido', docTipo: 'recibo', docIdGlobal: ref, docVersion: i + 1, userId,
+        contenido: { recibo: ref, cliente_id: cuenta.cliente_id, importe: v.importe, moneda: v.moneda, tipo: v.forma === 'echeq' ? 'echeq' : 'fisico', cheque: { tipo: v.forma === 'echeq' ? 'echeq' : 'fisico', ...v.cheque, identificador_red: v.forma === 'echeq' ? v.referencia ?? v.cheque.numero : undefined } } });
+    }
     for (const x of retenciones) {
       await conn.query('INSERT INTO recibo_retenciones (recibo_id, impuesto, regimen, jurisdiccion, nro_certificado, fecha, importe) VALUES (?, ?, ?, ?, ?, ?, ?)', [r.insertId, x.impuesto, x.regimen, x.jurisdiccion, x.nro_certificado, x.fecha, x.importe_original ?? x.importe]);
       await Mensajeria.publicar(conn, { origen: 'clientes', destino: 'contable', tipo: 'retencion_sufrida', docTipo: 'recibo', docIdGlobal: ref, docVersion: x.nro_certificado.length * 1000 + retenciones.indexOf(x), userId, contenido: { recibo: ref, cliente_id: cuenta.cliente_id, ...x } }); // lo recibe Contable si está instalado (RN38)
     }
     if (imputacion !== 'ninguna') await imputarEn(conn, { cuentaId: cuenta.id, credito: mov.insertId, modo: imputacion, items: d.imputaciones ?? [], userId });
     await conn.commit();
-    if (retenciones.length) Mensajeria.despertar();
+    if (retenciones.length || valores.some((v) => FORMAS_PROPIAS.includes(v.forma))) Mensajeria.despertar();
     return { ...(await obtener(r.insertId)), ...(avisoCotizacion && { aviso: avisoCotizacion }) };
   } catch (err) {
     await conn.rollback().catch(() => {});

@@ -79,6 +79,8 @@ const PERMISOS = [
   { id: 'financiero.gastos.ver', modulo: 'financiero', descripcion: 'Consultar los gastos y los gastos recurrentes' },
   { id: 'financiero.gastos.registrar', modulo: 'financiero', descripcion: 'Registrar gastos y gastos recurrentes, con o sin comprobante fiscal' },
   { id: 'financiero.gastos.anular', modulo: 'financiero', descripcion: 'Anular un gasto (con motivo)' },
+  { id: 'financiero.cheques.gestionar', modulo: 'financiero', funcion: 'FIN-CHEQUES', descripcion: 'Registrar, depositar, endosar, acreditar y rechazar cheques' },
+  { id: 'financiero.conciliar', modulo: 'financiero', funcion: 'FIN-CONCILIACION', descripcion: 'Importar extractos, conciliar y cerrar la conciliación de un período' },
   { id: 'financiero.cajas.configurar', modulo: 'financiero', descripcion: 'Crear y modificar cajas, cuentas, categorías y la configuración de Financiero' },
   { id: 'usuarios.copias.gestionar', modulo: 'usuarios', descripcion: 'Copias de seguridad: configurar la clave, generar, descargar y restaurar' },
   { id: 'usuarios.gestionar', modulo: 'usuarios', descripcion: 'Usuarios, terminales y sesiones abiertas' },

@@ -208,6 +208,7 @@ const config = async (db = pool) => {
   return {
     antiguedad_max_reapertura_dias: c.antiguedad_max_reapertura_dias, tolerancia_diferencia: Number(c.tolerancia_diferencia),
     exigir_turno_efectivo: !!c.exigir_turno_efectivo, retencion_solicitudes_dias: c.retencion_solicitudes_dias,
+    plazo_presentacion_cheque_dias: c.plazo_presentacion_cheque_dias, conciliacion_dias: c.conciliacion_dias,
   };
 };
 
@@ -220,7 +221,11 @@ const actualizarConfig = async (d) => {
   if (!(tol >= 0)) throw invalida('La tolerancia de diferencia no puede ser negativa.');
   if (!Number.isInteger(ret) || ret < 90) throw invalida('Las solicitudes procesadas se conservan al menos 90 días.');
   const exigir = d.exigir_turno_efectivo !== undefined ? flag(d.exigir_turno_efectivo) : actual.exigir_turno_efectivo ? 1 : 0;
-  await pool.query('UPDATE fin_config SET antiguedad_max_reapertura_dias = ?, tolerancia_diferencia = ?, exigir_turno_efectivo = ?, retencion_solicitudes_dias = ? WHERE id = 1', [dias, tol, exigir, ret]);
+  const plazo = d.plazo_presentacion_cheque_dias !== undefined ? Number(d.plazo_presentacion_cheque_dias) : actual.plazo_presentacion_cheque_dias;
+  const ventana = d.conciliacion_dias !== undefined ? Number(d.conciliacion_dias) : actual.conciliacion_dias;
+  if (!Number.isInteger(plazo) || plazo < 1 || plazo > 365) throw invalida('El plazo de presentación de cheques es un entero de días entre 1 y 365.');
+  if (!Number.isInteger(ventana) || ventana < 0 || ventana > 30) throw invalida('La ventana de la conciliación automática es un entero de días entre 0 y 30.');
+  await pool.query('UPDATE fin_config SET antiguedad_max_reapertura_dias = ?, tolerancia_diferencia = ?, exigir_turno_efectivo = ?, retencion_solicitudes_dias = ?, plazo_presentacion_cheque_dias = ?, conciliacion_dias = ? WHERE id = 1', [dias, tol, exigir, ret, plazo, ventana]);
   return config();
 };
 

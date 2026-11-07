@@ -31,3 +31,13 @@ M.registrarReceptor('clientes', 'remitos_facturados', async (conn, c, ctx) => {
   return { movimiento_id: r.movimientoId, trasladado: r.trasladado };
 });
 M.registrarReceptor('clientes', 'anulacion_remito', anulacion, { revierte: 'remito_emitido' });
+
+// Cheque rechazado (Financiero RF08, RN11): Financiero solo lo publica; Clientes reabre la deuda con una nota de débito por el importe y los gastos bancarios.
+M.registrarReceptor('clientes', 'cheque_rechazado', async (conn, c, ctx) => {
+  if (!c.cliente_id) throw new M.RechazoNegocio('El cheque rechazado no indica a qué cliente corresponde.');
+  const r = await Cuentas.registrarDebito(conn, {
+    tipo: 'nd', clienteId: c.cliente_id, moneda: c.moneda ?? 'ARS', importe: Number(c.importe) + Number(c.gastos_bancarios ?? 0), ref: `CHQ-${c.cheque_id_global}`, idOperacion: ctx.idOperacion,
+    detalle: `Cheque rechazado ${c.banco ?? ''} N° ${c.numero ?? ''}: ${c.motivo}${c.origen_doc ? ` (recibo ${c.origen_doc})` : ''}`.trim(),
+  });
+  return { movimiento_id: r.movimientoId };
+});
