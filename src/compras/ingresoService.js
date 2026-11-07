@@ -72,6 +72,9 @@ const actualizarEstado = async (c, hayVinculos, diferencias) => {
 const idOp = (c, vinculoId, tipo) => `compras:${tipo}:${c.id_global}:${vinculoId}`;
 
 // Vincula la factura con uno o varios ingresos existentes (RF04).
+const hooksVincular = [];
+const alVincular = (fn) => hooksVincular.push(fn);
+
 const vincular = async (comprobanteId, ingresoIds, ctx) => {
   await exigirStock();
   const c = await cargarCompleto(comprobanteId);
@@ -98,6 +101,7 @@ const vincular = async (comprobanteId, ingresoIds, ctx) => {
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
   M.despertar();
   await actualizarEstado(c, true, diferencias);
+  for (const h of hooksVincular) await h(c.proveedor_id, ids).catch(() => {}); // el pedido se pone al dia; si falla, la factura queda igual vinculada
   return { ...(await Comprobantes.obtener(c.id)), diferencias, vinculos: await vinculos(c.id) };
 };
 
@@ -215,4 +219,4 @@ const reclamos = async () => {
   return [...por.values()];
 };
 
-module.exports = { pendientes, vincular, desvincular, vinculos, generar, reclamos, comparar, r2 };
+module.exports = { alVincular, pendientes, vincular, desvincular, vinculos, generar, reclamos, comparar, r2 };

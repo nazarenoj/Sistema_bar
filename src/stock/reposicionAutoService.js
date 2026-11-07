@@ -61,9 +61,10 @@ const sugerir = async ({ deposito_id, hoy = new Date() } = {}) => {
     for (let i = 0; i < cobertura + plazo; i++) necesario += promedio[new Date(hoy.getTime() + i * DIA_MS).getDay() + 1];
     const seguridad = Number(cfg?.stock_seguridad ?? 0);
     necesario += seguridad;
-    const disponible = Number(fisico);
+    const [[{ transito }]] = await pool.query('SELECT COALESCE(SUM(cantidad), 0) AS transito FROM stock_pedidos_transito WHERE item_tipo = ? AND item_id = ?', [it.item_tipo, it.item_id]); // pedido en transito de Compras
+    const disponible = Number(fisico) + Number(transito);
     salida.push({ item_tipo: it.item_tipo, item_id: it.item_id, nombre: x?.nombre, consumo_diario: redondear(it.dias.reduce((a, c) => a + c, 0) / (semanas * 7)), consumo_por_dia: promedio.slice(1).map(redondear),
-      plazo_entrega_dias: plazo, plazo_origen: viaCompras !== null ? 'compras' : 'item', dias_cobertura: cobertura, stock_seguridad: seguridad, disponible, sugerida: Math.max(0, redondear(necesario - disponible)) });
+      plazo_entrega_dias: plazo, plazo_origen: viaCompras !== null ? 'compras' : 'item', dias_cobertura: cobertura, stock_seguridad: seguridad, disponible, en_transito: Number(transito), sugerida: Math.max(0, redondear(necesario - disponible)) });
   }
   return salida.filter((s) => s.sin_plazo || s.sugerida > 0).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
 };
