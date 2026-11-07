@@ -1,5 +1,6 @@
 const express = require('express');
 const Comprobantes = require('../compras/comprobanteService');
+const Ingresos = require('../compras/ingresoService');
 const { manejar, puede } = require('../compras/comun');
 const requiereModulo = require('../middleware/requiereModulo');
 const { requierePermiso } = require('../middleware/requierePermiso');
@@ -48,6 +49,27 @@ router.post('/comprobantes/:id/anular', requierePermiso('compras.comprobantes.an
   await auditar(req, { modulo: 'compras', accion: 'anular_comprobante', entidad: 'cmp_comprobante', entidad_id: String(c.id), detalle: req.body.motivo });
   res.json(c);
 }));
+
+// Vínculo con los ingresos de Stock y recepción con lotes y series (RF04, RF19, RF24).
+const VINCULAR = requierePermiso('compras.ingresos.vincular');
+router.get('/comprobantes/:id/ingresos-pendientes', VER, manejar(async (req, res) => res.json(await Ingresos.pendientes(Number(req.params.id)))));
+router.get('/comprobantes/:id/vinculos', VER, manejar(async (req, res) => res.json(await Ingresos.vinculos(Number(req.params.id)))));
+router.post('/comprobantes/:id/vincular', VINCULAR, manejar(async (req, res) => {
+  const r = await Ingresos.vincular(Number(req.params.id), req.body.ingreso_ids, { userId: req.usuario.sub });
+  await auditar(req, { modulo: 'compras', accion: 'vincular_ingreso', entidad: 'cmp_comprobante', entidad_id: req.params.id, detalle: JSON.stringify(req.body.ingreso_ids) });
+  res.json(r);
+}));
+router.post('/comprobantes/:id/desvincular', VINCULAR, manejar(async (req, res) => {
+  const r = await Ingresos.desvincular(Number(req.params.id), Number(req.body.vinculo_id), req.body, { userId: req.usuario.sub });
+  await auditar(req, { modulo: 'compras', accion: 'desvincular_ingreso', entidad: 'cmp_comprobante', entidad_id: req.params.id, detalle: req.body.motivo });
+  res.json(r);
+}));
+router.post('/comprobantes/:id/generar-ingreso', VINCULAR, manejar(async (req, res) => {
+  const r = await Ingresos.generar(Number(req.params.id), req.body, { userId: req.usuario.sub, puedeLotes: await puede(req, 'compras.lotes.cargar') });
+  await auditar(req, { modulo: 'compras', accion: 'generar_ingreso', entidad: 'cmp_comprobante', entidad_id: req.params.id, detalle: `depósito ${req.body.deposito_id}` });
+  res.status(201).json(r);
+}));
+router.get('/reclamos', VER, manejar(async (req, res) => res.json(await Ingresos.reclamos())));
 
 router.get('/periodos-iva', VER, manejar(async (req, res) => res.json(await Comprobantes.periodos())));
 router.post('/periodos-iva/:periodo/cerrar', requierePermiso('compras.periodos.cerrar'), manejar(async (req, res) => {

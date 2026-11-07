@@ -217,7 +217,8 @@ const registrar = async (d, ctx = {}) => {
   try {
     await conn.beginTransaction();
     const idG = await idGlobal();
-    const estado = borrador ? 'borrador' : (ctx.estado ?? 'registrado');
+    const esperaMercaderia = !borrador && lins.some((l) => l.tipo === 'mercaderia' && l.item_tipo && l.item_id) && ['FACTURA', 'TICKET', 'OTRO'].includes(clase) && (await Modulos.estaInstalado('stock'));
+    const estado = borrador ? 'borrador' : (ctx.estado ?? (esperaMercaderia ? 'pendiente_recepcion' : 'registrado'));
     const [r] = await conn.query(
       `INSERT INTO cmp_comprobantes (id_global, proveedor_id, clase, tipo, punto_venta, numero, fecha, cae, cae_tipo, cae_vencimiento, moneda, cotizacion, neto_gravado, no_gravado, exento, iva, iva_computable, percepciones_iva, percepciones_iibb,
          percepciones_detalle, impuestos_internos, otros_tributos, total, estado, origen, periodo_iva, clave, id_reserva, id_solicitud, observacion, user_id, ts_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

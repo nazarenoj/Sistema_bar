@@ -97,6 +97,7 @@ require('./clientes/creditoPuerto');
 require('./financiero/cobroReceptor'); // cobros y devoluciones que pide Ventas (G2)
 require('./financiero/cobrosPuerto'); // Financiero implementa el puerto de cobros de Ventas (G3)
 require('./financiero/comisionReceptor'); // pago de liquidaciones de comisiones (G7)
+require('./stock/comprasReceptor'); // vínculo de las facturas de Compras con los ingresos de Stock (H3)
 require('./financiero/chequeService'); // cheques que llegan de Clientes y Compras (G8)
 require('./financiero/indicadoresFinanciero'); // tablero y paquete de consolidación (G9)
 require('./financiero/proyeccionService'); // vencimientos que publican Clientes y Compras (G9)

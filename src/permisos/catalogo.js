@@ -76,6 +76,8 @@ const PERMISOS = [
   { id: 'compras.comprobantes.confirmar_parecido', modulo: 'compras', descripcion: 'Confirmar, con motivo, un comprobante muy parecido a uno ya cargado' },
   { id: 'compras.comprobantes.anular', modulo: 'compras', descripcion: 'Anular comprobantes de compra (con motivo)' },
   { id: 'compras.periodos.cerrar', modulo: 'compras', descripcion: 'Cerrar un período de IVA de compras' },
+  { id: 'compras.ingresos.vincular', modulo: 'compras', descripcion: 'Vincular una factura con ingresos de Stock o generar el ingreso desde la factura' },
+  { id: 'compras.lotes.cargar', modulo: 'compras', descripcion: 'Cargar lotes y vencimientos al recibir la mercadería de una factura' },
   { id: 'financiero.cajas.ver', modulo: 'financiero', descripcion: 'Ver las cajas y cuentas (sin saldos)' },
   { id: 'financiero.saldos.ver', modulo: 'financiero', descripcion: 'Ver saldos de cajas y cuentas y el saldo teórico de un turno' },
   { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },
