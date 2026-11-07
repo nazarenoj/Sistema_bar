@@ -28,7 +28,7 @@ const MODULOS = {
     nombre: 'Stock e Insumos', capa: 2, dependeDe: ['usuarios', 'ventas'],
     archivos: [/^(controllers|routes)\/(insumo|deposito|presentacion|stock|receta|inventario|lote|produccion|alergeno|traza|temperatura|serie|etiqueta)/, /^models\/(insumo|deposito|presentacion)/, /^stock\//],
   },
-  financiero: { nombre: 'Financiero', capa: 2, dependeDe: ['usuarios', 'ventas'], archivos: [], noConstruido: true },
+  financiero: { nombre: 'Financiero', capa: 2, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/fin[A-Z]/, /^financiero\//, /^models\/fin[A-Z]/] },
   clientes: { nombre: 'Clientes y CC', capa: 3, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/cliente/, /^clientes\//, /^models\/cliente/] }, // Stock es opcional (Clientes RF30)
   compras: { nombre: 'Compras', capa: 3, dependeDe: ['usuarios', 'ventas', 'stock'], archivos: [], noConstruido: true },
   contable: { nombre: 'Contable', capa: 4, dependeDe: ['usuarios', 'ventas', 'stock', 'clientes'], archivos: [], noConstruido: true },
