@@ -95,6 +95,8 @@ const PERMISOS = [
   { id: 'compras.pedidos.armar', modulo: 'compras', funcion: 'CMP-PEDIDOS', descripcion: 'Armar y editar pedidos a proveedores (borrador)' },
   { id: 'compras.pedidos.confirmar', modulo: 'compras', funcion: 'CMP-PEDIDOS', descripcion: 'Confirmar y cancelar pedidos a proveedores' },
   { id: 'compras.pedidos.enviar', modulo: 'compras', funcion: 'CMP-PEDIDOS', descripcion: 'Enviar pedidos a proveedores y reemplazar los enviados' },
+  { id: 'compras.libro_iva.ver', modulo: 'compras', descripcion: 'Generar el Libro IVA Compras' },
+  { id: 'compras.arca.controlar', modulo: 'compras', funcion: 'CMP-CONTROL-ARCA', descripcion: 'Importar Mis Comprobantes, compararlos y constatar el CAE de lo recibido' },
   { id: 'financiero.cajas.ver', modulo: 'financiero', descripcion: 'Ver las cajas y cuentas (sin saldos)' },
   { id: 'financiero.saldos.ver', modulo: 'financiero', descripcion: 'Ver saldos de cajas y cuentas y el saldo teórico de un turno' },
   { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },

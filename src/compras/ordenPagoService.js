@@ -67,9 +67,10 @@ const listar = async ({ proveedorId, estado, desde, hasta, tipo, limite = 200 } 
 const aplicar = async (conn, d, prov, moneda) => {
   const aplic = [];
   for (const a of d.aplicaciones ?? []) {
-    const [[v]] = await conn.query("SELECT v.*, c.proveedor_id, c.moneda, c.estado AS comp_estado FROM cmp_vencimientos v JOIN cmp_comprobantes c ON c.id = v.comprobante_id WHERE v.id = ? FOR UPDATE", [Number(a.vencimiento_id)]);
+    const [[v]] = await conn.query("SELECT v.*, c.proveedor_id, c.moneda, c.estado AS comp_estado, c.constatacion FROM cmp_vencimientos v JOIN cmp_comprobantes c ON c.id = v.comprobante_id WHERE v.id = ? FOR UPDATE", [Number(a.vencimiento_id)]);
     if (!v || v.proveedor_id !== prov.id) throw invalida(`La cuota ${a.vencimiento_id} no es de este proveedor.`, 404);
     if (v.moneda !== moneda) throw invalida('Las cuotas son de otra moneda.', 409);
+    if (v.constatacion === 'cae_no_valido' && (await Proveedores.config(conn)).bloquear_cae_invalido) throw invalida(`El comprobante de la cuota ${a.vencimiento_id} tiene un CAE no valido segun ARCA: no se paga.`, 409, { codigo: 'CAE_NO_VALIDO' });
     if (v.estado !== 'pendiente') throw invalida(`La cuota ${a.vencimiento_id} ya está ${v.estado}.`, 409, { codigo: 'CUOTA_NO_PENDIENTE' });
     const importe = r2(a.importe ?? v.saldo);
     if (!(importe > 0) || cts(importe) > cts(v.saldo)) throw invalida(`El importe de la cuota ${a.vencimiento_id} no puede superar su saldo (${Number(v.saldo)}).`, 400, { codigo: 'IMPORTE_SUPERA_SALDO' });
