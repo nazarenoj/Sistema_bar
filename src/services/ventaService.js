@@ -87,6 +87,23 @@ const validarPagos = async (conn, pagos, total) => {
   return normalizados;
 };
 
+// Cobro en efectivo con turno de caja (Ventas RN43, Financiero RN04, EX01): se consulta a Financiero por la llamada n.º 5. Si la instancia lo exige y la terminal no
+// tiene turno abierto, no se cobra. Si Financiero no responde en 3 s, el cobro sigue solo con la autorización de un supervisor y la venta queda marcada
+// «turno no verificado». Sin Financiero instalado no hay turno que verificar.
+const verificarTurno = async (pagos, { terminalId, autorizar }) => {
+  if (!pagos.some((p) => p.forma === 'efectivo')) return { turnoNoVerificado: false };
+  const r = await llamar(5, 'ventas', async () => (await puertos.obtener('cobros')).turnoAbierto({ terminalId }));
+  if (r.fallo && r.degradado && /no instalado/.test(r.motivo)) return { turnoNoVerificado: false }; // sin Financiero no hay turno que verificar
+  if (r.fallo) {
+    const aut = await autorizar();
+    if (!aut?.ok) throw Object.assign(new Error('Financiero no responde: el cobro en efectivo necesita la autorización de un supervisor.'), { codigo: 'TURNO_NO_VERIFICADO', status: aut?.status ?? 409 });
+    return { turnoNoVerificado: true };
+  }
+  if (r.valor.exigido && !r.valor.abierto)
+    throw Object.assign(new Error(`Abrí el turno de la caja${r.valor.caja ? ` "${r.valor.caja}"` : ''} antes de cobrar en efectivo.`), { codigo: 'SIN_TURNO_ABIERTO', status: 409 });
+  return { turnoNoVerificado: false };
+};
+
 // Lo que se guarda en pedidos y facturas: el código de la forma, o 'mixto' si hay varias.
 const metodoResumen = (pagos) => (pagos.length > 1 ? 'mixto' : pagos[0].forma);
 
@@ -397,4 +414,4 @@ const margen = async ({ desde, hasta } = {}) => {
   }).sort((a, b) => b.margen - a.margen);
 };
 
-module.exports = { retenerCanjes, liberarCanjes, aplicarPremio, esSocioLocal, reservarCredito, liberarCredito, importeACuenta, porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, regularizadaPorReintento, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };
+module.exports = { verificarTurno, retenerCanjes, liberarCanjes, aplicarPremio, esSocioLocal, reservarCredito, liberarCredito, importeACuenta, porMoneda, comprometerStock, liberarCompromiso, liberarSeries, margen, regularizar, regularizadaPorReintento, TIPOS_NO_FISCAL, publicarDescuento, registrar, obtener, validarPagos, metodoResumen, porFormaPago, PagoInvalido, EFECTOS };

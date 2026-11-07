@@ -18,6 +18,9 @@ before(async () => {
   barra = await crear({ tipo: 'caja_efectivo', nombre: 'Caja Barra', terminal_id: term });
   procesador = await crear({ tipo: 'procesador', nombre: 'Posnet' });
   banco = await crear({ tipo: 'banco', nombre: 'Banco' });
+  // Los cobros en efectivo piden turno abierto (Financiero RN04): el cajero abre el de su caja.
+  const t = await api('POST', '/api/financiero/turnos', { token: cajero.token, body: { cuenta_id: barra.id, fondo_contado: 0 } });
+  assert.equal(t.status, 201, JSON.stringify(t.json));
 });
 after(async () => { await cerrar(); });
 

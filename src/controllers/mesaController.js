@@ -90,7 +90,7 @@ const cerrarCuenta = async (req, res) => {
   }
 
   const conn = await pool.getConnection();
-  let mesa, pedidoIds, totalAcumulado, factura, venta, metodoPago, idCompromiso, credito, canjes = [], premioAplicado = null;
+  let mesa, pedidoIds, totalAcumulado, factura, venta, metodoPago, idCompromiso, credito, canjes = [], premioAplicado = null, turnoVerif = { turnoNoVerificado: false };
   try {
     await conn.beginTransaction();
 
@@ -138,6 +138,7 @@ const cerrarCuenta = async (req, res) => {
 
     await Pedido.cerrarPedidosMesa(id, conn);
     const pagos = await Venta.validarPagos(conn, Array.isArray(req.body.pagos) ? req.body.pagos : [{ forma: metodo_pago, importe: totalAcumulado }], totalAcumulado);
+    turnoVerif = await Venta.verificarTurno(pagos, { terminalId: req.usuario?.terminal_id ?? null, autorizar: () => validarAutorizacion(req, 'ventas.cuenta.cobrar') }); // turno de caja para cobrar en efectivo (Financiero RN04)
     // Venta a cuenta corriente: veredicto y reserva de crédito de Clientes antes de cerrar (Ventas RF16, Clientes RF12, RF26); el débito viaja con la venta.
     credito = await Venta.reservarCredito(pagos, { clienteId: clienteId, idSolicitud: req.get('X-ID-Solicitud') ?? `cuenta:${id}:${pedidosActivos[0].sesion_apertura}`, userId: req.usuario?.sub ?? null,
       autorizar: () => validarAutorizacion(req, 'ventas.credito.autorizar'), motivoContingencia: req.body.motivo_contingencia, moneda: String(req.body.cuenta_moneda ?? 'ARS').toUpperCase() });
@@ -149,7 +150,7 @@ const cerrarCuenta = async (req, res) => {
       mesa_id: id, sesion_apertura: pedidosActivos[0].sesion_apertura, items, total: totalAcumulado, pagos,
       idSolicitud: req.get('X-ID-Solicitud'), userId: req.usuario?.sub ?? null, tipoNoFiscal,
       modalidad: pedidosActivos[0].modalidad, mozoId: pedidosActivos[0].mozo_id, idCompromiso, credito,
-      fid: clienteId ? { clienteId, premio: premioAplicado } : null, clienteId, terminalId: req.usuario?.terminal_id ?? null,
+      fid: clienteId ? { clienteId, premio: premioAplicado } : null, clienteId, terminalId: req.usuario?.terminal_id ?? null, turnoNoVerificado: turnoVerif.turnoNoVerificado,
     });
     // La mesa sigue "ocupada": recién se libera cuando se confirma que se imprimió/descargó el
     // comprobante (ver confirmarTicket), para no dejar la mesa disponible sin haberlo entregado.
@@ -186,7 +187,7 @@ const cerrarCuenta = async (req, res) => {
     await Venta.liberarCanjes(canjes); // la venta no se confirmó: el saldo retenido vuelve // la venta no se confirmó: la reserva de crédito se libera
     await Venta.liberarSeries(req.get('X-ID-Solicitud')); // la venta no se confirmó: lo comprometido se libera
     if (['SIN_DISPONIBLE', 'STOCK_NO_RESPONDE', 'LOTE_NO_DISPONIBLE', 'SERIE_NO_DISPONIBLE'].includes(err.codigo)) return res.status(409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
-    if (['CREDITO_BLOQUEADO', 'CREDITO_REQUIERE_AUTORIZACION', 'CREDITO_NO_RESPONDE', 'CLIENTE_NO_IDENTIFICADO', 'CUENTA_CORRIENTE_NO_DISPONIBLE', 'CANJE_NO_DISPONIBLE', 'SALDO_INSUFICIENTE', 'INSTRUMENTO_RECHAZADO', 'PREMIO_NO_DISPONIBLE', 'COTIZACION_NO_DISPONIBLE'].includes(err.codigo)) return res.status(err.status ?? 409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
+    if (['CREDITO_BLOQUEADO', 'CREDITO_REQUIERE_AUTORIZACION', 'CREDITO_NO_RESPONDE', 'CLIENTE_NO_IDENTIFICADO', 'CUENTA_CORRIENTE_NO_DISPONIBLE', 'CANJE_NO_DISPONIBLE', 'SALDO_INSUFICIENTE', 'INSTRUMENTO_RECHAZADO', 'PREMIO_NO_DISPONIBLE', 'COTIZACION_NO_DISPONIBLE', 'SIN_TURNO_ABIERTO', 'TURNO_NO_VERIFICADO'].includes(err.codigo)) return res.status(err.status ?? 409).json({ error: err.message, codigo: err.codigo, detalle: err.detalle });
     if (err instanceof Venta.PagoInvalido) return res.status(400).json({ error: err.message, codigo: err.codigo ?? 'PAGO_INVALIDO' });
     if (err.codigo === 'SIN_CAEA') return res.status(409).json({ error: err.message, codigo: 'SIN_CAEA' });
     if (err.status === 400) return res.status(400).json({ error: err.message, codigo: 'RECEPTOR_INVALIDO' });
