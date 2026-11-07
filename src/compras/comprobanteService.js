@@ -264,6 +264,18 @@ const confirmarBorrador = async (id, ctx) => {
   }
 };
 
+// Un comprobante propio de Compras (sin clave de un tercero): reabre la deuda con un proveedor, por ejemplo cuando se le rechaza un cheque que se le endosó (EX13). Va en la transacción del mensaje.
+const crearInterno = async (conn, { proveedorId, importe, moneda = 'ARS', referencia, motivo }) => {
+  const per = await periodoImputable(hoy(), conn);
+  const idG = await idGlobal();
+  const [r] = await conn.query(
+    `INSERT INTO cmp_comprobantes (id_global, proveedor_id, clase, tipo, punto_venta, numero, fecha, moneda, no_gravado, total, estado, origen, periodo_iva, observacion, ts_ms)
+     VALUES (?, ?, 'NOTA_DEBITO', 'X', '00000', ?, ?, ?, ?, ?, 'registrado', 'financiero', ?, ?, ?)`,
+    [idG, proveedorId, String(referencia).replace(/\D/g, '').padStart(8, '0').slice(-8), hoy(), moneda, importe, importe, per.periodo, String(motivo).slice(0, 255), Date.now()]);
+  for (const h of hooksRegistro) await h(conn, { id: r.insertId, id_global: idG, clase: 'NOTA_DEBITO', proveedor_id: proveedorId, total: importe, fecha: hoy() }, {});
+  return { id: r.insertId, id_global: idG };
+};
+
 // ---- Ganchos (cada parte de Compras que cuelga de un comprobante: cuotas, pagos, ingresos) ----
 
 const hooksRegistro = [];
@@ -321,4 +333,4 @@ const leerQr = async (texto) => {
   return propuesta(r);
 };
 
-module.exports = { alRegistrar, alAnulado, CLASES, periodoImputable, periodos, cerrarPeriodo, cerradoEs, obtener, fila, listar, registrar, confirmarBorrador, alAnular, anular, leerFoto, leerQr, cts };
+module.exports = { crearInterno, alRegistrar, alAnulado, CLASES, periodoImputable, periodos, cerrarPeriodo, cerradoEs, obtener, fila, listar, registrar, confirmarBorrador, alAnular, anular, leerFoto, leerQr, cts };

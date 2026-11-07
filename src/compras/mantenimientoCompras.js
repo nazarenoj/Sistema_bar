@@ -1,6 +1,7 @@
 const registro = require('../instancias/registro');
 const logger = require('../utils/logger');
 const Vencimientos = require('./vencimientoService');
+const Ordenes = require('./ordenPagoService');
 
 // Trabajo periódico de Compras (cada hora, por instancia): los avisos de vencimientos y la foto de los vencimientos a pagar para el flujo de fondos de Financiero. Tolera cualquier falla.
 const vuelta = async () => {
@@ -9,6 +10,7 @@ const vuelta = async () => {
       try {
         if (!(await require('../modulos/registro').estaInstalado('compras'))) return;
         await Vencimientos.avisos();
+        await Ordenes.avisarProgramadas();
         await Vencimientos.publicar();
       } catch (err) {
         logger.error(`[compras] instancia ${inst.codigo}: ${err.message}`);

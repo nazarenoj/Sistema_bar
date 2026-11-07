@@ -57,6 +57,7 @@ const finInformeRoutes = require('./routes/finInformeRoutes');
 const cmpProveedorRoutes = require('./routes/cmpProveedorRoutes');
 const cmpComprobanteRoutes = require('./routes/cmpComprobanteRoutes');
 const cmpCuentaRoutes = require('./routes/cmpCuentaRoutes');
+const cmpOrdenPagoRoutes = require('./routes/cmpOrdenPagoRoutes');
 const mantenimientoCompras = require('./compras/mantenimientoCompras');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
@@ -100,6 +101,8 @@ require('./financiero/cobroReceptor'); // cobros y devoluciones que pide Ventas 
 require('./financiero/cobrosPuerto'); // Financiero implementa el puerto de cobros de Ventas (G3)
 require('./financiero/comisionReceptor'); // pago de liquidaciones de comisiones (G7)
 require('./stock/comprasReceptor'); // vínculo de las facturas de Compras con los ingresos de Stock (H3)
+require('./financiero/pagoProveedorReceptor'); // pago de las órdenes de Compras (H5)
+require('./compras/chequeReceptor'); // cheque rechazado que se endosó a un proveedor (H5)
 require('./financiero/chequeService'); // cheques que llegan de Clientes y Compras (G8)
 require('./financiero/indicadoresFinanciero'); // tablero y paquete de consolidación (G9)
 require('./financiero/proyeccionService'); // vencimientos que publican Clientes y Compras (G9)
@@ -256,6 +259,7 @@ app.use('/api/financiero', finInformeRoutes);
 app.use('/api/compras', cmpProveedorRoutes);
 app.use('/api/compras', cmpComprobanteRoutes);
 app.use('/api/compras', cmpCuentaRoutes);
+app.use('/api/compras', cmpOrdenPagoRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);

@@ -161,7 +161,7 @@ const rechazar = async (id, { motivo, gastos_bancarios: gastos = 0 }, userId) =>
     await historial(conn, id, 'rechazado', motivo.trim(), userId);
     const destino = c.estado === 'endosado' && c.endoso_modulo === 'compras' ? 'compras' : c.origen_modulo === 'clientes' ? 'clientes' : null;
     if (destino) await M.publicar(conn, { origen: 'financiero', destino, tipo: 'cheque_rechazado', docTipo: 'cheque', docIdGlobal: c.id_global, userId,
-      contenido: { cheque_id_global: c.id_global, origen_modulo: c.origen_modulo, origen_doc: c.origen_doc, cliente_id: c.cliente_id, endosado_a: c.endosado_a, banco: c.banco, numero: c.numero ?? c.identificador_red,
+      contenido: { cheque_id: c.id, cheque_id_global: c.id_global, origen_modulo: c.origen_modulo, origen_doc: c.origen_doc, cliente_id: c.cliente_id, endosado_a: c.endosado_a, banco: c.banco, numero: c.numero ?? c.identificador_red,
         importe: Number(c.importe), moneda: c.moneda, gastos_bancarios: gb, motivo: motivo.trim() } });
     await conn.commit();
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
