@@ -47,10 +47,10 @@ const siguienteNumero = async (conn, ejercicioId) => {
 const hashDe = (o) => crypto.createHash('sha256').update(JSON.stringify(o)).digest('hex');
 
 // Registra un asiento. `exacto` (asientos manuales) rechaza un período cerrado; los automáticos se desplazan al primer período abierto con la fecha original en la leyenda (RN05).
-const crear = async (conn, { fecha, tipo, leyenda, lineas, usuarioId = null, anulaId = null, resumenClave = null, idSolicitud = null, instantanea = null, configVersion = null, exacto = false, origen = null }) => {
+const crear = async (conn, { fecha, tipo, leyenda, lineas, usuarioId = null, anulaId = null, resumenClave = null, idSolicitud = null, instantanea = null, configVersion = null, exacto = false, ignorarCierre = false, origen = null }) => {
   const f = iso(fecha);
   await validarLineas(conn, lineas, { soloActivas: exacto });
-  const { periodo, desplazado, fechaOriginal } = await Periodos.periodoPara(conn, f, { exacto });
+  const { periodo, desplazado, fechaOriginal } = await Periodos.periodoPara(conn, f, { exacto, ignorarCierre });
   const fechaAsiento = desplazado ? `${periodo.anio}-${String(periodo.mes).padStart(2, '0')}-01` : f;
   const [r] = await conn.query('INSERT INTO con_asientos (numero, ejercicio_id, periodo_id, fecha, tipo, leyenda, usuario_id, anula_id, resumen_clave, id_solicitud, contenido_hash, config_version, instantanea, creado_ms) VALUES (0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [periodo.ejercicio_id, periodo.id, fechaAsiento, tipo, `${leyenda}${desplazado ? ` (fecha original ${fmt(fechaOriginal)})` : ''}`.slice(0, 255), usuarioId, anulaId, resumenClave, idSolicitud, hashDe(lineas), configVersion, instantanea ? JSON.stringify(instantanea) : null, Date.now()]);

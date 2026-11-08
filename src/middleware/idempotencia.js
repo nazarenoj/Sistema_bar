@@ -22,6 +22,8 @@ const OBLIGATORIAS = [
   /^POST \/api\/facturas\/:n\/reintentar$/,
   /^POST \/api\/contable\/asientos-manuales$/,
   /^POST \/api\/contable\/apertura$/,
+  /^POST \/api\/contable\/ejercicios\/:n\/cerrar$/,
+  /^POST \/api\/contable\/revaluacion$/,
   /^POST \/api\/contable\/asientos\/:n\/anular$/,
   /^POST \/api\/contable\/pendientes\/:n\/imputar$/,
 ];

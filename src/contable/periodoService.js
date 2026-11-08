@@ -40,7 +40,33 @@ const cambiarPeriodo = async (id, estado, { usuarioId, motivo } = {}) => {
   await pool.query('INSERT INTO con_periodo_log (periodo_id, accion, motivo, usuario_id, ms) VALUES (?, ?, ?, ?, ?)', [id, estado === 'cerrado' ? 'cierre' : 'reapertura', motivo ?? null, usuarioId ?? null, Date.now()]);
   return periodoVista((await pool.query('SELECT * FROM con_periodos WHERE id = ?', [id]))[0][0]);
 };
-const cerrar = (id, usuarioId) => cambiarPeriodo(id, 'cerrado', { usuarioId });
+const rangoDe = (p) => {
+  const ultimo = new Date(p.anio, p.mes, 0).getDate();
+  const sig = p.mes === 12 ? [p.anio + 1, 1] : [p.anio, p.mes + 1];
+  return { desde: `${p.anio}-${String(p.mes).padStart(2, '0')}-01`, hasta: `${p.anio}-${String(p.mes).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`, siguiente: `${sig[0]}-${String(sig[1]).padStart(2, '0')}-01` };
+};
+
+// Un período no se cierra con pendientes de imputar, salvo que se acepten con motivo (y la autorización que pide la ruta): pasan al período siguiente y siguen pendientes (RN08).
+// Si está configurado, tampoco con diferencias en los controles cruzados (EX06).
+const cerrar = async (id, usuarioId, { aceptar = null } = {}) => {
+  const [[p]] = await pool.query('SELECT * FROM con_periodos WHERE id = ?', [id]);
+  if (!p) throw invalida('Período no encontrado.', 404);
+  if (p.estado === 'cerrado') return cambiarPeriodo(id, 'cerrado', { usuarioId }); // informa que ya está cerrado
+  const r = rangoDe(p);
+  const [pend] = await pool.query("SELECT id, tipo_evento, id_documento, motivo FROM con_pendientes WHERE estado = 'abierto' AND fecha BETWEEN ? AND ?", [r.desde, r.hasta]);
+  if (pend.length) {
+    const aceptados = new Map((aceptar ?? []).map((a) => [Number(a.pendiente_id ?? a.id), String(a.motivo ?? '').trim()]));
+    const sinAceptar = pend.filter((x) => !aceptados.has(x.id) || aceptados.get(x.id).length < 5);
+    if (sinAceptar.length) throw invalida(`El período tiene ${sinAceptar.length} pendiente(s) de imputar: resolvelos o aceptalos con un motivo.`, 409, { codigo: 'PENDIENTES_SIN_RESOLVER', pendientes: sinAceptar });
+    for (const x of pend) await pool.query('UPDATE con_pendientes SET fecha_original = COALESCE(fecha_original, fecha), fecha = ?, aceptado_motivo = ?, aceptado_ms = ?, aceptado_por = ? WHERE id = ?', [r.siguiente, aceptados.get(x.id).slice(0, 255), Date.now(), usuarioId ?? null, x.id]);
+  }
+  const [[cfg]] = await pool.query('SELECT bloquear_cierre_controles AS b FROM con_config WHERE id = 1');
+  if (cfg.b) {
+    const u = await require('./controlService').ultimo();
+    if (!u || u.con_diferencias > 0) throw invalida(u ? 'Los controles cruzados tienen diferencias y el cierre está configurado para bloquearse.' : 'Ejecutá los controles cruzados antes de cerrar: el cierre está configurado para bloquearse con diferencias.', 409, { codigo: 'CONTROLES_CON_DIFERENCIAS' });
+  }
+  return cambiarPeriodo(id, 'cerrado', { usuarioId });
+};
 const reabrir = (id, motivo, usuarioId) => {
   if (String(motivo ?? '').trim().length < 5) throw invalida('Reabrir un período requiere un motivo (al menos 5 caracteres).');
   return cambiarPeriodo(id, 'abierto', { usuarioId, motivo: String(motivo).trim().slice(0, 255) });
@@ -50,7 +76,7 @@ const historial = async (id) => (await pool.query('SELECT accion, motivo, usuari
 // El período que recibe un asiento de esa fecha (RN05, EX03): el de su mes si está abierto y, si está cerrado, el primer período abierto con la leyenda de la fecha original. Si la fecha cae
 // después del último ejercicio se agregan ejercicios calendario hasta cubrirla. `exacto` (asientos manuales) rechaza un período cerrado en vez de desplazarlo.
 // shortcut: se crean ejercicios de año calendario sin avisar, cuando haya cierres de ejercicio reales (J8) conviene exigir que el anterior esté cerrado.
-const periodoPara = async (db, fecha, { exacto = false } = {}) => {
+const periodoPara = async (db, fecha, { exacto = false, ignorarCierre = false } = {}) => {
   const f = iso(fecha);
   const [anio, mes] = [Number(f.slice(0, 4)), Number(f.slice(5, 7))];
   let [[p]] = await db.query('SELECT * FROM con_periodos WHERE anio = ? AND mes = ?', [anio, mes]);
@@ -63,11 +89,11 @@ const periodoPara = async (db, fecha, { exacto = false } = {}) => {
     }
     if (!p) throw invalida('No hay un ejercicio que cubra esa fecha.', 409, { codigo: 'SIN_EJERCICIO' });
   }
-  if (p.estado === 'abierto') return { periodo: p, desplazado: false, fechaOriginal: f };
+  if (p.estado === 'abierto' || ignorarCierre) return { periodo: p, desplazado: false, fechaOriginal: f };
   if (exacto) throw invalida('El período de esa fecha está cerrado.', 409, { codigo: 'PERIODO_CERRADO' });
   const [[abierto]] = await db.query("SELECT p.* FROM con_periodos p JOIN con_ejercicios e ON e.id = p.ejercicio_id WHERE p.estado = 'abierto' AND e.estado = 'abierto' ORDER BY p.anio, p.mes LIMIT 1");
   if (!abierto) throw invalida('No hay períodos abiertos.', 409, { codigo: 'SIN_PERIODO_ABIERTO' });
   return { periodo: abierto, desplazado: true, fechaOriginal: f };
 };
 
-module.exports = { ejercicios, periodos, crearEjercicio, cerrar, reabrir, historial, periodoPara };
+module.exports = { ejercicios, periodos, crearEjercicio, cerrar, reabrir, historial, periodoPara, rangoDe };

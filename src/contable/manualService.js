@@ -4,7 +4,7 @@ const { invalida, esFecha, iso, fechaLocal } = require('./comun');
 
 // Asientos manuales, modelos reutilizables y asientos recurrentes (Contable RF05, RN04, RN13, RN33, EX01, EX03). Un asiento manual con fecha de un período cerrado se rechaza (EX03); los
 // automáticos no se editan a mano (RN04). La clave X-ID-Solicitud la controla el middleware de idempotencia (mismo contenido devuelve el asiento original, otro contenido es conflicto).
-const limpiarLineas = (lineas) => (Array.isArray(lineas) ? lineas : []).map((l) => ({ cuenta_id: Number(l.cuenta_id), debe: Number(l.debe ?? 0), haber: Number(l.haber ?? 0), detalle: l.detalle ? String(l.detalle).slice(0, 160) : null }));
+const limpiarLineas = (lineas) => (Array.isArray(lineas) ? lineas : []).map((l) => ({ cuenta_id: Number(l.cuenta_id), debe: Number(l.debe ?? 0), haber: Number(l.haber ?? 0), detalle: l.detalle ? String(l.detalle).slice(0, 160) : null, importe_divisa: l.importe_divisa ?? null, cotizacion: l.cotizacion ?? null }));
 
 const crear = async ({ fecha, leyenda, lineas }, usuarioId, idSolicitud = null, { tipo = 'manual' } = {}) => {
   if (!esFecha(fecha)) throw invalida('La fecha va como AAAA-MM-DD.');
