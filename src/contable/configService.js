@@ -17,7 +17,7 @@ const MESES = (desde, hasta) => {
 
 const config = async (db = pool) => (await db.query('SELECT * FROM con_config WHERE id = 1'))[0][0];
 const vista = (c) => ({ fecha_inicio: iso(c.fecha_inicio), iniciada: !!c.fecha_inicio, perfil_rubro: c.perfil_rubro, momento_costo_no_fiscal: c.momento_costo_no_fiscal, asiento_apertura_id: c.asiento_apertura_id, es_casa_central: !!c.es_casa_central,
-  retencion_anios: c.retencion_anios, bloquear_cierre_controles: !!c.bloquear_cierre_controles });
+  retencion_anios: c.retencion_anios, bloquear_cierre_controles: !!c.bloquear_cierre_controles, responsable_id: c.responsable_id, plazo_pendientes_dias: c.plazo_pendientes_dias });
 
 // Primer ejercicio: desde el inicio hasta fin de año (puede durar menos de 12 meses, RF02).
 const crearEjercicio = async (conn, desde, hasta) => {
@@ -72,6 +72,8 @@ const actualizar = async (d) => {
   const campos = {};
   if (d.momento_costo_no_fiscal !== undefined) { if (!['movimiento', 'regularizar'].includes(d.momento_costo_no_fiscal)) throw invalida('El momento es movimiento o regularizar.'); campos.momento_costo_no_fiscal = d.momento_costo_no_fiscal; }
   if (d.retencion_anios !== undefined) { if (!Number.isInteger(d.retencion_anios) || d.retencion_anios < 1 || d.retencion_anios > 50) throw invalida('La retención son entre 1 y 50 años.'); campos.retencion_anios = d.retencion_anios; }
+  if (d.responsable_id !== undefined) campos.responsable_id = d.responsable_id ? Number(d.responsable_id) : null;
+  if (d.plazo_pendientes_dias !== undefined) { if (!Number.isInteger(d.plazo_pendientes_dias) || d.plazo_pendientes_dias < 1 || d.plazo_pendientes_dias > 90) throw invalida('El plazo son entre 1 y 90 días.'); campos.plazo_pendientes_dias = d.plazo_pendientes_dias; }
   if (d.bloquear_cierre_controles !== undefined) campos.bloquear_cierre_controles = d.bloquear_cierre_controles ? 1 : 0;
   const k = Object.keys(campos);
   if (k.length) await pool.query(`UPDATE con_config SET ${k.map((x) => `${x} = ?`).join(', ')} WHERE id = 1`, k.map((x) => campos[x]));

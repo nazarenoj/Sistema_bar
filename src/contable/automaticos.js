@@ -5,6 +5,7 @@ const Asientos = require('./asientoService');
 const Funciones = require('../funciones/servicio');
 const Form = require('./formularios');
 const Periodos = require('./periodoService');
+const Pendientes = require('./pendienteService');
 const { gancho } = require('./receptor');
 const { invalida, r2, cts, iso, fechaLocal } = require('./comun');
 
@@ -15,6 +16,8 @@ class SinRegla extends Error {
 }
 
 const nombreForm = (id) => Form.porId(id)?.nombre ?? id;
+
+class EsperaOriginal extends Error {}
 
 // ---- Cálculo de líneas ----
 
@@ -89,7 +92,7 @@ const importeDe = (c) => c.total ?? null;
 const esperarOriginal = async (conn, c) => {
   if (!c.venta_id_global) return;
   const [msgs] = await conn.query("SELECT estado FROM mensajes_integracion WHERE doc_id_global = ? AND modulo_destino = 'contable' AND tipo IN ('venta_confirmada', 'venta_regularizada')", [c.venta_id_global]);
-  if (msgs.some((m) => m.estado !== 'confirmado')) throw new Error('Espera al original: la venta de esta devolución todavía no se contabilizó.');
+  if (msgs.some((m) => m.estado !== 'confirmado')) throw new EsperaOriginal('Espera al original: la venta de esta devolución todavía no se contabilizó.');
 };
 
 const aplicar = async (conn, tipo, c, ctx, fecha) => {
@@ -122,10 +125,26 @@ const aplicar = async (conn, tipo, c, ctx, fecha) => {
   return { asiento_id: a.id, numero: a.numero };
 };
 
+const MODULO_DE = { venta: 'ventas', cierre: 'financiero', reapertura: 'financiero', comprobante: 'compras', orden: 'compras', retencion: 'compras' };
+
+// Lo que no se pudo contabilizar queda en Pendientes de imputar (RF15) sin frenar al origen: sin regla se responde Rechazado (RN30) y una devolución que llegó antes que su venta espera (RN29).
 gancho.tomar = async (conn, tipo, c, ctx, fecha) => {
-  if (!CONSTRUCTORES[tipo]) throw new M.RechazoNegocio(`Sin regla de imputación para el evento ${tipo}.`); // los demás eventos se suman en los checkpoints siguientes
-  try { return await aplicar(conn, tipo, c, ctx, fecha); } catch (err) {
-    if (err instanceof SinRegla) throw new M.RechazoNegocio(`Sin regla de imputación: ${err.formulario} / ${err.componente}${err.criterio && err.criterio !== '*' ? ` (${err.criterio})` : ''}.`); // RN30
+  const datos = { idOperacion: ctx.idOperacion, modulo: MODULO_DE[tipo.split('_')[0]] ?? 'otro', tipoEvento: tipo, idDocumento: ctx.docIdGlobal, fecha, importe: importeDe(c) };
+  if (!CONSTRUCTORES[tipo]) {
+    await Pendientes.registrar({ ...datos, motivo: 'sin_regla', detalle: `El evento ${tipo} todavía no tiene reglas.` });
+    throw new M.RechazoNegocio(`Sin regla de imputación para el evento ${tipo}.`);
+  }
+  try {
+    const r = await aplicar(conn, tipo, c, ctx, fecha);
+    await Pendientes.resolver(conn, ctx.idOperacion, { asientoId: r.asiento_id ?? null });
+    return r;
+  } catch (err) {
+    if (err instanceof SinRegla) {
+      const detalle = `${err.formulario} / ${err.componente}${err.criterio && err.criterio !== '*' ? ` (${err.criterio})` : ''}`;
+      await Pendientes.registrar({ ...datos, motivo: 'sin_regla', detalle });
+      throw new M.RechazoNegocio(`Sin regla de imputación: ${detalle}.`); // RN30
+    }
+    if (err instanceof EsperaOriginal) await Pendientes.registrar({ ...datos, motivo: 'espera_original', detalle: err.message }); // EX19: sigue como pendiente hasta que el original se confirme
     throw err;
   }
 };

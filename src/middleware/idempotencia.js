@@ -20,6 +20,9 @@ const OBLIGATORIAS = [
   /^POST \/api\/devoluciones$/,
   /^POST \/api\/precios\/actualizaciones$/,
   /^POST \/api\/facturas\/:n\/reintentar$/,
+  /^POST \/api\/contable\/asientos-manuales$/,
+  /^POST \/api\/contable\/asientos\/:n\/anular$/,
+  /^POST \/api\/contable\/pendientes\/:n\/imputar$/,
 ];
 
 const TOPE_ID = 64;

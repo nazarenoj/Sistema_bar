@@ -97,6 +97,16 @@ const confirmarMensaje = async (m, resultado) => {
   await actualizarAlertaRechazos();
 };
 
+// Un receptor que resolvió a mano un mensaje rechazado (Contable RN30: imputarlo a mano) lo da por confirmado, con su operación registrada para que un reenvío no lo repita.
+const confirmarResuelto = async (idOperacion, resultado) => {
+  const [[m]] = await pool.query('SELECT * FROM mensajes_integracion WHERE id_operacion = ?', [idOperacion]);
+  if (!m) return false;
+  await pool.query('INSERT IGNORE INTO operaciones_procesadas (id_operacion, modulo_receptor, doc_id_global, ts_ms, resultado, vence_ms) VALUES (?, ?, ?, ?, ?, ?)',
+    [m.id_operacion, m.modulo_destino, m.doc_id_global, Date.now(), resultado == null ? null : JSON.stringify(resultado), Date.now() + 90 * 86400000]);
+  await confirmarMensaje(m, resultado);
+  return true;
+};
+
 const rechazarMensaje = async (m, motivo) => {
   await pool.query("UPDATE mensajes_integracion SET estado = 'rechazado', motivo_rechazo = ? WHERE id = ?", [motivo.slice(0, 500), m.id]);
   await abrirPendiente(m, 'rechazado', motivo);
@@ -341,7 +351,7 @@ const conciliar = async (tipoEjecucion, actor) => {
 };
 
 module.exports = {
-  RechazoNegocio, registrarReceptor, publicar, despertar, procesarPendientes, estadoIntegracion,
+  RechazoNegocio, confirmarResuelto, registrarReceptor, publicar, despertar, procesarPendientes, estadoIntegracion,
   pendientes, reintentar, descartar, reenviarDesde, escalarVencidos, archivarConfirmados, conciliar,
   proximoIntento, RETARDOS_MS, CADA_MS,
 };
