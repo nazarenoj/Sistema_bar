@@ -126,6 +126,20 @@ const comprometer = async ({ idSolicitud, lineas, reemplazaA = null, userId = nu
   return { ok: true, id_compromiso: idCompromiso, vence_ms: Math.min(...tomadas.map((t) => Number(t.vence_ms))) };
 };
 
+// Cuantas unidades de un articulo se pueden vender hoy (disponibilidad publicada de la tienda online, Ventas Online RN03): el minimo, entre los insumos y articulos que consume una unidad
+// (un combo se expande a sus componentes), de lo disponible (fisico menos comprometido) sobre lo que aporta. Nulo si ningun componente controla stock (sin limite).
+const disponibleUnidades = async (productoId) => {
+  let min = null;
+  for (const e of (await requerimientos(pool, [{ producto_id: productoId, cantidad: 1 }])).values()) {
+    const b = await bloqueante(pool, e);
+    if (!b || !(e.cantidad > 0)) continue;
+    const disp = (await fisico(pool, b.tipo, b.id, b.deposito_id)) - (await comprometido(pool, recursoDe(b.tipo, b.id, b.deposito_id)));
+    const u = Math.max(0, Math.floor(disp / e.cantidad + 1e-9));
+    min = min === null ? u : Math.min(min, u);
+  }
+  return { cantidad: min };
+};
+
 // Mientras el cierre sigue en curso se renueva (mismo ID_Compromiso, hasta 3 veces); un compromiso vencido no se renueva.
 const renovar = async (idCompromiso) => {
   const rs = await reservasDe(idCompromiso);
@@ -156,4 +170,4 @@ const comprometidos = async () => {
   return new Map(rows.map((r) => [r.recurso, Number(r.t)]));
 };
 
-module.exports = { verificar, comprometer, renovar, liberar, consumir, comprometidos, recursoDe };
+module.exports = { disponibleUnidades, verificar, comprometer, renovar, liberar, consumir, comprometidos, recursoDe };

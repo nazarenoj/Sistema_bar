@@ -3,6 +3,7 @@ const registro = require('../instancias/registro');
 const Modulos = require('../modulos/registro');
 const Tienda = require('../ventas_online/tiendaService');
 const Limitador = require('../ventas_online/limitador');
+const Catalogo = require('../ventas_online/catalogoService');
 
 // La parte pública de la tienda (Ventas Online RF01, RN01): rutas SIN sesión bajo /tienda/<codigo>. El código identifica la instancia; todo lo que sigue corre dentro de ella, así que una
 // ruta pública no puede leer datos de otra. Sin la tienda activa (o sin el módulo) todo responde 404, y las respuestas solo traen lo que se puede mostrar.
@@ -38,6 +39,11 @@ router.get('/paginas/:slug', async (req, res, next) => {
     res.json(p);
   } catch (err) { next(err); }
 });
+
+router.get('/catalogo', async (req, res, next) => {
+  try { res.json(await Catalogo.publicados({ q: req.query.q, categoria: req.query.categoria, orden: req.query.orden })); } catch (err) { next(err); }
+});
+router.get('/categorias', async (req, res, next) => { try { res.json(await Catalogo.categoriasPublicas()); } catch (err) { next(err); } });
 
 module.exports = router;
 module.exports.limitePedidos = limitePedidos;

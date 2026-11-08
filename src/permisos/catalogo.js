@@ -102,6 +102,8 @@ const PERMISOS = [
   { id: 'compras.informes.ver', modulo: 'compras', descripcion: 'Consultar y exportar los informes de Compras' },
   { id: 'ventas_online.tienda.ver', modulo: 'ventas_online', descripcion: 'Ver la configuracion de la tienda online' },
   { id: 'ventas_online.tienda.configurar', modulo: 'ventas_online', descripcion: 'Configurar la tienda online (codigo, datos legales, horarios, paginas) y activarla' },
+  { id: 'ventas_online.catalogo.ver', modulo: 'ventas_online', descripcion: 'Ver el catalogo publicado en la tienda online y su disponibilidad' },
+  { id: 'ventas_online.catalogo.gestionar', modulo: 'ventas_online', descripcion: 'Publicar articulos, ajustar precios online y la disponibilidad de la tienda' },
   { id: 'financiero.cajas.ver', modulo: 'financiero', descripcion: 'Ver las cajas y cuentas (sin saldos)' },
   { id: 'financiero.saldos.ver', modulo: 'financiero', descripcion: 'Ver saldos de cajas y cuentas y el saldo teórico de un turno' },
   { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },

@@ -27,6 +27,7 @@ puertos.registrar('stock', {
     if (r.id_compromiso) await Compromiso.liberar(r.id_compromiso);
     return { ok: false, serie_no_disponible: s.no_disponible };
   },
+  disponibleUnidades: (productoId) => Compromiso.disponibleUnidades(productoId),
   verificar: (items) => Compromiso.verificar(items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad }))),
   estadoSerie: (productoId, numero) => Series.estadoParaVenta(productoId, numero),
   liberarSeries: (idSolicitud) => Series.liberarPorCompromiso(`SER:${idSolicitud}`),
