@@ -32,6 +32,7 @@ puertos.registrar('stock', {
   estadoSerie: (productoId, numero) => Series.estadoParaVenta(productoId, numero),
   liberarSeries: (idSolicitud) => Series.liberarPorCompromiso(`SER:${idSolicitud}`),
   seriesVigentes: () => Series.vigentes(),
+  firmarCompromiso: (id) => Compromiso.firmar(id),
   renovarCompromiso: (id, vigenciaMs) => Compromiso.renovar(id, vigenciaMs),
   liberarCompromiso: (id) => Compromiso.liberar(id),
   // Alérgenos de una línea de venta (RF39): { alergenos, incompletos }; Ventas los muestra y los publica.

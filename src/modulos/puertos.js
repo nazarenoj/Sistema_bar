@@ -15,7 +15,7 @@ const PUERTOS = {
   stock: {
     define: 'ventas', implementa: 'stock',
     nula: { disponibilidad: async () => ({ bloqueado: false }), saldoInicial: async () => {}, recetaCambiada: async () => {},
-      disponibleUnidades: async () => ({ cantidad: null }),
+      disponibleUnidades: async () => ({ cantidad: null }), firmarCompromiso: async () => 0,
       comprometer: async () => ({ ok: true, id_compromiso: null, sin_compromiso: true }), verificar: async () => ({ ok: true }), renovarCompromiso: async () => null, liberarCompromiso: async () => 0,
       alergenosLinea: async () => ({ alergenos: [], incompletos: false, disponible: false }),
       estadoSerie: async () => ({ controlada: false }), liberarSeries: async () => 0, seriesVigentes: async () => [],

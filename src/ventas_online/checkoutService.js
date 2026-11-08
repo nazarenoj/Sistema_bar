@@ -98,6 +98,7 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
   if (d.total_confirmado === undefined || Math.abs(Number(d.total_confirmado) - a.total) > 0.004)
     throw invalida(`El total es ${a.total}: confirmá de nuevo con el importe actualizado.`, 409, { codigo: 'TOTAL_CAMBIO', resumen: vistaResumen(a) });
   if (a.alergenos.length && d.acepta_alergenos !== true) throw invalida('Revisá los alérgenos del pedido y aceptalos para continuar.', 400, { codigo: 'ALERGENOS_NO_ACEPTADOS', alergenos: a.alergenos });
+  if (medio === 'canje' && !(d.canje && Number(d.canje.importe) >= a.total)) throw invalida('El canje tiene que cubrir el total del pedido; si no, elegí otro medio para el resto.', 400, { codigo: 'CANJE_PARCIAL' });
   if (medio === 'efectivo_contra_entrega' && a.entrega.tipo !== 'delivery') throw invalida('El efectivo contra entrega es solo para delivery.', 400);
 
   // Canje de vale, gift card o puntos: es una forma de pago y puede ser parcial (RF24, llamada n.º 9).

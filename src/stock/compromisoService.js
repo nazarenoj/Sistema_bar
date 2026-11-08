@@ -164,10 +164,18 @@ const consumir = async (conn, idCompromiso) => {
   return n;
 };
 
+// Con el pago aprobado la reserva de un pedido online queda firme: no vence hasta que Ventas registra la venta y el descuento la consume (Ventas Online RN07).
+const firmar = async (idCompromiso) => {
+  const hasta = Date.now() + 365 * 86400000;
+  const rs = await reservasDe(idCompromiso);
+  for (const r of rs) await pool.query("UPDATE reservas SET vence_ms = ? WHERE id_reserva = ? AND estado = 'vigente'", [hasta, r.id_reserva]);
+  return rs.length;
+};
+
 // Comprometido por ítem y depósito (para las existencias): Map 'tipo:id:deposito' -> cantidad.
 const comprometidos = async () => {
   const [rows] = await pool.query("SELECT recurso, SUM(cantidad) AS t FROM reservas WHERE tipo = 'compromiso_stock' AND estado = 'vigente' AND vence_ms > ? GROUP BY recurso", [Date.now()]);
   return new Map(rows.map((r) => [r.recurso, Number(r.t)]));
 };
 
-module.exports = { disponibleUnidades, verificar, comprometer, renovar, liberar, consumir, comprometidos, recursoDe };
+module.exports = { firmar, disponibleUnidades, verificar, comprometer, renovar, liberar, consumir, comprometidos, recursoDe };

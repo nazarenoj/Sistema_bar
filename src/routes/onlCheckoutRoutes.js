@@ -2,6 +2,8 @@ const { Router } = require('express');
 const Checkout = require('../ventas_online/checkoutService');
 const Cuentas = require('../ventas_online/cuentaService');
 const Tienda = require('../ventas_online/tiendaService');
+const Pagos = require('../ventas_online/pagoService');
+const Pasarela = require('../ventas_online/pasarelaMP');
 const { limitePedidos } = require('../ventas_online/limites');
 
 // Checkout y seguimiento del pedido en la parte pública (Ventas Online RF09). Se monta bajo /tienda/:codigo.
@@ -33,5 +35,18 @@ router.post('/checkout', limitePedidos, manejar(async (req, res) => {
 router.get('/pedidos/:idGlobal', manejar(async (req, res) => res.json(await localizar(req))));
 router.post('/pedidos/:idGlobal/renovar-reserva', manejar(async (req, res) => res.json(await Checkout.renovarReserva((await localizar(req)).id)))); 
 router.post('/pedidos/:idGlobal/abandonar', manejar(async (req, res) => res.json(await Checkout.abandonar((await localizar(req)).id))));
+
+const base = (req) => `${req.protocol}://${req.get('host')}/tienda/${req.params.codigo}`;
+// Abre el cobro en la pasarela una vez confirmada la reserva (RF10).
+router.post('/pedidos/:idGlobal/pagar', manejar(async (req, res) => res.json(await Pagos.abrirCobro((await localizar(req)).id, { baseUrl: base(req), idSolicitud: req.get('X-ID-Solicitud') }))));
+// Notificación de la pasarela (RN09): se valida la firma y se procesa una sola vez por transacción. Un error técnico devuelve 500 para que la pasarela reintente.
+router.post('/webhooks/mercadopago', async (req, res, next) => {
+  try {
+    const dataId = String(req.query['data.id'] ?? req.body?.data?.id ?? '');
+    if (!(await Pasarela.proveedor().verificarFirma({ headers: req.headers, dataId }))) return res.status(401).json({ error: 'Firma inválida.', codigo: 'FIRMA_INVALIDA' });
+    if ((req.body?.type ?? req.query.type) !== 'payment' || !dataId) return res.json({ ignorado: true });
+    res.json(await Pagos.procesarPago(dataId));
+  } catch (err) { next(err); }
+});
 
 module.exports = router;
