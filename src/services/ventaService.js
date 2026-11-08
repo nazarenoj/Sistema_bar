@@ -1,4 +1,5 @@
 const SerieVenta = require('./serieVentaService');
+const { lineasContables } = require('./lineasContables');
 const Monedas = require('../servicios/monedaService');
 const pool = require('../config/db');
 const Mensajeria = require('../mensajeria/servicio');
@@ -261,11 +262,12 @@ const registrar = async (conn, { mesa_id, sesion_apertura, items, total, pagos, 
     await conn.query('INSERT INTO pago_venta (venta_id, metodo_pago, importe, referencia, recibido, vuelto, moneda, importe_divisa, cotizacion, cotizacion_id, instrumento, retencion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [r.insertId, p.forma, p.importe, p.referencia, p.recibido, p.vuelto, p.moneda ?? null, p.importe_divisa ?? null, p.cotizacion ?? null, p.cotizacion_id ?? null, p.instrumento ?? null, p.retencion_id ?? null]);
   }
+  const lineas_contables = await lineasContables(conn, detalle);
   for (const e of EFECTOS) {
     if (tipoNoFiscal && e.destino === 'contable') continue; // una venta no fiscal no se informa a Contable (RN84)
     await Mensajeria.publicar(conn, {
       origen: 'ventas', destino: e.destino, tipo: e.tipo, docTipo: 'venta', docIdGlobal: id_global, userId,
-      solicitud: idSolicitud, contenido: { total, pagos, items: detalle, terminal_id: terminalId, no_fiscal: !!tipoNoFiscal, turno_no_verificado: !!turnoNoVerificado, fecha_ms: Date.now() },
+      solicitud: idSolicitud, contenido: { total, pagos, items: detalle, terminal_id: terminalId, no_fiscal: !!tipoNoFiscal, turno_no_verificado: !!turnoNoVerificado, fecha_ms: Date.now(), ...(e.destino === 'contable' && { modalidad, lineas_contables }) },
     });
   }
   await publicarDescuento(conn, { docTipo: 'venta', docIdGlobal: id_global, items, userId, solicitud: idSolicitud, noFiscal: !!tipoNoFiscal, idCompromiso, modalidad, seriesRegistradas: true, clienteId: fid?.clienteId ?? credito?.clienteId ?? null }); // el cliente identificado viaja para el alcance de un retiro de lote (Clientes RF30)
@@ -367,7 +369,7 @@ const publicarRegularizada = async (venta, factura, userId) => {
   try {
     await conn.beginTransaction();
     await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_regularizada', docTipo: 'venta', docIdGlobal: venta.id_global, userId,
-      contenido: { total: venta.total, pagos: venta.pagos, factura_id_global: factura.id_global } });
+      contenido: { total: venta.total, pagos: venta.pagos, factura_id_global: factura.id_global, modalidad: venta.modalidad, lineas_contables: await lineasContables(conn, venta.detalle), fecha_ms: Date.now() } });
     await conn.commit();
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
   Mensajeria.despertar();

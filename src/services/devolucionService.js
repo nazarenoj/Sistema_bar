@@ -1,4 +1,5 @@
 const SerieVenta = require('./serieVentaService');
+const { lineasContables } = require('./lineasContables');
 const pool = require('../config/db');
 const afipConfig = require('../config/afipConfig');
 const Mensajeria = require('../mensajeria/servicio');
@@ -180,7 +181,8 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
     const [[cobroInformado]] = await conn.query("SELECT 1 AS si FROM mensajes_integracion WHERE doc_id_global = ? AND tipo = 'cobro_registrado' AND modulo_destino = 'financiero' LIMIT 1", [idGlobalVenta]);
     if (cobroInformado) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'financiero', tipo: 'cobro_revertido', docTipo: 'venta', docIdGlobal: idGlobalVenta, docVersion: r.insertId, secuencia: 2, userId, solicitud: idSolicitud,
       contenido: { ...contenido, motivo: motivo.trim(), devolucion_id_global: id_global, saldo_autorizado_por: saldoAutorizadoPor, saldo_no_verificado: saldoNoVerificado, terminal_id: terminalId } });
-    if (venta.condicion_fiscal !== 'no_fiscal') await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_devuelta', docTipo: 'devolucion', docIdGlobal: id_global, userId, solicitud: idSolicitud, contenido });
+    if (venta.condicion_fiscal !== 'no_fiscal') await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_devuelta', docTipo: 'devolucion', docIdGlobal: id_global, userId, solicitud: idSolicitud,
+      contenido: { ...contenido, modalidad: venta.modalidad, lineas_contables: await lineasContables(conn, itemsDev), fecha_ms: Date.now() } });
     await conn.commit();
     devolucion = { id: r.insertId, id_global, tipo, total, reingreso };
   } catch (err) {

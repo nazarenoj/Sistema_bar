@@ -76,6 +76,7 @@ const onlReservaRoutes = require('./routes/onlReservaRoutes');
 const onlInformeRoutes = require('./routes/onlInformeRoutes');
 const conConfigRoutes = require('./routes/conConfigRoutes');
 const conReglasRoutes = require('./routes/conReglasRoutes');
+const conAsientosRoutes = require('./routes/conAsientosRoutes');
 const finPlataformaRoutes = require('./routes/finPlataformaRoutes');
 const mantenimientoCompras = require('./compras/mantenimientoCompras');
 const correoRoutes = require('./routes/correoRoutes');
@@ -305,10 +306,12 @@ app.use('/api/ventas-online', onlReservaRoutes.admin);
 app.use('/api/ventas-online', onlInformeRoutes);
 app.use('/api/contable', conConfigRoutes);
 app.use('/api/contable', conReglasRoutes);
+app.use('/api/contable', conAsientosRoutes);
 app.use('/api/financiero', finPlataformaRoutes);
 require('./financiero/plataformaService'); // comisiones y liquidaciones de plataformas (I11)
 require('./ventas_online/conectorService'); // estados hacia la plataforma y comision a Financiero (I11)
 require('./contable/receptor'); // eventos hacia Contable (J1)
+require('./contable/automaticos'); // asientos automaticos (J3)
 require('./ventas_online/gestionService'); // entrega a Ventas y avisos al cliente (I8)
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);

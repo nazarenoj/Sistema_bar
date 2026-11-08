@@ -153,6 +153,7 @@ const PERMISOS = [
   { id: 'contable.reglas.editar', modulo: 'contable', descripcion: 'Crear, editar, activar y desactivar las reglas de imputacion y los ejercicios' },
   { id: 'contable.periodos.cerrar', modulo: 'contable', descripcion: 'Cerrar periodos contables' },
   { id: 'contable.periodos.reabrir', modulo: 'contable', descripcion: 'Reabrir periodos contables cerrados, con motivo' },
+  { id: 'contable.reprocesar', modulo: 'contable', descripcion: 'Reprocesar los asientos automaticos de los periodos abiertos tras cambiar las reglas' },
   { id: 'integracion.pendientes.descartar', modulo: 'usuarios', descripcion: 'Descartar mensajes con motivo (con autorización de un supervisor)' },
   { id: 'integracion.conciliar', modulo: 'usuarios', descripcion: 'Ejecutar la conciliación de integración bajo demanda' },
   { id: 'auditoria.exportar', modulo: 'usuarios', descripcion: 'Exportar la auditoría' },
