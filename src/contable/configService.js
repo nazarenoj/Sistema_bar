@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const Modulos = require('../modulos/registro');
 const Funciones = require('../funciones/servicio');
 const { cuentasDe, PERFILES } = require('./plantillas');
+const Reglas = require('./reglaService');
 const { invalida, fechaLocal, esFecha, iso } = require('./comun');
 
 // Inicio de la contabilidad (Contable RF13, RN01, RN18, EX12). Contable se instala como cualquier módulo, pero recién cuenta movimientos desde la fecha de inicio que elige el
@@ -60,7 +61,7 @@ const iniciar = async ({ fecha_inicio: fecha, perfil }, { hoy = fechaLocal() } =
     if (Number(n)) throw invalida('Ya hay asientos: la fecha de inicio no se modifica.', 409, { codigo: 'INICIO_FIJO' });
     await conn.query('DELETE FROM con_numeracion'); await conn.query('DELETE FROM con_periodos'); await conn.query('DELETE FROM con_ejercicios');
     await crearEjercicio(conn, fecha, `${fecha.slice(0, 4)}-12-31`);
-    if (!c.perfil_rubro) await cargarPlan(conn, perfil);
+    if (!c.perfil_rubro) { await cargarPlan(conn, perfil); await Reglas.sembrar(conn, fecha); }
     await conn.query('UPDATE con_config SET fecha_inicio = ?, perfil_rubro = COALESCE(perfil_rubro, ?), iniciada_ms = COALESCE(iniciada_ms, ?) WHERE id = 1', [fecha, perfil, Date.now()]);
     await conn.commit();
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
