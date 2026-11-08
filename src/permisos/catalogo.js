@@ -117,6 +117,8 @@ const PERMISOS = [
   { id: 'ventas_online.pesaje.registrar', modulo: 'ventas_online', descripcion: 'Cargar el peso real de los pesables de un pedido online y pedir la aceptacion de la diferencia' },
   { id: 'ventas_online.pesaje.manual', modulo: 'ventas_online', descripcion: 'Ingresar a mano el peso de un pesable (con motivo)' },
   { id: 'ventas_online.facturacion.gestionar', modulo: 'ventas_online', descripcion: 'Facturar pedidos online, reintentar comprobantes y recalcular la alineacion' },
+  { id: 'ventas_online.pedidos.cancelar', modulo: 'ventas_online', descripcion: 'Cancelar pedidos de la tienda online antes del despacho' },
+  { id: 'ventas_online.pedidos.devolver', modulo: 'ventas_online', descripcion: 'Registrar devoluciones totales o parciales de pedidos de la tienda online' },
   { id: 'financiero.cajas.ver', modulo: 'financiero', descripcion: 'Ver las cajas y cuentas (sin saldos)' },
   { id: 'financiero.saldos.ver', modulo: 'financiero', descripcion: 'Ver saldos de cajas y cuentas y el saldo teórico de un turno' },
   { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },

@@ -56,6 +56,13 @@ router.post('/pedidos/:idGlobal/aceptar-diferencia', manejar(async (req, res) =>
   res.json(await responder(req.params.idGlobal, { token: req.body?.token, email: req.body?.email, acepta: req.body?.acepta === true }, { baseUrl: `${req.protocol}://${req.get('host')}/tienda/${req.params.codigo}` }));
 }));
 
+// El cliente cancela su pedido mientras no esté en preparación, y pide el arrepentimiento (botón visible) dentro de los 10 días (RF15).
+router.post('/pedidos/:idGlobal/cancelar', manejar(async (req, res) => {
+  const p = await localizar(req);
+  res.json(await require('../ventas_online/cancelacionService').cancelar(p.id, { motivo: req.body?.motivo ?? 'Cancelado por el cliente', cliente: true }));
+}));
+router.post('/pedidos/:idGlobal/arrepentimiento', manejar(async (req, res) => res.status(201).json(await require('../ventas_online/cancelacionService').solicitarArrepentimiento(req.params.idGlobal, { email: req.body?.email, motivo: req.body?.motivo }))));
+
 const base = (req) => `${req.protocol}://${req.get('host')}/tienda/${req.params.codigo}`;
 // Abre el cobro en la pasarela una vez confirmada la reserva (RF10).
 router.post('/pedidos/:idGlobal/pagar', manejar(async (req, res) => res.json(await Pagos.abrirCobro((await localizar(req)).id, { baseUrl: base(req), idSolicitud: req.get('X-ID-Solicitud') }))));

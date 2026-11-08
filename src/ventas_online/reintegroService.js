@@ -32,6 +32,10 @@ const ejecutar = async (id) => {
   if (!r) throw invalida('Reintegro no encontrado.', 404);
   if (r.estado !== 'pendiente') return vista(r);
   const [[pago]] = await pool.query('SELECT * FROM onl_pagos WHERE id = ?', [r.pago_id]);
+  if (pago.proveedor === 'manual') { // una transferencia no se devuelve por API: queda pendiente hasta que alguien la devuelva y lo registre
+    await pool.query("UPDATE onl_reintegros SET error = 'Pago manual: devolvelo por otro medio y registralo.', actualizado_ms = ? WHERE id = ?", [Date.now(), id]);
+    return vista((await pool.query('SELECT * FROM onl_reintegros WHERE id = ?', [id]))[0][0]);
+  }
   try {
     const x = await Pasarela.proveedor().reintegrar(pago.id_externo, Number(r.importe), r.id_solicitud);
     await pool.query("UPDATE onl_reintegros SET estado = 'ejecutado', id_externo = ?, intentos = intentos + 1, error = NULL, actualizado_ms = ? WHERE id = ?", [x.id, Date.now(), id]);

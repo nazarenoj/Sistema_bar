@@ -86,7 +86,7 @@ const devolver = async (idGlobalVenta, { items, todo, motivo, reingreso = 'reing
 
     // Reintegro: el reparto original salvo que el usuario elija otro (RF49).
     reintegros = reintegro?.length ? reintegro : repartoOriginal(venta.pagos, venta.total, total);
-    const [formas] = await conn.query('SELECT codigo FROM formas_pago WHERE activa = 1');
+    const [formas] = await conn.query("SELECT codigo FROM formas_pago WHERE activa = 1 OR codigo IN ('cobro_online', 'cobro_plataforma')");
     const activas = new Set(formas.map((f) => f.codigo));
     for (const r of reintegros) {
       if (!activas.has(r.forma)) throw new DevolucionInvalida(`La forma de reintegro "${r.forma}" no existe o está desactivada.`);

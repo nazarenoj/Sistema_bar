@@ -73,7 +73,8 @@ const alinear = async (id) => {
   const pendiente = r2(await Reintegros.pendientesDe(id));
   const [[{ aj }]] = await pool.query("SELECT COUNT(*) AS aj FROM onl_ajustes WHERE pedido_id = ? AND estado IN ('pendiente_reintegro', 'pendiente_comprobante')", [id]);
   let estado;
-  if (pendiente > 0 || aj > 0) estado = 'pendiente_reintegro';
+  const [[{ dv }]] = await pool.query("SELECT COUNT(*) AS dv FROM onl_devoluciones WHERE pedido_id = ? AND estado IN ('nota_credito_pendiente', 'reintegro_pendiente')", [id]);
+  if (pendiente > 0 || aj > 0 || dv > 0) estado = 'pendiente_reintegro';
   else if (Math.abs(r2(cobrado - reintegrado) - fact) < 0.01) estado = 'alineado';
   else if (r2(cobrado - reintegrado) > fact) estado = 'pendiente_facturacion';
   else estado = 'con_diferencia'; // EX36: ninguna operación pendiente lo explica

@@ -107,8 +107,8 @@ test('Ventas Online.RN50: la alineacion compara lo cobrado, lo reintegrado y lo 
   const p = await nuevo([{ producto_id: B.id, cantidad: 2 }]);
   const r = await api('POST', `/api/ventas-online/pedidos/${p.id}/alineacion`, { token: gerente.token });
   assert.deepEqual([r.json.alineacion, r.json.cobrado, r.json.reintegrado, r.json.facturado_neto], ['alineado', 600, 0, 600]);
-  // Una factura de mas que ninguna operacion pendiente explica: «con diferencia» y alerta (EX36).
-  await pool.query("INSERT INTO ventas_online_movs (pedido_global, tipo, importe, referencia, ts_ms) VALUES (?, 'factura', 50, 'manual-1', ?)", [p.id_global, Date.now()]);
+  // Una devolucion registrada de mas (cobrado menos reintegrado queda por debajo de lo facturado) que ninguna operacion pendiente explica: «con diferencia» y alerta (EX36).
+  await pool.query("INSERT INTO ventas_online_movs (pedido_global, tipo, importe, referencia, ts_ms) VALUES (?, 'devolucion', 50, 'manual-1', ?)", [p.id_global, Date.now()]);
   assert.equal((await api('POST', `/api/ventas-online/pedidos/${p.id}/alineacion`, { token: gerente.token })).json.alineacion, 'con_diferencia');
   assert.ok((await pool.query("SELECT COUNT(*) AS n FROM notificaciones WHERE tipo = 'reintegro' AND mensaje LIKE '%diferencias%'"))[0][0].n >= 1);
   assert.equal((await det(p)).comprobantes.length, 1); // Ventas Online no toco los comprobantes
