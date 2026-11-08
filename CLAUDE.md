@@ -20,7 +20,10 @@ con arqueo, cierre y reapertura, destinos de cobro, transferencias, acreditacion
 cheques, conciliación bancaria, flujo de fondos, moneda extranjera e informes. **Compras** también (Fase H,
 v81.0.0): proveedores, comprobantes, vínculo con Stock, cuenta corriente, órdenes de pago y retenciones, listas y
 costo de reposición, pedidos y pedido sugerido, Libro IVA y controles contra ARCA, devoluciones e informes (por API,
-sin pantallas todavía). Siguen Ventas Online (I) y Contable (J).
+sin pantallas todavía). **Ventas Online** también (Fase I, v92.0.0): tienda pública bajo `/tienda/<código>`, catálogo y precios,
+carrito, cupones y cuentas, checkout con reserva de stock, pagos por Mercado Pago, envíos propios y pedidos programados, gestión de
+pedidos, facturación y pesaje, cancelaciones y arrepentimiento, plataformas, reservas, informes e indicadores (por API, sin pantallas).
+Sigue Contable (J). Lo que quedó diferido está en `Pendientes.md`.
 
 ## Dirección del producto
 - **Plan de referencia**: `plan-tecnico-desarrollo.md` (basado en los SPECS 00 a 08 y Anexos). Es la
