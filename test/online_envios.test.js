@@ -2,6 +2,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { iniciarApp } = require('./ayudas');
 const { usuario } = require('./ayudas_financiero');
+const { simularArca } = require('./ayudas_online');
 const Pasarela = require('../src/ventas_online/pasarelaMP');
 const Pagos = require('../src/ventas_online/pagoService');
 
@@ -13,6 +14,7 @@ const proxima = (min) => Math.ceil((Date.now() + min * 60000) / FRANJA) * FRANJA
 
 before(async () => {
   ({ api, pool, cerrar } = await iniciarApp());
+  simularArca();
   adm = await usuario(api, pool, 'adm', 'administrador');
   gerente = await usuario(api, pool, 'gero', 'gerente');
   administrativo = await usuario(api, pool, 'ana', 'administrativo');

@@ -2,6 +2,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { iniciarApp, esperarMensajes } = require('./ayudas');
 const { usuario } = require('./ayudas_financiero');
+const { simularArca } = require('./ayudas_online');
 const Pasarela = require('../src/ventas_online/pasarelaMP');
 const PedidoOnline = require('../src/services/pedidoOnlineService');
 const Reserva = require('../src/ventas_online/reservaPedidoService');
@@ -15,6 +16,7 @@ const T = '/tienda/cafe-ges';
 
 before(async () => {
   ({ api, pool, cerrar } = await iniciarApp());
+  simularArca();
   Pasarela.usarProveedor({ nombre: 'mercadopago', crearCobro: async () => ({ preferencia_id: 'P', url: 'https://x' }), obtenerPago: async (id) => ({ ...pagos.get(String(id)), id: String(id) }), buscarPagos: async () => [], reintegrar: async () => ({ id: 'R', estado: 'approved' }), verificarFirma: async () => true });
   adm = await usuario(api, pool, 'adm', 'administrador');
   gerente = await usuario(api, pool, 'gero', 'gerente');

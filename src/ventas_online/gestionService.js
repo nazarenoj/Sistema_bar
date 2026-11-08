@@ -16,7 +16,7 @@ const invalida = (m, status = 400, extra = {}) => Object.assign(new TiendaInvali
 
 const pedido = async (id) => { const [[p]] = await pool.query('SELECT * FROM onl_pedidos WHERE id = ?', [id]); if (!p) throw invalida('Pedido no encontrado.', 404); return p; };
 
-const FORMA = { pasarela: 'cobro_online', transferencia: 'transferencia', pago_al_retirar: 'efectivo', efectivo_contra_entrega: 'efectivo', cuenta_corriente: 'cuenta_corriente' };
+const FORMA = { plataforma: 'cobro_plataforma', pasarela: 'cobro_online', transferencia: 'transferencia', pago_al_retirar: 'efectivo', efectivo_contra_entrega: 'efectivo', cuenta_corriente: 'cuenta_corriente' };
 
 const armarEntrega = async (p) => {
   const [lineas] = await pool.query('SELECT producto_id, titulo, cantidad, precio_unitario, importe, es_pesable, observaciones, opciones FROM onl_pedido_lineas WHERE pedido_id = ? ORDER BY linea', [p.id]);
@@ -138,11 +138,12 @@ const sincronizarCocina = async () => {
 
 // ---- Panel ----
 
-const listar = async ({ estado, q, desde, hasta, alineacion, limite = 200 } = {}) => {
+const listar = async ({ estado, q, desde, hasta, alineacion, origen, limite = 200 } = {}) => {
   const w = [], par = [];
   if (estado) { w.push('estado = ?'); par.push(estado); }
   if (q) { w.push('(nombre LIKE ? OR email LIKE ? OR numero_retiro = ? OR id = ?)'); par.push(`%${q}%`, `%${q}%`, q, Number(q) || 0); }
   if (alineacion) { w.push('alineacion = ?'); par.push(alineacion); }
+  if (origen) { w.push('origen = ?'); par.push(origen); }
   if (desde) { w.push('created_ms >= ?'); par.push(new Date(`${desde}T00:00:00`).getTime()); }
   if (hasta) { w.push('created_ms <= ?'); par.push(new Date(`${hasta}T23:59:59`).getTime()); }
   const [filas] = await pool.query(`SELECT id FROM onl_pedidos ${w.length ? `WHERE ${w.join(' AND ')}` : ''} ORDER BY COALESCE(programado_ms, created_ms), id LIMIT ?`, [...par, Math.min(Number(limite) || 200, 500)]);

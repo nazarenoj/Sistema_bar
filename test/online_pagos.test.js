@@ -3,6 +3,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { iniciarApp } = require('./ayudas');
 const { usuario } = require('./ayudas_financiero');
+const { simularArca } = require('./ayudas_online');
 const Pasarela = require('../src/ventas_online/pasarelaMP');
 const Reintegros = require('../src/ventas_online/reintegroService');
 const Checkout = require('../src/ventas_online/checkoutService');
@@ -27,6 +28,7 @@ const fake = {
 
 before(async () => {
   ({ api, pool, cerrar } = await iniciarApp());
+  simularArca();
   Pasarela.usarProveedor(fake);
   adm = await usuario(api, pool, 'adm', 'administrador');
   gerente = await usuario(api, pool, 'gero', 'gerente');

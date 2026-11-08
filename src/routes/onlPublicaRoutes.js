@@ -27,7 +27,7 @@ router.use(async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/', async (req, res, next) => { try { res.json(await Tienda.publica()); } catch (err) { next(err); } });
+router.get('/', async (req, res, next) => { try { await require('../ventas_online/informeService').registrarVisita().catch(() => {}); res.json(await Tienda.publica()); } catch (err) { next(err); } });
 router.get('/paginas/:slug', async (req, res, next) => {
   try {
     const p = await Tienda.paginaPublica(req.params.slug);
@@ -56,6 +56,8 @@ router.get('/categorias', async (req, res, next) => { try { res.json(await Catal
 
 router.use(require('./onlCarritoRoutes'));
 router.use(require('./onlCheckoutRoutes'));
+router.use(require('./onlPlataformaRoutes').publico);
+router.use(require('./onlReservaRoutes').publico);
 
 module.exports = router;
 module.exports.limitePedidos = limitePedidos;
