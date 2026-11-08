@@ -22,8 +22,10 @@ v81.0.0): proveedores, comprobantes, vínculo con Stock, cuenta corriente, órde
 costo de reposición, pedidos y pedido sugerido, Libro IVA y controles contra ARCA, devoluciones e informes (por API,
 sin pantallas todavía). **Ventas Online** también (Fase I, v92.0.0): tienda pública bajo `/tienda/<código>`, catálogo y precios,
 carrito, cupones y cuentas, checkout con reserva de stock, pagos por Mercado Pago, envíos propios y pedidos programados, gestión de
-pedidos, facturación y pesaje, cancelaciones y arrepentimiento, plataformas, reservas, informes e indicadores (por API, sin pantallas).
-Sigue Contable (J). Lo que quedó diferido está en `Pendientes.md`.
+pedidos, facturación y pesaje, cancelaciones y arrepentimiento, plataformas, reservas, informes e indicadores (por API, sin pantallas). **Contable** también (Fase J, v100.0.0): plan de cuentas
+por perfil de rubro, inicio de la contabilidad, ejercicios y períodos, reglas de imputación, asientos automáticos (individuales o resumidos), manuales y recurrentes, pendientes de imputar, libros
+y balance, conceptos del rubro, controles cruzados y asiento de apertura, cierre de ejercicio, revaluación, exportación con plantillas y consolidación en Casa Central (por API, sin pantallas).
+Con esto termina el plan de módulos de `plan-checkpoints-opcionales.md`. Lo que quedó diferido está en `Pendientes.md`.
 
 ## Dirección del producto
 - **Plan de referencia**: `plan-tecnico-desarrollo.md` (basado en los SPECS 00 a 08 y Anexos). Es la

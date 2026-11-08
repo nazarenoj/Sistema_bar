@@ -133,6 +133,9 @@ const importar = async (s) => {
   if (huellaDe(s.contenido) !== s.huella) return rechazar(s, 'el contenido fue alterado: la huella no coincide');
   if (!esFecha(s.periodo) || !Number.isInteger(s.version) || s.version < 1 || typeof s.modulo !== 'string') return rechazar(s, 'faltan el módulo, el período o la versión');
   if (!suc.modulos.split(',').includes(s.modulo)) return rechazar(s, `la sucursal no está registrada como publicadora de ${s.modulo}`);
+  // Un módulo puede validar el paquete antes de aceptarlo (Contable: cuentas sin equivalencia, EX15); si lo rechaza no se importa nada.
+  const def = generadores.get(s.modulo);
+  if (def?.validar) { const motivo = await def.validar(s); if (motivo) return rechazar(s, motivo); }
   const id = `${s.sucursal}-${s.modulo}-${s.periodo}-v${s.version}`;
   const previos = (await pool.query("SELECT id, version, estado FROM paquetes_recibidos WHERE sucursal = ? AND modulo = ? AND periodo = ? AND estado IN ('importado', 'pendiente_version') ORDER BY version DESC", [s.sucursal, s.modulo, s.periodo]))[0];
   if (previos.some((p) => p.version === s.version && p.estado === 'importado')) return { importado: false, ya_importado: true, mensaje: 'Ya importado' }; // EX21

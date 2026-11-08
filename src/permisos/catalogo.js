@@ -164,6 +164,7 @@ const PERMISOS = [
   { id: 'contable.revaluacion.registrar', modulo: 'contable', funcion: 'CON-REVALUACION', descripcion: 'Registrar la revaluacion de moneda extranjera de un periodo' },
   { id: 'contable.plantillas.editar', modulo: 'contable', funcion: 'CON-EXPORT-PLANTILLAS', descripcion: 'Crear y editar las plantillas de exportacion al estudio contable' },
   { id: 'contable.pendientes.aceptar', modulo: 'contable', descripcion: 'Aceptar pendientes de imputar al cerrar un periodo (con motivo y autorizacion de un supervisor)' },
+  { id: 'contable.consolidacion.configurar', modulo: 'contable', funcion: 'CON-CONSOL', descripcion: 'Definir las equivalencias de cuentas de cada sucursal con la Casa Central' },
   { id: 'integracion.pendientes.descartar', modulo: 'usuarios', descripcion: 'Descartar mensajes con motivo (con autorización de un supervisor)' },
   { id: 'integracion.conciliar', modulo: 'usuarios', descripcion: 'Ejecutar la conciliación de integración bajo demanda' },
   { id: 'auditoria.exportar', modulo: 'usuarios', descripcion: 'Exportar la auditoría' },

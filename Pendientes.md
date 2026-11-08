@@ -53,7 +53,46 @@ Lista de lo que quedó diferido o limitado al cerrar las Fases G (Financiero) y 
 - **Reservas desde la tienda** (I11): se valida contra los cupos de Ventas al instante (no hay una validación diferida a los 5 minutos); el recordatorio por correo sale por el trabajo de recordatorios de Ventas.
 - **Visitas** (I11): se cuenta cada carga de la portada, sin distinguir visitantes únicos.
 
+## Contable (Fase J)
+
+Todo Contable (J1 a J9) está por API; **no hay pantallas**. Lo que sigue quedó fuera o con límites conocidos.
+
+### Fuentes que todavía no publican a Contable (hay formulario y regla, falta el evento)
+
+- **Cobros de cuenta corriente y recibos** (Clientes): Contable solo recibe las retenciones sufridas. El cobro de un recibo no genera asiento, así que *Deudores por ventas* sube con cada venta a cuenta corriente y no baja al cobrar. Es el hueco más importante: hay que publicar `recibo_registrado` (cobro por forma de pago contra Deudores). El control cruzado de Deudores lo va a mostrar como diferencia.
+- **Movimientos de Financiero**: gastos, transferencias entre cajas, acreditaciones, liquidaciones de tarjeta/plataforma y comisiones de tarjeta no se publican (solo el cierre y la reapertura de turno, para la diferencia de caja). Los formularios `gasto`, `diferencia_cambio`, `comision_plataforma` y `liquidacion_plataforma` existen pero ningún módulo los alimenta.
+- **Pago de comisiones** (`pago_comision`), **factura de remitos** (VEN-CC), **anulación de un remito** y **comisiones de plataforma** (ONL-MARKETPLACES): formulario definido, sin publicador.
+- **Vencimiento de gift cards y vales**: Contable entiende `vencimiento_instrumento`, Clientes no lo publica.
+- **Producción valorizada** (STK-PRODUCCION) y ajustes de stock: sin publicador; solo se imputan el costo de ventas y las mermas por egreso (motivos con clase `merma`).
+- **Costo de ventas**: se imputa todo a «Costo de ventas - insumos»; Stock no distingue packaging (`packaging` viaja en 0). El costo de una venta no fiscal que luego se regulariza no se contabiliza.
+- **Compras**: los comprobantes se imputan por totales (gasto, IVA, percepciones). Las compras de insumos van a «Compras y gastos generales» y no a Insumos (el evento no trae líneas ni categoría), las órdenes de pago no distinguen caja de banco (medios en un solo importe) y la moneda extranjera se trata como pesos (no hay cotización ni importe en divisa en el evento).
+- **Ventas**: el criterio «forma de pago = vale» imputa siempre a Gift cards (no distingue vale de gift card); el criterio por categoría de artículo no se usa aunque la línea lo trae.
+
+### Reglas y asientos
+
+- **EX18**: si llega la misma ID_Operacion con otro contenido se descarta como «ya procesado»; no se detecta el conflicto ni se alerta.
+- **RN15/RN16**: la retención legal (`retencion_anios`) se guarda pero no archiva ni purga nada; no se midieron los tiempos de rendimiento.
+- **Adjuntos** de asientos manuales: no están.
+- **Asientos recurrentes**: se generan con `POST /api/contable/modelos/recurrentes/generar`; no hay un trabajador que lo dispare solo.
+- **Anular un asiento resumido** anula el resumen del día completo.
+- **RN08**: el pendiente aceptado al cerrar un período pasa al siguiente, pero la escalada al Administrador (Usuarios RN85) no está.
+- **RF13**: la fecha de inicio propuesta es la de hoy, no «el primer día del período abierto más cercano».
+- **Cierre de ejercicio**: el ejercicio siguiente es de año calendario (se crea solo si no existe); no hay reapertura de un ejercicio cerrado.
+- **Revaluación**: se propone y registra a pedido para un período; no se dispara sola al cerrarlo. Solo revalúa cuentas con importe en divisa cargado a mano (ningún flujo automático lo trae todavía).
+- **Controles cruzados**: no comparan cuentas en moneda extranjera; el de existencias compara el total, no por depósito; el informe guarda la última ejecución sin historial navegable.
+- **Plantillas de exportación**: solo el diario; el plan de cuentas sale en CSV propio.
+
+### Consolidación (J9)
+
+- El paquete contable es mensual (balance del mes hasta el día publicado) y viaja por el mecanismo diario de Usuarios: el control de «paquetes faltantes» de Usuarios no distingue períodos contables, así que el faltante contable se resuelve en el propio balance consolidado.
+- No se midió el tiempo de generación con 2.000 cuentas ni el del consolidado con 20 sucursales.
+
+### Instalación y dependencias
+
+- Contable depende de Usuarios y Ventas; Stock, Clientes, Compras y Financiero son opcionales. Si un módulo se instala **después** de iniciar la contabilidad, hay que correr `POST /api/contable/reglas/predeterminadas` para sumar sus reglas y agregar a mano las cuentas que falten (el plan se carga una sola vez, al iniciar).
+
 ## Pruebas
 
 - **Tests que dependen de la hora del día**: dos pruebas de Financiero (`financiero_informes`: balance de actividad y paquete de consolidación) fallan cuando se corren después de las 21:00 hora de Argentina, porque comparan fechas UTC con fechas locales. Con `TZ=UTC` pasan.
 - **ARCA en los tests de la tienda**: las pruebas de Ventas Online simulan ARCA (`test/ayudas_online.js`); sin la simulación cada pedido pagado intenta salir a internet y espera su tiempo máximo.
+- **MySQL local para las pruebas**: el servicio `MySQL80` de esta máquina no arranca sin permisos de administrador; para correr las pruebas se levantó un `mysqld` descartable (`--initialize-insecure`, puerto 3306) en una carpeta temporal.
