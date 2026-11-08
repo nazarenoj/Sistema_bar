@@ -58,6 +58,8 @@ router.post('/catalogo/:id/seleccion', async (req, res, next) => {
 });
 router.get('/categorias', async (req, res, next) => { try { res.json(await Catalogo.categoriasPublicas()); } catch (err) { next(err); } });
 
+router.use(require('./onlCarritoRoutes'));
+
 module.exports = router;
 module.exports.limitePedidos = limitePedidos;
 module.exports.limitadores = { general, pedidos };
