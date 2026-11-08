@@ -112,6 +112,8 @@ const PERMISOS = [
   { id: 'ventas_online.pagos.gestionar', modulo: 'ventas_online', descripcion: 'Confirmar transferencias y aceptar pedidos de la tienda online, y reintentar reintegros' },
   { id: 'ventas_online.pagos.configurar', modulo: 'ventas_online', funcion: 'ONL-PASARELA', descripcion: 'Configurar las credenciales de la pasarela de pago' },
   { id: 'ventas_online.reintegros.manual', modulo: 'ventas_online', funcion: 'ONL-PASARELA', descripcion: 'Resolver a mano un reintegro que la pasarela no pudo ejecutar' },
+  { id: 'ventas_online.envios.configurar', modulo: 'ventas_online', descripcion: 'Configurar zonas de delivery, tiempos de preparacion y capacidad por franja de la tienda online' },
+  { id: 'ventas_online.envios.despachar', modulo: 'ventas_online', descripcion: 'Despachar los pedidos de delivery de la tienda online' },
   { id: 'financiero.cajas.ver', modulo: 'financiero', descripcion: 'Ver las cajas y cuentas (sin saldos)' },
   { id: 'financiero.saldos.ver', modulo: 'financiero', descripcion: 'Ver saldos de cajas y cuentas y el saldo teórico de un turno' },
   { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },

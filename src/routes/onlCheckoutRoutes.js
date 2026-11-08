@@ -36,6 +36,20 @@ router.get('/pedidos/:idGlobal', manejar(async (req, res) => res.json(await loca
 router.post('/pedidos/:idGlobal/renovar-reserva', manejar(async (req, res) => res.json(await Checkout.renovarReserva((await localizar(req)).id)))); 
 router.post('/pedidos/:idGlobal/abandonar', manejar(async (req, res) => res.json(await Checkout.abandonar((await localizar(req)).id))));
 
+// Cuánto cuesta y cuándo llega la entrega elegida, y las franjas de 15 minutos con cupo de un día (RF11, RF26).
+const lineasDelCarrito = async (token, cta) => (await require('../ventas_online/carritoService').calcular(await require('../ventas_online/carritoService').exigirCarrito(token), cta)).lineas;
+router.post('/entrega/cotizar', manejar(async (req, res) => {
+  const lineas = await lineasDelCarrito(req.body?.carrito, await cuenta(req));
+  const subtotal = lineas.reduce((a, l) => a + l.importe, 0);
+  const c = await require('../ventas_online/envioService').cotizar({ entrega: req.body?.entrega ?? { tipo: 'retiro' }, subtotal, lineas });
+  res.json({ tipo: c.tipo, costo: c.costo, gratis: c.gratis, tiempo_estimado_min: c.tiempo_estimado_min, programado_ms: c.programado_ms, ...c.datos });
+}));
+router.get('/entrega/franjas', manejar(async (req, res) => {
+  const lineas = req.query.carrito ? await lineasDelCarrito(req.query.carrito, await cuenta(req)) : [];
+  res.json(await require('../ventas_online/envioService').franjas({ fecha: req.query.fecha, lineas }));
+}));
+router.get('/entrega/zonas', manejar(async (req, res) => res.json((await require('../ventas_online/envioService').zonas()).filter((z) => z.activa).map((z) => ({ nombre: z.nombre, costo: z.costo, plazo_min: z.plazo_min, minimo_compra: z.minimo_compra, gratis_desde: z.gratis_desde, codigos_postales: z.codigos_postales })))));
+
 const base = (req) => `${req.protocol}://${req.get('host')}/tienda/${req.params.codigo}`;
 // Abre el cobro en la pasarela una vez confirmada la reserva (RF10).
 router.post('/pedidos/:idGlobal/pagar', manejar(async (req, res) => res.json(await Pagos.abrirCobro((await localizar(req)).id, { baseUrl: base(req), idSolicitud: req.get('X-ID-Solicitud') }))));

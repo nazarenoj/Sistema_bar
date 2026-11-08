@@ -75,7 +75,7 @@ const FUNCIONES = [
   f('ONL-CUPONES', 'ventas_online', 'Cupones y envío gratis', true),
   f('ONL-CUENTA-CLIENTE', 'ventas_online', 'Cuentas de cliente', true),
   f('ONL-PASARELA', 'ventas_online', 'Pasarela de pago', true, { internet: true }),
-  f('ONL-ENVIOS-TRANSPORTISTA', 'ventas_online', 'Transportistas integrados', true, { internet: true }),
+  f('ONL-ENVIOS-TRANSPORTISTA', 'ventas_online', 'Transportistas integrados', false, { internet: true }), // apagada: no hay transportistas integrados, solo retiro y delivery propio
   f('ONL-MARKETPLACES', 'ventas_online', 'Marketplaces y plataformas de delivery', false, { modulos: ['financiero'], internet: true }),
   f('ONL-RESERVAS', 'ventas_online', 'Reservas y pedidos especiales desde la tienda', false, { funciones: ['VEN-RESERVAS'] }),
   f('USU-TABLERO', 'usuarios', 'Tablero de indicadores', false),

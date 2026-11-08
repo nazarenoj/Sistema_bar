@@ -50,7 +50,7 @@ const armar = async (token, d, cuenta) => {
   const c = await Carrito.exigirCarrito(token);
   const r = await Carrito.calcular(c, cuenta);
   if (!r.lineas.length) throw invalida('El carrito está vacío.', 409, { codigo: 'CARRITO_VACIO' });
-  const entrega = await Envios.cotizar({ tipo: d?.entrega?.tipo ?? 'retiro', direccion: d?.entrega, subtotal: r.subtotal });
+  const entrega = await Envios.cotizar({ entrega: d?.entrega ?? { tipo: 'retiro' }, subtotal: r.subtotal, lineas: r.lineas });
   const envio = r.envio_gratis.gratis ? 0 : entrega.costo;
   const total = r2(r.total + envio);
   const alerg = unionAlergenos(r.lineas);
@@ -73,6 +73,7 @@ const vista = async (id) => {
     id: p.id, id_global: p.id_global, estado: p.estado, nombre: p.nombre, email: p.email, telefono: p.telefono, facturacion: JSON.parse(p.facturacion), entrega: { tipo: p.entrega_tipo, ...(p.entrega_datos ? JSON.parse(p.entrega_datos) : {}) },
     medio_pago: p.medio_pago, subtotal: Number(p.subtotal), descuento: Number(p.descuento), envio: Number(p.envio), total: Number(p.total), canje: Number(p.canje_importe), a_pagar: Number(p.a_pagar), cupon: p.cupon_codigo,
     reserva: { estado: p.reserva_estado, vence_ms: p.reserva_vence_ms ? Number(p.reserva_vence_ms) : null, segundos_restantes: p.reserva_vence_ms ? Math.max(0, Math.floor((Number(p.reserva_vence_ms) - Date.now()) / 1000)) : null, intento: p.reserva_intento },
+    programado_ms: p.programado_ms ? Number(p.programado_ms) : null, tiempo_estimado_min: p.tiempo_estimado_min, numero_retiro: p.numero_retiro,
     created_ms: Number(p.created_ms), pagado_ms: p.pagado_ms ? Number(p.pagado_ms) : null, motivo_cancelacion: p.motivo_cancelacion,
     lineas: lineas.map((l) => ({ ...l, cantidad: Number(l.cantidad), precio_unitario: Number(l.precio_unitario), importe: Number(l.importe), opciones: l.opciones ? JSON.parse(l.opciones) : [], alergenos: l.alergenos ? JSON.parse(l.alergenos) : [] })),
   };
@@ -172,6 +173,9 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
          VALUES (?, ?, 'pendiente_pago', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [idG, solicitud, cuenta?.id ?? null, cont.nombre, cont.email, cont.telefono, JSON.stringify(fact), a.entrega.tipo, JSON.stringify(a.entrega.datos ?? {}), medio, a.calculo.subtotal, descuento, a.envio, a.total, canjeImporte, aPagar, cuponId, a.calculo.cupon?.codigo ?? null,
           rs.id ?? null, rs.estado, rs.vence_ms ?? null, creditoId, canje?.id_retencion ?? null, canje ? JSON.stringify(canje) : null, cfg.version, JSON.stringify(activas), ahora, d.observaciones ? String(d.observaciones).slice(0, 255) : null, ahora, ahora]);
+      const inicioDia = new Date(); inicioDia.setHours(0, 0, 0, 0);
+      const [[{ hoyN }]] = await conn.query('SELECT COUNT(*) AS hoyN FROM onl_pedidos WHERE created_ms >= ?', [inicioDia.getTime()]);
+      await conn.query('UPDATE onl_pedidos SET programado_ms = ?, tiempo_estimado_min = ?, zona_id = ?, numero_retiro = ? WHERE id = ?', [a.entrega.programado_ms ?? null, a.entrega.tiempo_estimado_min ?? 0, a.entrega.zona_id ?? null, a.entrega.tipo === 'retiro' ? `R${String(hoyN).padStart(3, '0')}` : null, r.insertId]);
       for (const l of a.calculo.lineas) await conn.query('INSERT INTO onl_pedido_lineas (pedido_id, linea, producto_id, titulo, cantidad, precio_unitario, importe, opciones, alergenos, observaciones, lista) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [r.insertId, l.linea, l.producto_id, l.titulo, l.cantidad, l.precio_unitario, l.importe, JSON.stringify(l.opciones), JSON.stringify(l.alergenos), l.observaciones, null]);
       if (cuponId) await Cupones.consumir(conn, cuponId, { quien, pedidoId: idG, importe: descuento });
