@@ -62,6 +62,8 @@ const cmpCostoRoutes = require('./routes/cmpCostoRoutes');
 const cmpPedidoRoutes = require('./routes/cmpPedidoRoutes');
 const cmpArcaRoutes = require('./routes/cmpArcaRoutes');
 const cmpInformeRoutes = require('./routes/cmpInformeRoutes');
+const onlTiendaRoutes = require('./routes/onlTiendaRoutes');
+const onlPublicaRoutes = require('./routes/onlPublicaRoutes');
 const mantenimientoCompras = require('./compras/mantenimientoCompras');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
@@ -152,6 +154,8 @@ app.use(requestLogger);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', version: VERSION, timestamp: new Date().toISOString() });
 });
+// La tienda publica va fuera de /api y sin sesion: su codigo identifica la instancia (Ventas Online RN01).
+app.use('/tienda/:codigo', onlPublicaRoutes);
 app.use('/api', instancia);
 
 app.get('/api', (req, res) => {
@@ -275,6 +279,7 @@ app.use('/api/compras', cmpCostoRoutes);
 app.use('/api/compras', cmpPedidoRoutes);
 app.use('/api/compras', cmpArcaRoutes);
 app.use('/api/compras', cmpInformeRoutes);
+app.use('/api/ventas-online', onlTiendaRoutes);
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);

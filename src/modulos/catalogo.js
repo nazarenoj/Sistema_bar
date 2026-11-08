@@ -32,7 +32,7 @@ const MODULOS = {
   clientes: { nombre: 'Clientes y CC', capa: 3, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/cliente/, /^clientes\//, /^models\/cliente/] }, // Stock es opcional (Clientes RF30)
   compras: { nombre: 'Compras', capa: 3, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/cmp[A-Z]/, /^compras\//, /^models\/cmp[A-Z]/] }, // Stock y Financiero son opcionales
   contable: { nombre: 'Contable', capa: 4, dependeDe: ['usuarios', 'ventas', 'stock', 'clientes'], archivos: [], noConstruido: true },
-  ventas_online: { nombre: 'Ventas Online', capa: 4, dependeDe: ['usuarios', 'ventas', 'stock', 'clientes'], archivos: [], noConstruido: true },
+  ventas_online: { nombre: 'Ventas Online', capa: 4, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/onl[A-Z]/, /^ventas_online\//, /^models\/onl[A-Z]/] }, // Stock, Clientes y Financiero son opcionales
 };
 
 module.exports = { MODULOS };

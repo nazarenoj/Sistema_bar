@@ -29,3 +29,9 @@ Lista de lo que quedó diferido o limitado al cerrar las Fases G (Financiero) y 
 ## Pendiente de documentación
 
 - Los números de versión y el detalle de cada checkpoint están en `plan-checkpoints-opcionales.md`.
+
+## Ventas Online (Fase I)
+
+- **I1, aislamiento entre instancias**: la prueba automática usa una sola instancia; que una ruta pública no lea datos de otra se garantiza porque cada instancia tiene su base y el código resuelve la instancia, pero no hay una prueba con dos instancias reales.
+- **I1, límites por IP**: los contadores están en memoria de este proceso (se pierden al reiniciar); alcanza con una sola app. El tope de pedidos por hora ya sale de la configuración de la tienda, pero lo usará el checkout (I5).
+- **I1, sin pantallas**: ni la administración de la tienda ni la tienda pública tienen todavía frontend; por ahora son API.
