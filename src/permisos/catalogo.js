@@ -158,6 +158,8 @@ const PERMISOS = [
   { id: 'contable.asientos.anular', modulo: 'contable', descripcion: 'Anular asientos con un contraasiento' },
   { id: 'contable.pendientes.resolver', modulo: 'contable', descripcion: 'Resolver los pendientes de imputar (reintentar o imputar a mano)' },
   { id: 'contable.exportar', modulo: 'contable', descripcion: 'Exportar los libros y balances de Contable (PDF, Excel, CSV)' },
+  { id: 'contable.controles.ejecutar', modulo: 'contable', funcion: 'CON-CONTROLES-CRUZADOS', descripcion: 'Ejecutar los controles cruzados de saldos contra los modulos' },
+  { id: 'contable.apertura.registrar', modulo: 'contable', descripcion: 'Registrar el asiento de apertura con los saldos iniciales' },
   { id: 'integracion.pendientes.descartar', modulo: 'usuarios', descripcion: 'Descartar mensajes con motivo (con autorización de un supervisor)' },
   { id: 'integracion.conciliar', modulo: 'usuarios', descripcion: 'Ejecutar la conciliación de integración bajo demanda' },
   { id: 'auditoria.exportar', modulo: 'usuarios', descripcion: 'Exportar la auditoría' },

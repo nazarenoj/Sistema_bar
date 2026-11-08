@@ -79,6 +79,7 @@ const conReglasRoutes = require('./routes/conReglasRoutes');
 const conAsientosRoutes = require('./routes/conAsientosRoutes');
 const conPendientesRoutes = require('./routes/conPendientesRoutes');
 const conLibrosRoutes = require('./routes/conLibrosRoutes');
+const conControlesRoutes = require('./routes/conControlesRoutes');
 const finPlataformaRoutes = require('./routes/finPlataformaRoutes');
 const mantenimientoCompras = require('./compras/mantenimientoCompras');
 const correoRoutes = require('./routes/correoRoutes');
@@ -311,12 +312,14 @@ app.use('/api/contable', conReglasRoutes);
 app.use('/api/contable', conAsientosRoutes);
 app.use('/api/contable', conPendientesRoutes);
 app.use('/api/contable', conLibrosRoutes);
+app.use('/api/contable', conControlesRoutes);
 app.use('/api/financiero', finPlataformaRoutes);
 require('./financiero/plataformaService'); // comisiones y liquidaciones de plataformas (I11)
 require('./ventas_online/conectorService'); // estados hacia la plataforma y comision a Financiero (I11)
 require('./contable/receptor'); // eventos hacia Contable (J1)
 require('./contable/automaticos'); // asientos automaticos (J3)
 require('./contable/conceptos'); // conceptos del rubro (J6)
+for (const f of ['financiero', 'stock', 'clientes', 'compras', 'services']) require(`./${f}/consultasContable`); // consultas hacia Contable (J7, llamada n.º 18)
 require('./ventas_online/gestionService'); // entrega a Ventas y avisos al cliente (I8)
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
