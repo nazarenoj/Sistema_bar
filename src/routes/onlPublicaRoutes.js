@@ -2,17 +2,13 @@ const { Router } = require('express');
 const registro = require('../instancias/registro');
 const Modulos = require('../modulos/registro');
 const Tienda = require('../ventas_online/tiendaService');
-const Limitador = require('../ventas_online/limitador');
 const Catalogo = require('../ventas_online/catalogoService');
 
 // La parte pública de la tienda (Ventas Online RF01, RN01): rutas SIN sesión bajo /tienda/<codigo>. El código identifica la instancia; todo lo que sigue corre dentro de ella, así que una
 // ruta pública no puede leer datos de otra. Sin la tienda activa (o sin el módulo) todo responde 404, y las respuestas solo traen lo que se puede mostrar.
 const router = Router({ mergeParams: true });
 
-const general = Limitador.crear({ ventanaMs: 60000, maximo: 120 });
-// Los pedidos tienen su propio tope por hora, que fija cada tienda (Ventas Online RN56); lo usa el checkout (I5).
-const pedidos = Limitador.crear({ ventanaMs: 3600000, maximo: 20, mensaje: 'Hiciste demasiados pedidos seguidos. Probá más tarde.' });
-const limitePedidos = pedidos.middleware(async () => (await Tienda.fila()).limite_pedidos_ip_hora);
+const { general, pedidos, limitePedidos } = require('../ventas_online/limites');
 
 router.use(general.middleware());
 router.use(async (req, res, next) => {
@@ -59,6 +55,7 @@ router.post('/catalogo/:id/seleccion', async (req, res, next) => {
 router.get('/categorias', async (req, res, next) => { try { res.json(await Catalogo.categoriasPublicas()); } catch (err) { next(err); } });
 
 router.use(require('./onlCarritoRoutes'));
+router.use(require('./onlCheckoutRoutes'));
 
 module.exports = router;
 module.exports.limitePedidos = limitePedidos;

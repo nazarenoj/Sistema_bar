@@ -8,7 +8,7 @@ const router = Router({ mergeParams: true });
 
 const manejar = (fn) => async (req, res, next) => {
   try { await fn(req, res); } catch (err) {
-    if (err instanceof TiendaInvalida) return res.status(err.status ?? 400).json({ error: err.message, ...(err.codigo && { codigo: err.codigo }), ...(err.grupo && { grupo: err.grupo }), ...(err.disponible !== undefined && { disponible: err.disponible }) });
+    if (err instanceof TiendaInvalida) { const { status, ...extra } = err; return res.status(status ?? 400).json({ error: err.message, ...extra }); }
     next(err);
   }
 };

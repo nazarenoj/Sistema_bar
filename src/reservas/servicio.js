@@ -33,7 +33,7 @@ const fila = (r) => ({ ...r, cantidad: Number(r.cantidad) });
 //               atómica: nadie puede quedarse con lo reservado entre las dos (RN82.4).
 // Con la misma idSolicitud devuelve la misma reserva (reintento idempotente). Si no hay disponible lanza
 // ReservaError 'SIN_DISPONIBLE' con la cantidad que queda (EX56).
-const reservar = async ({ tipo, modulo, idSolicitud, recurso, cantidad, contenido = null, capacidad, reemplazaA = null, userId = null }) => {
+const reservar = async ({ tipo, modulo, idSolicitud, recurso, cantidad, contenido = null, capacidad, reemplazaA = null, userId = null, vigenciaMs = null }) => {
   if (!TIPOS.includes(tipo)) throw new Error(`Tipo de reserva inválido: ${tipo}`);
   if (!(cantidad > 0)) throw new ReservaError('CANTIDAD_INVALIDA', 'La cantidad a reservar debe ser mayor que cero.');
   const conn = await pool.getConnection();
@@ -68,7 +68,7 @@ const reservar = async ({ tipo, modulo, idSolicitud, recurso, cantidad, contenid
                              vence_ms, renovaciones_max, user_id, creada_ms)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, tipo, modulo, idSolicitud, reemplazaA, recurso, cantidad, contenido == null ? null : JSON.stringify(contenido),
-        ahora + (await vigenciaDe(tipo)), p.reserva_renovaciones_max ?? 3, userId, ahora]
+        ahora + (vigenciaMs ?? await vigenciaDe(tipo)), p.reserva_renovaciones_max ?? 3, userId, ahora]
     );
     await conn.commit();
     const [[nueva]] = await pool.query('SELECT * FROM reservas WHERE id_reserva = ?', [id]);
@@ -84,12 +84,12 @@ const reservar = async ({ tipo, modulo, idSolicitud, recurso, cantidad, contenid
 
 // Mientras la operación de origen sigue en curso, la reserva se renueva (mismo identificador, nuevo
 // vencimiento) hasta `renovaciones_max` veces. Una vencida no se renueva: se pide una nueva (RN82.5).
-const renovar = async (idReserva) => {
+const renovar = async (idReserva, vigenciaMs = null) => {
   const [[r]] = await pool.query('SELECT * FROM reservas WHERE id_reserva = ?', [idReserva]);
   if (!r) throw new ReservaError('NO_EXISTE', 'La reserva no existe.');
   if (r.estado !== 'vigente' || Number(r.vence_ms) <= Date.now()) throw new ReservaError('RESERVA_VENCIDA', 'La reserva venció: pedí una nueva.');
   if (r.renovaciones >= r.renovaciones_max) throw new ReservaError('SIN_RENOVACIONES', `La reserva ya se renovó ${r.renovaciones_max} veces.`);
-  await pool.query('UPDATE reservas SET vence_ms = ?, renovaciones = renovaciones + 1 WHERE id_reserva = ?', [Date.now() + (await vigenciaDe(r.tipo)), idReserva]);
+  await pool.query('UPDATE reservas SET vence_ms = ?, renovaciones = renovaciones + 1 WHERE id_reserva = ?', [Date.now() + (vigenciaMs ?? await vigenciaDe(r.tipo)), idReserva]);
   return fila((await pool.query('SELECT * FROM reservas WHERE id_reserva = ?', [idReserva]))[0][0]);
 };
 

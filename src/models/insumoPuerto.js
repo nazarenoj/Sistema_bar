@@ -19,7 +19,7 @@ puertos.registrar('stock', {
   recetaCambiada: (productoId, userId) => Receta.snapshot(productoId, userId),
   // Compromiso de venta (RF36): items = filas con producto_id y cantidad, en el orden de la venta.
   comprometer: async (items, ctx) => {
-    const r = await Compromiso.comprometer({ idSolicitud: ctx.idSolicitud, lineas: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null })), reemplazaA: ctx.reemplazaA, userId: ctx.userId });
+    const r = await Compromiso.comprometer({ idSolicitud: ctx.idSolicitud, lineas: items.map((i, linea) => ({ linea, producto_id: i.producto_id, cantidad: i.cantidad, lote_indicado: i.lote_indicado ?? null })), reemplazaA: ctx.reemplazaA, userId: ctx.userId, vigenciaMs: ctx.vigenciaMs ?? null });
     if (!r.ok || !items.some((i) => i.serie)) return r;
     // Las series de las líneas pasan de Disponible a Comprometida con el cierre (Ventas RN05); si alguna no sirve se informa su estado (EX33).
     const s = await Series.comprometerParaVenta(items.filter((i) => i.serie), `SER:${ctx.idSolicitud}`, { userId: ctx.userId });
@@ -32,7 +32,7 @@ puertos.registrar('stock', {
   estadoSerie: (productoId, numero) => Series.estadoParaVenta(productoId, numero),
   liberarSeries: (idSolicitud) => Series.liberarPorCompromiso(`SER:${idSolicitud}`),
   seriesVigentes: () => Series.vigentes(),
-  renovarCompromiso: (id) => Compromiso.renovar(id),
+  renovarCompromiso: (id, vigenciaMs) => Compromiso.renovar(id, vigenciaMs),
   liberarCompromiso: (id) => Compromiso.liberar(id),
   // Alérgenos de una línea de venta (RF39): { alergenos, incompletos }; Ventas los muestra y los publica.
   alergenosLinea: (productoId, opciones, opcionIds = []) => Alergenos.linea(productoId, opciones, undefined, opcionIds),

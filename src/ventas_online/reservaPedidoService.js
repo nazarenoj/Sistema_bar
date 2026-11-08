@@ -1,0 +1,72 @@
+const pool = require('../config/db');
+const puertos = require('../modulos/puertos');
+const llamar = require('../modulos/llamar');
+const { idGlobal } = require('../utils/idGlobal');
+
+// Reserva de stock de un pedido online (Ventas Online RN07, RN45, EX27 a EX30). Se pide ANTES del cobro, por todos los ítems que controlan stock y todo o nada, con la vigencia de la tienda
+// (15 minutos por defecto) y una espera máxima de 5 segundos (llamada n.º 7). Cada intento lleva su propia clave de solicitud; un intento nuevo reemplaza al anterior en una sola operación.
+// Si Stock no está instalado no hay reserva; si no responde, el pedido se acepta contra la disponibilidad publicada y la reserva queda pendiente de confirmación.
+const MAX_RENOVACIONES = 3;
+const config = async () => (await pool.query('SELECT vigencia_reserva_min, timeout_reserva_segundos FROM onl_tienda WHERE id = 1'))[0][0];
+const items = (lineas) => lineas.map((l) => ({ producto_id: l.producto_id, cantidad: Number(l.cantidad) }));
+
+// -> { estado: 'confirmada' | 'pendiente' | 'no_aplica' | 'rechazada', id, vence_ms, sin_disponible? }
+const reservar = async ({ lineas, solicitud, reemplazaA = null }) => {
+  const c = await config();
+  const r = await llamar(7, 'ventas_online', async () => (await puertos.obtener('stock')).comprometer(items(lineas), { idSolicitud: solicitud, reemplazaA, vigenciaMs: c.vigencia_reserva_min * 60000 }), { esperaMs: c.timeout_reserva_segundos * 1000 });
+  if (r.fallo) return /no instalado/.test(r.motivo ?? '') ? { estado: 'no_aplica' } : { estado: 'pendiente', motivo: r.motivo };
+  const v = r.valor;
+  if (v.ok === false) return { estado: 'rechazada', sin_disponible: v.sin_disponible ?? [], lote_no_disponible: v.lote_no_disponible, serie_no_disponible: v.serie_no_disponible };
+  if (!v.id_compromiso) return { estado: 'no_aplica' }; // ningún ítem controla stock
+  return { estado: 'confirmada', id: v.id_compromiso, vence_ms: Number(v.vence_ms) };
+};
+
+const liberar = async (id) => { if (id) await llamar(7, 'ventas_online', async () => (await puertos.obtener('stock')).liberarCompromiso(id)).catch(() => {}); };
+
+// Mientras el cliente sigue en el checkout se renueva la misma reserva, hasta 3 veces (RN07).
+const renovar = async (pedido) => {
+  if (!pedido.reserva_id || pedido.reserva_estado !== 'confirmada') return null;
+  if (pedido.reserva_renovaciones >= MAX_RENOVACIONES) return { renovada: false, motivo: 'RENOVACIONES_AGOTADAS' };
+  const c = await config();
+  const r = await llamar(7, 'ventas_online', async () => (await puertos.obtener('stock')).renovarCompromiso(pedido.reserva_id, c.vigencia_reserva_min * 60000));
+  if (r.fallo) return { renovada: false, motivo: r.motivo };
+  await pool.query('UPDATE onl_pedidos SET reserva_vence_ms = ?, reserva_renovaciones = reserva_renovaciones + 1, updated_ms = ? WHERE id = ?', [Number(r.valor.vence_ms), Date.now(), pedido.id]);
+  return { renovada: true, vence_ms: Number(r.valor.vence_ms) };
+};
+
+// Un intento nuevo (el carrito cambió o la reserva venció): clave nueva y reemplazo de la anterior.
+const reintentar = async (pedido, lineas) => {
+  const intento = pedido.reserva_intento + 1;
+  const r = await reservar({ lineas, solicitud: `${pedido.id_global}:reserva:${intento}`, reemplazaA: pedido.reserva_estado === 'confirmada' ? pedido.reserva_id : null });
+  await pool.query('UPDATE onl_pedidos SET reserva_intento = ?, reserva_id = ?, reserva_estado = ?, reserva_vence_ms = ?, reserva_renovaciones = 0, updated_ms = ? WHERE id = ?',
+    [intento, r.id ?? null, r.estado === 'rechazada' ? 'vencida' : r.estado, r.vence_ms ?? null, Date.now(), pedido.id]);
+  return r;
+};
+
+// La reserva vence sola en Stock; acá se marca el pedido para que la tienda lo sepa (EX28).
+const marcarVencidas = async () => {
+  const [r] = await pool.query("UPDATE onl_pedidos SET reserva_estado = 'vencida', updated_ms = ? WHERE reserva_estado = 'confirmada' AND reserva_vence_ms < ? AND estado IN ('pendiente_pago')", [Date.now(), Date.now()]);
+  return r.affectedRows;
+};
+
+// RN45: cuando Stock vuelve a responder se piden las reservas pendientes, la más antigua primero; cada una es idempotente por su clave.
+const confirmarPendientes = async () => {
+  const [pend] = await pool.query("SELECT * FROM onl_pedidos WHERE reserva_estado = 'pendiente' AND estado NOT IN ('cancelado', 'entregado') ORDER BY created_ms, id");
+  const salida = { confirmadas: 0, rechazadas: 0, sin_respuesta: 0 };
+  for (const p of pend) {
+    const [lineas] = await pool.query('SELECT producto_id, cantidad FROM onl_pedido_lineas WHERE pedido_id = ?', [p.id]);
+    const r = await reservar({ lineas, solicitud: `${p.id_global}:reserva:${p.reserva_intento}` });
+    if (r.estado === 'pendiente') { salida.sin_respuesta++; break; } // Stock sigue sin responder
+    if (r.estado === 'rechazada') {
+      salida.rechazadas++;
+      await pool.query("UPDATE onl_pedidos SET reserva_estado = 'rechazada', estado = IF(estado IN ('pagado', 'reserva_pendiente'), 'con_faltante', estado), updated_ms = ? WHERE id = ?", [Date.now(), p.id]);
+      await pool.query('INSERT INTO onl_pedido_historial (pedido_id, estado, detalle, ts_ms) VALUES (?, ?, ?, ?)', [p.id, 'reserva_rechazada', 'Stock no pudo confirmar la reserva', Date.now()]);
+    } else {
+      salida.confirmadas++;
+      await pool.query("UPDATE onl_pedidos SET reserva_estado = ?, reserva_id = ?, reserva_vence_ms = ?, estado = IF(estado = 'reserva_pendiente', 'pagado', estado), updated_ms = ? WHERE id = ?", [r.estado, r.id ?? null, r.vence_ms ?? null, Date.now(), p.id]);
+    }
+  }
+  return salida;
+};
+
+module.exports = { reservar, liberar, renovar, reintentar, marcarVencidas, confirmarPendientes, MAX_RENOVACIONES, idGlobal };

@@ -75,7 +75,7 @@ const verificar = async (lineas) => {
 // Pide el compromiso. Devuelve { ok: true, id_compromiso, vence_ms } (id nulo si ningún ítem bloquea) o { ok: false, sin_disponible:
 // [{ nombre, deposito, requerido, disponible }] con lo que no alcanza. Con la misma idSolicitud devuelve el mismo compromiso.
 // `reemplazaA`: el compromiso anterior (cambió la cantidad o venció) se libera y se toma el nuevo.
-const comprometer = async ({ idSolicitud, lineas, reemplazaA = null, userId = null }) => {
+const comprometer = async ({ idSolicitud, lineas, reemplazaA = null, userId = null, vigenciaMs = null }) => {
   // Lote indicado en la línea (Ventas RF48): si no sirve, se rechaza informando el motivo para elegir otro o dejar FEFO (EX57).
   const loteNo = [];
   for (const l of lineas.filter((x) => x.lote_indicado)) {
@@ -112,7 +112,7 @@ const comprometer = async ({ idSolicitud, lineas, reemplazaA = null, userId = nu
       tomadas.push(await R.reservar({
         tipo: 'compromiso_stock', modulo: 'stock', idSolicitud: `${idSolicitud}:${i}`, recurso: recursoDe(b.tipo, b.id, b.deposito_id), cantidad: b.cantidad,
         contenido: { compromiso: idCompromiso, tipo: b.tipo, id: b.id, deposito_id: b.deposito_id }, userId,
-        capacidad: (conn) => fisico(conn, b.tipo, b.id, b.deposito_id),
+        capacidad: (conn) => fisico(conn, b.tipo, b.id, b.deposito_id), vigenciaMs,
       }));
     }
   } catch (err) {
@@ -141,10 +141,10 @@ const disponibleUnidades = async (productoId) => {
 };
 
 // Mientras el cierre sigue en curso se renueva (mismo ID_Compromiso, hasta 3 veces); un compromiso vencido no se renueva.
-const renovar = async (idCompromiso) => {
+const renovar = async (idCompromiso, vigenciaMs = null) => {
   const rs = await reservasDe(idCompromiso);
   if (!rs.length) throw new R.ReservaError('NO_EXISTE', 'El compromiso no existe.');
-  for (const r of rs) await R.renovar(r.id_reserva);
+  for (const r of rs) await R.renovar(r.id_reserva, vigenciaMs);
   return { id_compromiso: idCompromiso, vence_ms: Math.min(...(await reservasDe(idCompromiso)).map((r) => Number(r.vence_ms))) };
 };
 

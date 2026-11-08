@@ -107,6 +107,8 @@ const PERMISOS = [
   { id: 'ventas_online.cupones.gestionar', modulo: 'ventas_online', funcion: 'ONL-CUPONES', descripcion: 'Crear y editar cupones y la regla de envio gratis' },
   { id: 'ventas_online.clientes.ver', modulo: 'ventas_online', funcion: 'ONL-CUENTA-CLIENTE', descripcion: 'Ver las cuentas de cliente de la tienda' },
   { id: 'ventas_online.clientes.vincular', modulo: 'ventas_online', funcion: 'ONL-CUENTA-CLIENTE', descripcion: 'Vincular una cuenta de la tienda con una ficha de Clientes y CC' },
+  { id: 'ventas_online.pedidos.ver', modulo: 'ventas_online', descripcion: 'Ver los pedidos de la tienda online' },
+  { id: 'ventas_online.pedidos.gestionar', modulo: 'ventas_online', descripcion: 'Gestionar los pedidos de la tienda online (estados, cancelaciones, reintegros)' },
   { id: 'financiero.cajas.ver', modulo: 'financiero', descripcion: 'Ver las cajas y cuentas (sin saldos)' },
   { id: 'financiero.saldos.ver', modulo: 'financiero', descripcion: 'Ver saldos de cajas y cuentas y el saldo teórico de un turno' },
   { id: 'financiero.movimientos.ver', modulo: 'financiero', descripcion: 'Consultar los movimientos de fondos' },
