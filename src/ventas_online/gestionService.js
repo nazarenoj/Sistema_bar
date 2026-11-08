@@ -19,7 +19,7 @@ const pedido = async (id) => { const [[p]] = await pool.query('SELECT * FROM onl
 const FORMA = { pasarela: 'cobro_online', transferencia: 'transferencia', pago_al_retirar: 'efectivo', efectivo_contra_entrega: 'efectivo', cuenta_corriente: 'cuenta_corriente' };
 
 const armarEntrega = async (p) => {
-  const [lineas] = await pool.query('SELECT producto_id, titulo, cantidad, precio_unitario, observaciones, opciones FROM onl_pedido_lineas WHERE pedido_id = ? ORDER BY linea', [p.id]);
+  const [lineas] = await pool.query('SELECT producto_id, titulo, cantidad, precio_unitario, importe, es_pesable, observaciones, opciones FROM onl_pedido_lineas WHERE pedido_id = ? ORDER BY linea', [p.id]);
   const [[cta]] = p.cuenta_id ? await pool.query('SELECT cliente_id FROM onl_clientes WHERE id = ?', [p.cuenta_id]) : [[null]];
   const [[pago]] = await pool.query("SELECT id_externo FROM onl_pagos WHERE pedido_id = ? AND estado = 'aprobado' ORDER BY id LIMIT 1", [p.id]);
   const pagos = [];
@@ -29,7 +29,10 @@ const armarEntrega = async (p) => {
   const clienteId = cta?.cliente_id ?? null;
   return {
     idGlobal: p.id_global, referencia: `Online #${p.id}${p.numero_retiro ? ` ${p.numero_retiro}` : ''} ${p.nombre}`, modalidad: p.entrega_tipo === 'delivery' ? 'delivery' : 'retiro', transaccion: pago?.id_externo ?? null,
-    lineas: lineas.map((l) => ({ producto_id: l.producto_id, titulo: l.titulo, cantidad: Number(l.cantidad), precio_unitario: Number(l.precio_unitario), observaciones: l.observaciones, opciones: l.opciones ? JSON.parse(l.opciones) : [] })),
+    // Un pesable viaja como una línea por su importe estimado: la cantidad de la línea de Ventas es entera; el peso real se ajusta después (RN51).
+    lineas: lineas.map((l) => (l.es_pesable
+      ? { producto_id: l.producto_id, titulo: `${l.titulo} (aprox. ${Number(l.cantidad)} kg)`, cantidad: 1, precio_unitario: Number(l.importe), observaciones: l.observaciones, opciones: [] }
+      : { producto_id: l.producto_id, titulo: l.titulo, cantidad: Number(l.cantidad), precio_unitario: Number(l.precio_unitario), observaciones: l.observaciones, opciones: l.opciones ? JSON.parse(l.opciones) : [] })),
     envio: Number(p.envio), descuento: Number(p.descuento), total: Number(p.total), pagos, idCompromiso: p.reserva_id ?? null, clienteId,
     credito: p.credito_reserva_id && clienteId ? { clienteId, moneda: 'ARS', importe: Number(p.a_pagar), importePesos: Number(p.a_pagar), reservaId: p.credito_reserva_id } : null,
   };
@@ -135,10 +138,11 @@ const sincronizarCocina = async () => {
 
 // ---- Panel ----
 
-const listar = async ({ estado, q, desde, hasta, limite = 200 } = {}) => {
+const listar = async ({ estado, q, desde, hasta, alineacion, limite = 200 } = {}) => {
   const w = [], par = [];
   if (estado) { w.push('estado = ?'); par.push(estado); }
   if (q) { w.push('(nombre LIKE ? OR email LIKE ? OR numero_retiro = ? OR id = ?)'); par.push(`%${q}%`, `%${q}%`, q, Number(q) || 0); }
+  if (alineacion) { w.push('alineacion = ?'); par.push(alineacion); }
   if (desde) { w.push('created_ms >= ?'); par.push(new Date(`${desde}T00:00:00`).getTime()); }
   if (hasta) { w.push('created_ms <= ?'); par.push(new Date(`${hasta}T23:59:59`).getTime()); }
   const [filas] = await pool.query(`SELECT id FROM onl_pedidos ${w.length ? `WHERE ${w.join(' AND ')}` : ''} ORDER BY COALESCE(programado_ms, created_ms), id LIMIT ?`, [...par, Math.min(Number(limite) || 200, 500)]);
@@ -150,7 +154,8 @@ const detalle = async (id) => {
   const p = await pedido(id);
   const [hist] = await pool.query('SELECT estado, detalle, user_id, ts_ms FROM onl_pedido_historial WHERE pedido_id = ? ORDER BY id', [id]);
   const integracion = p.venta_id_global ? await Mensajeria.estadoIntegracion(p.venta_id_global) : null;
-  return { ...v, entrega_ventas: { estado: p.entrega_ventas_estado, venta_id_global: p.venta_id_global, intentos: p.entrega_intentos, error: p.entrega_error }, integracion, pagos: await Pagos.pagosDe(id),
+  const Facturacion = require('./facturacionService'); // más tarde que la entrega a Ventas: sus enlaces se registran después
+  return { ...v, alineacion: p.alineacion, comprobantes: await Facturacion.comprobantes(id), entrega_ventas: { estado: p.entrega_ventas_estado, venta_id_global: p.venta_id_global, intentos: p.entrega_intentos, error: p.entrega_error }, integracion, pagos: await Pagos.pagosDe(id),
     historial: hist.map((h) => ({ ...h, ts_ms: Number(h.ts_ms) })) };
 };
 // La lista de preparación: lo que hay que armar, por hora comprometida (RN36).

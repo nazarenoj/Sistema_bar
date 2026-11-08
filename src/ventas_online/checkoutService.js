@@ -71,6 +71,7 @@ const vista = async (id) => {
   const [lineas] = await pool.query('SELECT linea, producto_id, titulo, cantidad, precio_unitario, importe, opciones, alergenos, observaciones, lista FROM onl_pedido_lineas WHERE pedido_id = ? ORDER BY linea', [id]);
   return {
     id: p.id, id_global: p.id_global, estado: p.estado, nombre: p.nombre, email: p.email, telefono: p.telefono, facturacion: JSON.parse(p.facturacion), entrega: { tipo: p.entrega_tipo, ...(p.entrega_datos ? JSON.parse(p.entrega_datos) : {}) },
+    alineacion: p.alineacion, tiene_pesables: !!p.tiene_pesables, pesaje: p.pesaje_estado,
     medio_pago: p.medio_pago, subtotal: Number(p.subtotal), descuento: Number(p.descuento), envio: Number(p.envio), total: Number(p.total), canje: Number(p.canje_importe), a_pagar: Number(p.a_pagar), cupon: p.cupon_codigo,
     reserva: { estado: p.reserva_estado, vence_ms: p.reserva_vence_ms ? Number(p.reserva_vence_ms) : null, segundos_restantes: p.reserva_vence_ms ? Math.max(0, Math.floor((Number(p.reserva_vence_ms) - Date.now()) / 1000)) : null, intento: p.reserva_intento },
     programado_ms: p.programado_ms ? Number(p.programado_ms) : null, tiempo_estimado_min: p.tiempo_estimado_min, numero_retiro: p.numero_retiro,
@@ -178,6 +179,8 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
       await conn.query('UPDATE onl_pedidos SET programado_ms = ?, tiempo_estimado_min = ?, zona_id = ?, numero_retiro = ? WHERE id = ?', [a.entrega.programado_ms ?? null, a.entrega.tiempo_estimado_min ?? 0, a.entrega.zona_id ?? null, a.entrega.tipo === 'retiro' ? `R${String(hoyN).padStart(3, '0')}` : null, r.insertId]);
       for (const l of a.calculo.lineas) await conn.query('INSERT INTO onl_pedido_lineas (pedido_id, linea, producto_id, titulo, cantidad, precio_unitario, importe, opciones, alergenos, observaciones, lista) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [r.insertId, l.linea, l.producto_id, l.titulo, l.cantidad, l.precio_unitario, l.importe, JSON.stringify(l.opciones), JSON.stringify(l.alergenos), l.observaciones, null]);
+      const [pes] = await conn.query("UPDATE onl_pedido_lineas l JOIN productos pr ON pr.id = l.producto_id SET l.es_pesable = 1, l.peso_min = pr.peso_minimo, l.peso_max = pr.peso_maximo, l.pesaje_estado = 'pendiente' WHERE l.pedido_id = ? AND pr.tipo = 'pesable'", [r.insertId]);
+      if (pes.affectedRows) await conn.query("UPDATE onl_pedidos SET tiene_pesables = 1, pesaje_estado = 'pendiente' WHERE id = ?", [r.insertId]);
       if (cuponId) await Cupones.consumir(conn, cuponId, { quien, pedidoId: idG, importe: descuento });
       await historial(conn, r.insertId, 'pendiente_pago', rs.estado === 'pendiente' ? 'Stock no respondió: reserva pendiente de confirmación' : null);
       await conn.query('DELETE FROM onl_carritos WHERE token = ?', [token]);

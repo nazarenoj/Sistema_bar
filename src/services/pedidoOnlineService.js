@@ -5,6 +5,10 @@ const Venta = require('./ventaService');
 const Comandas = require('./comandaService');
 const Mensajeria = require('../mensajeria/servicio');
 const logger = require('../utils/logger');
+const Factura = require('../models/facturaModel');
+const afipService = require('./afipService');
+const afipConfig = require('../config/afipConfig');
+const NotaFiscal = require('./notaFiscalService');
 
 // Ventas recibe un pedido online ya pagado (Ventas RF25, Ventas Online RN44): lo abre como un pedido de origen «ventas_online» (retiro o delivery) con sus líneas y opciones, lo manda a
 // la comanda de cocina o barra y registra la venta con el Pago_Online como forma de pago «Cobro online (pasarela)» (o la que corresponda). Es la única que informa el cobro a Financiero.
@@ -99,4 +103,59 @@ const avanceDe = async (pedidoGlobal) => {
   return AVANCES[Math.min(...cs.map((c) => AVANCES.indexOf(c.avance)))];
 };
 
-module.exports = { recibir, avanceDe, productoEnvio };
+// ---- Comprobantes, devoluciones y totales de un pedido online (Ventas RF17, RN67): operaciones elementales que Ventas Online le pide y que Ventas ejecuta ----
+
+const movimiento = (idGlobal, tipo, importe, referencia, detalle = null) => pool.query('INSERT IGNORE INTO ventas_online_movs (pedido_global, tipo, importe, referencia, detalle, ts_ms) VALUES (?, ?, ?, ?, ?, ?)', [idGlobal, tipo, r2(importe), referencia, detalle, Date.now()]);
+const ventaDe = async (idGlobal) => {
+  const [[m]] = await pool.query('SELECT v.id, v.mesa_id, v.sesion_apertura, v.total FROM ventas_pedidos_online o JOIN ventas v ON v.id_global = o.venta_id_global WHERE o.pedido_global = ?', [idGlobal]);
+  if (!m) throw falla('El pedido todavía no pasó a Ventas.', 409, 'SIN_VENTA');
+  return m;
+};
+
+// Emite la factura del pedido por el importe pedido (el total, o el real después del pesaje). Repetir el intento devuelve el mismo comprobante.
+const facturar = async ({ idGlobal, receptor, importe, idIntento }) => {
+  const v = await ventaDe(idGlobal);
+  let f = await Factura.getBySesion(v.mesa_id, v.sesion_apertura);
+  if (f?.estado === 'aprobada') return { estado: 'aprobada', tipo_comprobante: f.tipo_comprobante, punto_venta: f.punto_venta, numero: Number(f.numero), cae: f.cae, importe: Number(f.importe_total), ya_procesado: true };
+  const tipo = NotaFiscal.letraFactura(receptor);
+  f ||= await Factura.create({ mesa_id: v.mesa_id, sesion_apertura: v.sesion_apertura, metodo_pago: 'cobro_online', tipo_comprobante: tipo, punto_venta: afipConfig.puntoVenta, doc_tipo: receptor.doc_tipo, doc_nro: String(receptor.doc_nro),
+    condicion_iva_receptor_id: receptor.condicion_iva_receptor_id, receptor_nombre: receptor.nombre ?? null, domicilio_receptor: receptor.domicilio ?? null, importe_total: importe, entorno: afipConfig.entorno, creado_por: null });
+  try {
+    const r = await afipService.emitirFactura({ tipoComprobante: f.tipo_comprobante, docTipo: f.doc_tipo, docNro: f.doc_nro, condicionIvaReceptorId: f.condicion_iva_receptor_id, importeTotal: Number(importe), idIntento, facturaId: f.id });
+    await Factura.updateResultado(f.id, r);
+    if (r.estado !== 'aprobada') throw falla(`ARCA rechazó el comprobante: ${r.observaciones ?? 'sin detalle'}.`, 409, 'COMPROBANTE_RECHAZADO');
+    await movimiento(idGlobal, 'factura', importe, String(r.numero), `${r.cae}`);
+    return { estado: 'aprobada', tipo_comprobante: f.tipo_comprobante, punto_venta: afipConfig.puntoVenta, numero: r.numero, cae: r.cae, importe: Number(importe), ya_procesado: false };
+  } catch (err) {
+    if (!err.codigo) await Factura.updateResultado(f.id, { estado: 'error', importeTotal: importe, observaciones: err.message });
+    throw err;
+  }
+};
+
+// Nota de crédito que corrige la factura del pedido (diferencia de peso, cancelación, arrepentimiento): siempre antes del reintegro (RN52).
+const notaCredito = async ({ idGlobal, receptor, importe, idIntento }) => {
+  const v = await ventaDe(idGlobal);
+  const f = await Factura.getBySesion(v.mesa_id, v.sesion_apertura);
+  if (f?.estado !== 'aprobada') throw falla('El pedido no tiene una factura aprobada para corregir.', 409, 'SIN_FACTURA');
+  const [[previa]] = await pool.query("SELECT referencia FROM ventas_online_movs WHERE pedido_global = ? AND tipo = 'nc' AND referencia = ?", [idGlobal, idIntento]);
+  if (previa) return { estado: 'aprobada', ya_procesado: true };
+  const r = await NotaFiscal.emitir({ tipo: 'nc', receptor, importe, asociado: { Tipo: f.tipo_comprobante, PtoVta: f.punto_venta, Nro: Number(f.numero) }, idIntento });
+  if (r.estado !== 'aprobada') throw falla('ARCA rechazó la nota de crédito.', 409, 'COMPROBANTE_RECHAZADO');
+  await movimiento(idGlobal, 'nc', importe, idIntento, `${r.tipo_comprobante}-${r.numero}`);
+  return { estado: 'aprobada', tipo_comprobante: r.tipo_comprobante, punto_venta: r.punto_venta, numero: r.numero, cae: r.cae, importe: Number(importe), ya_procesado: false };
+};
+
+// Ventas Online avisa lo que reintegró o cobró de más en la pasarela: Ventas lo registra como devolución o cobro adicional (la clave evita duplicarlo).
+const registrarDevolucion = async ({ idGlobal, importe, referencia, medio = 'pasarela' }) => { await ventaDe(idGlobal); await movimiento(idGlobal, 'devolucion', importe, referencia, medio); return { ok: true }; };
+const registrarCobroAdicional = async ({ idGlobal, importe, referencia }) => { await ventaDe(idGlobal); await movimiento(idGlobal, 'cobro_adicional', importe, referencia); return { ok: true }; };
+
+// Los totales de un pedido (llamada n.º 19): lo cobrado, lo reintegrado y lo facturado neto, tal como Ventas los registró.
+const totales = async (idGlobal) => {
+  const [[v]] = await pool.query('SELECT v.id FROM ventas_pedidos_online o JOIN ventas v ON v.id_global = o.venta_id_global WHERE o.pedido_global = ?', [idGlobal]);
+  const suma = async (tipo) => Number((await pool.query('SELECT COALESCE(SUM(importe), 0) AS t FROM ventas_online_movs WHERE pedido_global = ? AND tipo = ?', [idGlobal, tipo]))[0][0].t);
+  const cobradoVenta = v ? Number((await pool.query('SELECT COALESCE(SUM(importe), 0) AS t FROM pago_venta WHERE venta_id = ?', [v.id]))[0][0].t) : 0;
+  const cobrado = r2(cobradoVenta + await suma('cobro_adicional'));
+  return { cobrado, reintegrado: r2(await suma('devolucion')), facturado_neto: r2(await suma('factura') - await suma('nc')) };
+};
+
+module.exports = { recibir, avanceDe, productoEnvio, facturar, notaCredito, registrarDevolucion, registrarCobroAdicional, totales };

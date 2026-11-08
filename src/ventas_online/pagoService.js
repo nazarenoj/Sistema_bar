@@ -5,6 +5,7 @@ const Pasarela = require('./pasarelaMP');
 const Reserva = require('./reservaPedidoService');
 const Reintegros = require('./reintegroService');
 const Eventos = require('./eventos');
+const Pesaje = require('./pesajeService');
 const Checkout = require('./checkoutService');
 const { TiendaInvalida } = require('./tiendaService');
 
@@ -94,6 +95,15 @@ const procesarPago = async (idExterno) => {
   const prov = Pasarela.proveedor();
   const x = await prov.obtenerPago(idExterno);
   const estadoLocal = { approved: 'aprobado', rejected: 'rechazado', cancelled: 'rechazado', pending: 'pendiente', in_process: 'pendiente', refunded: 'reintegrado', charged_back: 'reintegrado' }[x.estado] ?? 'pendiente';
+  // Cobro adicional por una diferencia de peso que el cliente aceptó (la referencia termina en :AJ<id>): confirma ese ajuste, no un pedido.
+  if (/:AJ\d+$/.test(x.referencia ?? '')) {
+    const [[base]] = await pool.query('SELECT id FROM onl_pedidos WHERE id_global = ?', [String(x.referencia).replace(/:AJ\d+$/, '')]);
+    const [[yaAdic]] = await pool.query('SELECT estado FROM onl_pagos WHERE proveedor = ? AND id_externo = ?', [prov.nombre, x.id]);
+    if (yaAdic) return { ya_procesado: true, estado: yaAdic.estado };
+    await pool.query('INSERT INTO onl_pagos (pedido_id, proveedor, id_externo, referencia, estado, importe, metodo, detalle, creado_ms, actualizado_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [base?.id ?? null, prov.nombre, x.id, x.referencia, estadoLocal === 'aprobado' ? 'adicional' : estadoLocal, x.monto, x.metodo, 'Cobro adicional por diferencia de peso', Date.now(), Date.now()]);
+    if (estadoLocal === 'aprobado') await Pesaje.cobroAdicionalAprobado(x.referencia, { idExterno: x.id, monto: x.monto });
+    return { ya_procesado: false, estado: estadoLocal === 'aprobado' ? 'adicional' : estadoLocal };
+  }
   const [[ped]] = await pool.query('SELECT * FROM onl_pedidos WHERE id_global = ?', [x.referencia ?? '']);
   const [[previo]] = await pool.query('SELECT * FROM onl_pagos WHERE proveedor = ? AND id_externo = ?', [prov.nombre, x.id]);
   if (previo && previo.estado === estadoLocal) return { ya_procesado: true, estado: previo.estado, pedido_estado: ped?.estado ?? null };

@@ -50,6 +50,12 @@ router.get('/entrega/franjas', manejar(async (req, res) => {
 }));
 router.get('/entrega/zonas', manejar(async (req, res) => res.json((await require('../ventas_online/envioService').zonas()).filter((z) => z.activa).map((z) => ({ nombre: z.nombre, costo: z.costo, plazo_min: z.plazo_min, minimo_compra: z.minimo_compra, gratis_desde: z.gratis_desde, codigos_postales: z.codigos_postales })))));
 
+// El cliente responde a la solicitud de aceptar la diferencia de peso (RF29): acepta y paga por la pasarela, o rechaza y el comercio absorbe hasta su tolerancia.
+router.post('/pedidos/:idGlobal/aceptar-diferencia', manejar(async (req, res) => {
+  const { responder } = require('../ventas_online/pesajeService');
+  res.json(await responder(req.params.idGlobal, { token: req.body?.token, email: req.body?.email, acepta: req.body?.acepta === true }, { baseUrl: `${req.protocol}://${req.get('host')}/tienda/${req.params.codigo}` }));
+}));
+
 const base = (req) => `${req.protocol}://${req.get('host')}/tienda/${req.params.codigo}`;
 // Abre el cobro en la pasarela una vez confirmada la reserva (RF10).
 router.post('/pedidos/:idGlobal/pagar', manejar(async (req, res) => res.json(await Pagos.abrirCobro((await localizar(req)).id, { baseUrl: base(req), idSolicitud: req.get('X-ID-Solicitud') }))));
