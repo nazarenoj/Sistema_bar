@@ -6,7 +6,7 @@ const { usuario } = require('./ayudas_financiero');
 const { fechaLocal } = require('../src/contable/comun');
 
 // Prepara una instancia con Contable instalado e iniciado hoy, y un vendedor de cuentas de 250 (2 x $100 + 1 x $50, IVA 21% incluido).
-const preparar = async (api, pool, { perfil = 'cafeteria' } = {}) => {
+const preparar = async (api, pool, { perfil = 'cafeteria', antes = null } = {}) => {
   const wsfe = require('../src/afip/wsfeClient');
   let ultimo = 0;
   wsfe.compUltimoAutorizado = async () => ultimo;
@@ -14,6 +14,7 @@ const preparar = async (api, pool, { perfil = 'cafeteria' } = {}) => {
   const adm = await usuario(api, pool, 'adm', 'administrador');
   const gerente = await usuario(api, pool, 'gero', 'gerente');
   const cajero = await usuario(api, pool, 'cami', 'cajero');
+  if (antes) await antes({ adm, gerente, cajero }); // módulos y funciones que el plan de cuentas tiene en cuenta al iniciar
   assert.equal((await api('POST', '/api/modulos/contable/instalar', { token: adm.token })).status, 200);
   const hoy = fechaLocal();
   assert.equal((await api('POST', '/api/contable/config/iniciar', { token: gerente.token, body: { fecha_inicio: hoy, perfil } })).status, 200);

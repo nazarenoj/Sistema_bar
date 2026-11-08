@@ -4,8 +4,8 @@ const { iso, fechaLocal } = require('./comun');
 
 // Contable como receptor de los eventos de los demás módulos (Contable RF03, RN18, RN28, RN30, EX11). Un movimiento con fecha anterior al inicio de la contabilidad (o recibido antes de
 // iniciarla) no se contabiliza: queda en «Movimientos anteriores al inicio». Los demás los toma `gancho.tomar`, que completa el checkpoint de asientos automáticos.
-const TIPOS = ['venta_confirmada', 'venta_regularizada', 'venta_devuelta', 'cierre_turno', 'reapertura_turno', 'comprobante_compra', 'comprobante_compra_anulado', 'orden_pago', 'orden_pago_anulada', 'retencion_sufrida'];
-const MODULO_DE = { venta: 'ventas', cierre: 'financiero', reapertura: 'financiero', comprobante: 'compras', orden: 'compras', retencion: 'compras' };
+const TIPOS = ['venta_confirmada', 'venta_regularizada', 'venta_devuelta', 'cierre_turno', 'reapertura_turno', 'comprobante_compra', 'comprobante_compra_anulado', 'orden_pago', 'orden_pago_anulada', 'retencion_sufrida', 'pasivo_instrumento', 'vencimiento_instrumento', 'comision_liquidada', 'remito_emitido', 'costo_venta', 'merma_produccion'];
+const MODULO_DE = { venta: 'ventas', cierre: 'financiero', reapertura: 'financiero', comprobante: 'compras', orden: 'compras', retencion: 'clientes', pasivo: 'clientes', vencimiento: 'clientes', comision: 'ventas', remito: 'ventas', costo: 'stock', merma: 'stock' };
 
 const fechaDe = (c) => iso(c.fecha ?? c.fecha_emision ?? c.fecha_venta ?? c.fecha_operacion ?? c.cerrado_en ?? (c.fecha_ms ? new Date(Number(c.fecha_ms)) : null)) ?? fechaLocal();
 const gancho = { tomar: null };

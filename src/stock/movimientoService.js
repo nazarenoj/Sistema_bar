@@ -197,6 +197,13 @@ const egresar = async ({ deposito_id, motivo, observacion, lineas }, { userId, m
         movs.push(await registrar(conn, { item: l.item, deposito_id: dep.id, tipo: 'egreso', motivo: m.codigo, cantidad: -a.cantidad, lote_id: a.lote?.id, origen_lote: a.origen, presentacion_id: base.presentacion_id,
           factor_aplicado: base.factor_aplicado, cantidad_presentacion: base.cantidad_presentacion, documento_tipo: 'egreso', documento, user_id: userId, observacion }));
     }
+    // La merma valorizada va a una cuenta de resultado propia (Contable RF20, RN25).
+    if (m.clase_contable === 'merma') {
+      const [[{ v }]] = await conn.query("SELECT COALESCE(SUM(-cantidad * COALESCE(costo_unitario, 0)), 0) AS v FROM stock_movimientos WHERE documento_tipo = 'egreso' AND documento = ?", [documento]);
+      const importe = Math.round(Number(v) * 100) / 100;
+      if (importe > 0) await M.publicar(conn, { origen: 'stock', destino: 'contable', tipo: 'merma_produccion', docTipo: 'egreso', docIdGlobal: documento, userId,
+        contenido: { documento, motivo: m.codigo, importe, fecha_ms: Date.now() } });
+    }
     return { documento, deposito_id: dep.id, motivo: m.codigo, clase_contable: m.clase_contable, movimientos: movs };
   });
 };

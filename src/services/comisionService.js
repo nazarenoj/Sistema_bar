@@ -189,7 +189,8 @@ const liquidar = async ({ tipo, desde, hasta }, { userId } = {}) => {
     const { items, omitidas } = await calcular(conn, desde, hasta);
     if (!items.length) throw invalida('No hay nada para liquidar en ese período.', 409);
     const total = cts(items.reduce((a, i) => a + i.comision, 0)) / 100;
-    const [r] = await conn.query('INSERT INTO comision_liquidaciones (id_global, tipo, desde, hasta, total, creada_por) VALUES (?, ?, ?, ?, ?, ?)', [await idGlobal(), tipo, desde, hasta, total, userId ?? null]);
+    const liqGlobal = await idGlobal();
+    const [r] = await conn.query('INSERT INTO comision_liquidaciones (id_global, tipo, desde, hasta, total, creada_por) VALUES (?, ?, ?, ?, ?, ?)', [liqGlobal, tipo, desde, hasta, total, userId ?? null]);
     id = r.insertId;
     for (const i of items) {
       await conn.query('INSERT INTO comision_items (liquidacion_id, user_id, tipo, venta_id, devolucion_id, regla_id, base, costo, comision, nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -197,7 +198,11 @@ const liquidar = async ({ tipo, desde, hasta }, { userId } = {}) => {
       if (i.tipo === 'venta') await conn.query('INSERT INTO comision_ventas (venta_id, liquidacion_id) VALUES (?, ?)', [i.venta_id, id]);
       else await conn.query('INSERT INTO comision_devoluciones (devolucion_id, liquidacion_id) VALUES (?, ?)', [i.devolucion_id, id]);
     }
+    // La comisión se devenga al liquidarse (Contable RF18, RN23).
+    if (total > 0) await M.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'comision_liquidada', docTipo: 'comision', docIdGlobal: liqGlobal, userId,
+      contenido: { liquidacion_id_global: liqGlobal, total: Math.round(Number(total) * 100) / 100, desde, hasta, fecha_ms: Date.now() } });
     await conn.commit();
+    M.despertar();
     if (omitidas.sin_costo && (await param('comision_respaldo', 'sin_comision')) === 'sin_comision')
       await Notificacion.crear({ modulo: 'ventas', tipo: 'comision_sin_costo', severidad: 'media', roles: ['gerente', 'encargado'], clave: `comision-sin-costo:${id}`,
         mensaje: `${omitidas.sin_costo} venta(s) de la liquidación ${id} no tienen costo: no generaron comisión por margen.` });

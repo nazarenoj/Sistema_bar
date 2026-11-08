@@ -213,6 +213,9 @@ const emitir = async (conn, { tipo, codigo, clienteId = null, importe, ventaId =
   const [r] = await conn.query('INSERT INTO fid_instrumentos (codigo, tipo, cliente_id, importe_inicial, vence_en, instancia, venta_id_global, devolucion_id, nc_id, importe_devuelto, ultima_actividad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [cod, tipo, cliente?.id ?? null, imp, vence, inst, ventaId, devolucionId, ncId, importeDevuelto, hoy()]);
   await conn.query("INSERT INTO fid_instrumento_movs (instrumento_id, movimiento, importe, venta_id_global, id_operacion, motivo, user_id) VALUES (?, 'emision', ?, ?, ?, ?, ?)", [r.insertId, imp, ventaId, idOperacion, motivo, userId]);
+  // La gift card es una deuda hasta su canje (Contable RF25). El vale de una devolución ya nace en la nota de crédito, por su forma de pago, y no se informa dos veces.
+  if (tipo === 'gift_card') await M.publicar(conn, { origen: 'clientes', destino: 'contable', tipo: 'pasivo_instrumento', docTipo: 'instrumento', docIdGlobal: cod,
+    contenido: { tipo, codigo: cod, importe: imp, venta_id_global: ventaId, fecha_ms: Date.now() } });
   return { id: r.insertId, codigo: cod, importe: imp, vence_en: vence };
 };
 const detalleInstrumento = async (i) => ({ id: i.id, codigo: i.codigo, tipo: i.tipo, estado: i.estado, cliente_id: i.cliente_id, importe_inicial: num(i.importe_inicial), saldo: await saldoDe(i.id), vence_en: iso(i.vence_en), instancia: i.instancia, devolucion_id: i.devolucion_id, venta_id_global: i.venta_id_global });

@@ -68,12 +68,14 @@ const lineasDeVenta = async (db, formulario, c, fecha, devolucion) => {
   return out;
 };
 
-const FORMULARIO_DE = { venta_confirmada: 'venta', venta_regularizada: 'venta_regularizada', venta_devuelta: 'nota_credito_venta' };
-const CONSTRUCTORES = {
-  venta_confirmada: (db, c, f) => lineasDeVenta(db, 'venta', c, f, false),
-  venta_regularizada: (db, c, f) => lineasDeVenta(db, 'venta_regularizada', c, f, false),
-  venta_devuelta: (db, c, f) => lineasDeVenta(db, 'nota_credito_venta', c, f, true),
-};
+// Cada tipo de evento que Contable toma: su formulario, el módulo de origen y cómo arma las líneas. `esperar` retiene el evento hasta que su original esté confirmado (RN29) y
+// `reprocesable: false` lo deja fuera del reprocesamiento (un contraasiento no se regenera con las reglas nuevas).
+const EVENTOS = {};
+const registrar = (tipo, def) => { EVENTOS[tipo] = def; };
+
+registrar('venta_confirmada', { formulario: 'venta', modulo: 'ventas', construir: (db, c, f) => lineasDeVenta(db, 'venta', c, f, false) });
+registrar('venta_regularizada', { formulario: 'venta_regularizada', modulo: 'ventas', construir: (db, c, f) => lineasDeVenta(db, 'venta_regularizada', c, f, false) });
+registrar('venta_devuelta', { formulario: 'nota_credito_venta', modulo: 'ventas', construir: (db, c, f) => lineasDeVenta(db, 'nota_credito_venta', c, f, true), esperar: (conn, c) => esperarMensajes(conn, c.venta_id_global, ['venta_confirmada', 'venta_regularizada'], 'la venta de esta devolución') });
 
 // ---- Modo de generación ----
 
@@ -89,20 +91,20 @@ const importeDe = (c) => c.total ?? null;
 
 // RN29: una devolución no se aplica antes que la venta que corrige. Si el mensaje de la venta aún no se confirmó (o quedó rechazado) se reintenta más tarde; si nunca existió (la venta
 // es anterior a la instalación de Contable) se imputa por su propia fecha.
-const esperarOriginal = async (conn, c) => {
-  if (!c.venta_id_global) return;
-  const [msgs] = await conn.query("SELECT estado FROM mensajes_integracion WHERE doc_id_global = ? AND modulo_destino = 'contable' AND tipo IN ('venta_confirmada', 'venta_regularizada')", [c.venta_id_global]);
-  if (msgs.some((m) => m.estado !== 'confirmado')) throw new EsperaOriginal('Espera al original: la venta de esta devolución todavía no se contabilizó.');
+const esperarMensajes = async (conn, docIdGlobal, tipos, que) => {
+  if (!docIdGlobal) return;
+  const [msgs] = await conn.query("SELECT estado FROM mensajes_integracion WHERE doc_id_global = ? AND modulo_destino = 'contable' AND tipo IN (?)", [docIdGlobal, tipos]);
+  if (msgs.some((m) => m.estado !== 'confirmado')) throw new EsperaOriginal(`Espera al original: ${que} todavía no se contabilizó.`);
 };
 
 const aplicar = async (conn, tipo, c, ctx, fecha) => {
-  const formulario = FORMULARIO_DE[tipo];
+  const def = EVENTOS[tipo];
+  const formulario = def.formulario;
   const [[ya]] = await conn.query('SELECT asiento_id FROM con_asiento_origen WHERE id_operacion = ?', [ctx.idOperacion]);
   if (ya) return { asiento_id: ya.asiento_id, ya_procesado: true }; // RN28
-  if (tipo === 'venta_devuelta') await esperarOriginal(conn, c);
-  const constructor = CONSTRUCTORES[tipo];
-  const lineas = Asientos.consolidar(await constructor(conn, c, fecha));
-  const origen = { modulo: 'ventas', tipo_documento: tipo, id_documento: ctx.docIdGlobal, id_operacion: ctx.idOperacion, relacionado: c.venta_id_global ?? null, importe: importeDe(c), contenido: c, tipo_evento: tipo, fecha_documento: fecha, instantanea: ctx.instantanea };
+  if (def.esperar) await def.esperar(conn, c, ctx);
+  const lineas = Asientos.consolidar(await def.construir(conn, c, fecha, ctx));
+  const origen = { modulo: def.modulo, tipo_documento: tipo, id_documento: ctx.docIdGlobal, id_operacion: ctx.idOperacion, relacionado: (def.relacionado ? def.relacionado(c) : c.venta_id_global) ?? null, importe: def.importe ? def.importe(c) : importeDe(c), contenido: c, tipo_evento: tipo, fecha_documento: fecha, instantanea: ctx.instantanea };
   if (!lineas.length) { // por ejemplo una venta toda de gift cards: nada que contabilizar
     return { sin_asiento: true };
   }
@@ -125,12 +127,10 @@ const aplicar = async (conn, tipo, c, ctx, fecha) => {
   return { asiento_id: a.id, numero: a.numero };
 };
 
-const MODULO_DE = { venta: 'ventas', cierre: 'financiero', reapertura: 'financiero', comprobante: 'compras', orden: 'compras', retencion: 'compras' };
-
 // Lo que no se pudo contabilizar queda en Pendientes de imputar (RF15) sin frenar al origen: sin regla se responde Rechazado (RN30) y una devolución que llegó antes que su venta espera (RN29).
 gancho.tomar = async (conn, tipo, c, ctx, fecha) => {
-  const datos = { idOperacion: ctx.idOperacion, modulo: MODULO_DE[tipo.split('_')[0]] ?? 'otro', tipoEvento: tipo, idDocumento: ctx.docIdGlobal, fecha, importe: importeDe(c) };
-  if (!CONSTRUCTORES[tipo]) {
+  const datos = { idOperacion: ctx.idOperacion, modulo: EVENTOS[tipo]?.modulo ?? 'otro', tipoEvento: tipo, idDocumento: ctx.docIdGlobal, fecha, importe: EVENTOS[tipo]?.importe ? EVENTOS[tipo].importe(c) : importeDe(c) };
+  if (!EVENTOS[tipo]) {
     await Pendientes.registrar({ ...datos, motivo: 'sin_regla', detalle: `El evento ${tipo} todavía no tiene reglas.` });
     throw new M.RechazoNegocio(`Sin regla de imputación para el evento ${tipo}.`);
   }
@@ -168,10 +168,12 @@ const reprocesar = async ({ desde, hasta, confirmar = false } = {}, usuarioId = 
       let nuevas = [];
       let falla = null;
       for (const o of origenes) {
-        const construir = CONSTRUCTORES[o.tipo_evento];
-        if (!construir || !o.contenido) { falla = 'sin contenido para reprocesar'; break; }
-        try { nuevas.push(...await construir(conn, JSON.parse(o.contenido), iso(o.fecha_documento))); } catch (err) { if (err instanceof SinRegla) { falla = err.message; break; } throw err; }
+        const def = EVENTOS[o.tipo_evento];
+        if (def && def.reprocesable === false) { falla = null; nuevas = null; break; } // un contraasiento no se regenera
+        if (!def || !o.contenido) { falla = 'sin contenido para reprocesar'; break; }
+        try { nuevas.push(...await def.construir(conn, JSON.parse(o.contenido), iso(o.fecha_documento), { idOperacion: o.id_operacion, docIdGlobal: o.id_documento })); } catch (err) { if (err instanceof SinRegla) { falla = err.message; break; } throw err; }
       }
+      if (nuevas === null) continue;
       if (falla) { sinRegla.push({ asiento: a.numero, motivo: falla }); continue; }
       nuevas = Asientos.consolidar(nuevas);
       const [actuales] = await conn.query('SELECT cuenta_id, debe, haber FROM con_asiento_lineas WHERE asiento_id = ?', [a.id]);
@@ -198,7 +200,7 @@ const modos = async () => {
   const [filas] = await pool.query('SELECT formulario, modo FROM con_modos');
   const m = new Map(filas.map((f) => [f.formulario, f.modo]));
   const activa = await Funciones.estaActiva('CON-ASIENTOS-RESUMIDOS');
-  return { resumidos_activos: activa, formularios: Object.keys(FORMULARIO_DE).map((t) => FORMULARIO_DE[t]).map((id) => ({ formulario: id, nombre: nombreForm(id), modo: m.get(id) ?? 'individual' })) };
+  return { resumidos_activos: activa, formularios: [...new Set(Object.values(EVENTOS).map((e) => e.formulario))].map((id) => ({ formulario: id, nombre: nombreForm(id), modo: m.get(id) ?? 'individual' })) };
 };
 const fijarModo = async (formulario, modo) => {
   if (!Form.porId(formulario)) throw invalida('Formulario desconocido.', 404);
@@ -208,4 +210,4 @@ const fijarModo = async (formulario, modo) => {
   return modos();
 };
 
-module.exports = { aplicar, reprocesar, modos, fijarModo, neto, cobros, SinRegla, FORMULARIO_DE };
+module.exports = { aplicar, reprocesar, modos, fijarModo, neto, cobros, SinRegla, EsperaOriginal, EVENTOS, registrar, linea, resolver, esperarMensajes };

@@ -316,6 +316,7 @@ require('./financiero/plataformaService'); // comisiones y liquidaciones de plat
 require('./ventas_online/conectorService'); // estados hacia la plataforma y comision a Financiero (I11)
 require('./contable/receptor'); // eventos hacia Contable (J1)
 require('./contable/automaticos'); // asientos automaticos (J3)
+require('./contable/conceptos'); // conceptos del rubro (J6)
 require('./ventas_online/gestionService'); // entrega a Ventas y avisos al cliente (I8)
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);

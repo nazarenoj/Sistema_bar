@@ -113,7 +113,7 @@ const sembrar = async (db = pool, vigencia = fechaLocal()) => {
   const disp = new Set(Form.disponibles((m) => modulos.get(m), funciones).map((f) => f.id));
   for (const [form, lado] of [['venta', 'debe'], ['venta_regularizada', 'debe'], ['nota_credito_venta', 'haber']]) {
     if (!disp.has(form)) continue;
-    for (const [componente, mapa, ladoCuenta] of [['ingreso', INGRESO, lado === 'debe' ? 'haber' : 'debe'], ['cobro', COBRO, lado]]) {
+    for (const [componente, mapa, ladoCuenta] of [['ingreso', INGRESO, lado === 'debe' ? 'haber' : 'debe'], ['cobro', form === 'nota_credito_venta' ? { ...COBRO, vale: 'vales' } : COBRO, lado]]) {
       const base = (await db.query("SELECT * FROM con_reglas WHERE formulario = ? AND componente = ? AND criterio = '*' ORDER BY vigencia_desde LIMIT 1", [form, componente]))[0][0];
       if (!base) continue;
       for (const [criterio, claveCuenta] of Object.entries(mapa)) {
@@ -124,6 +124,17 @@ const sembrar = async (db = pool, vigencia = fechaLocal()) => {
         await db.query('INSERT IGNORE INTO con_reglas (formulario, componente, criterio, cuenta_debe_id, cuenta_haber_id, vigencia_desde, activa, predeterminada, actualizada_ms) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?)', [form, componente, criterio, debe, haber, vigencia, Date.now()]);
         nuevas++;
       }
+    }
+  }
+  // La gift card se cobra con la forma de pago de la venta que la vende.
+  if (disp.has('emision_gift_card')) {
+    const base = (await db.query("SELECT * FROM con_reglas WHERE formulario = 'emision_gift_card' AND componente = 'emision' AND criterio = '*' ORDER BY vigencia_desde LIMIT 1"))[0][0];
+    for (const criterio of ['tarjeta_debito', 'tarjeta_credito', 'transferencia', 'cobro_online']) {
+      const [[{ n }]] = await db.query("SELECT COUNT(*) AS n FROM con_reglas WHERE formulario = 'emision_gift_card' AND componente = 'emision' AND criterio = ?", [criterio]);
+      const banco = Number(n) || !base ? null : await Cuentas.porClave('bancos', db);
+      if (!banco) continue;
+      await db.query("INSERT IGNORE INTO con_reglas (formulario, componente, criterio, cuenta_debe_id, cuenta_haber_id, vigencia_desde, activa, predeterminada, actualizada_ms) VALUES ('emision_gift_card', 'emision', ?, ?, ?, ?, 1, 1, ?)", [criterio, banco.id, base.cuenta_haber_id, vigencia, Date.now()]);
+      nuevas++;
     }
   }
   return { nuevas };

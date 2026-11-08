@@ -114,6 +114,10 @@ M.registrarReceptor('stock', 'descuento_stock', async (conn, c, ctx) => {
       origen_costo: conCosto ? 'movimiento_stock' : 'sin_costo', provisorio: conCosto > 0 && (provisorio || !completo), detalle,
     });
   }
+  // El costo de la venta, congelado en este descuento, también lo toma Contable (RF03, RN11); una venta no fiscal pendiente de facturar no se contabiliza (RF26).
+  const costoTotal = Math.round(c.items.reduce((s, it) => s + (lineasCosto.find((l) => l.linea === it.linea)?.costo_unitario ?? 0) * it.cantidad, 0) * 100) / 100;
+  if (costoTotal > 0 && !(c.no_fiscal && (c.doc_tipo ?? 'venta') === 'venta'))
+    await M.publicar(conn, { origen: 'stock', destino: 'contable', tipo: 'costo_venta', docTipo: c.doc_tipo ?? 'venta', docIdGlobal: ctx.docIdGlobal, contenido: { documento: ctx.docIdGlobal, insumos: costoTotal, packaging: 0, total_costo: costoTotal, fecha_ms: Date.now() } });
   // La confirmación viaja a Ventas como mensaje (en la misma transacción), con el costo congelado de cada línea.
   await M.publicar(conn, { origen: 'stock', destino: 'ventas', tipo: 'costo_confirmado', docTipo: c.doc_tipo ?? 'venta', docIdGlobal: ctx.docIdGlobal, contenido: { doc_tipo: c.doc_tipo ?? 'venta', lineas: lineasCosto } });
   return { movimientos: aplicados, lineas: lineasCosto.length };

@@ -164,7 +164,7 @@ test('Contable.RN30/EX02: sin regla de imputación el mensaje se rechaza con su 
 test('Contable.RF26: las ventas no fiscales no se contabilizan hasta regularizarse', async () => {
   const [[{ n }]] = await pool.query("SELECT COUNT(*) n FROM mensajes_integracion WHERE modulo_destino = 'contable' AND tipo = 'venta_confirmada' AND JSON_EXTRACT(contenido, '$.no_fiscal') = true");
   assert.equal(Number(n), 0);
-  assert.deepEqual(Object.keys(Auto.FORMULARIO_DE).sort(), ['venta_confirmada', 'venta_devuelta', 'venta_regularizada']);
+  for (const t of ['venta_confirmada', 'venta_devuelta', 'venta_regularizada']) assert.ok(Auto.EVENTOS[t]);
   // El cobro de una venta regularizada usa las mismas reglas de cobro.
   const c = Auto.cobros([{ metodo_pago: 'efectivo', importe: 100 }, { metodo_pago: 'cuenta_corriente', importe: 50 }], 150);
   assert.deepEqual(c, [{ forma: 'efectivo', importe: 100 }]);

@@ -65,6 +65,9 @@ const emitir = async (d, { userId = null, idSolicitud = null, autorizar = null }
     await Venta.publicarDescuento(conn, { docTipo: 'remito', docIdGlobal: id, items, userId, solicitud: idSolicitud, noFiscal: true, idCompromiso }); // el stock se descuenta con el remito
     if (credito) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'remito_emitido', docTipo: 'remito', docIdGlobal: id, userId, solicitud: idSolicitud,
       contenido: { cliente_id: credito.clienteId, moneda: credito.moneda, importe: credito.importe, remito_id_global: id, fecha: new Date().toISOString().slice(0, 10), reserva_id: credito.reservaId, contingencia: credito.contingencia, concepto: `Remito N° ${numero}` } });
+    // Un remito asignado a una cuenta es deuda, no venta: Contable lo registra contra «Remitos a facturar» (RF24); sin cuenta no se informa (RF26).
+    if (credito && await Funciones.estaActiva('VEN-CC', conn)) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'remito_emitido', docTipo: 'remito', docIdGlobal: id, userId, solicitud: idSolicitud,
+      contenido: { remito_id_global: id, importe: credito.importePesos ?? credito.importe, fecha_ms: Date.now() } });
     await conn.commit();
     Mensajeria.despertar();
     return { id: r.insertId, ...(await obtener(id)) };
