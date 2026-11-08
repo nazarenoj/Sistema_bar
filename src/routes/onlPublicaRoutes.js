@@ -41,7 +41,20 @@ router.get('/paginas/:slug', async (req, res, next) => {
 });
 
 router.get('/catalogo', async (req, res, next) => {
-  try { res.json(await Catalogo.publicados({ q: req.query.q, categoria: req.query.categoria, orden: req.query.orden })); } catch (err) { next(err); }
+  try { res.json(await Catalogo.publicados({ q: req.query.q, categoria: req.query.categoria, orden: req.query.orden, sinAlergenos: String(req.query.sin_alergenos ?? '').split(',').filter(Boolean) })); } catch (err) { next(err); }
+});
+router.get('/catalogo/:id', async (req, res, next) => {
+  try {
+    const d = await Catalogo.detalle(Number(req.params.id));
+    if (!d) return res.status(404).json({ error: 'Artículo no encontrado.', codigo: 'ARTICULO_NO_ENCONTRADO' });
+    res.json(d);
+  } catch (err) { next(err); }
+});
+router.post('/catalogo/:id/seleccion', async (req, res, next) => {
+  try { res.json(await Catalogo.seleccion(Number(req.params.id), req.body?.opciones ?? [])); } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message, ...(err.codigo && { codigo: err.codigo }), ...(err.grupo && { grupo: err.grupo }) });
+    next(err);
+  }
 });
 router.get('/categorias', async (req, res, next) => { try { res.json(await Catalogo.categoriasPublicas()); } catch (err) { next(err); } });
 

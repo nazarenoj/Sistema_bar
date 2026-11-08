@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 const puertos = require('../modulos/puertos');
 const Funciones = require('../funciones/servicio');
+const Alergenos = require('../services/alergenoVentaService');
+const Modificadores = require('../services/modificadorService');
 const { TiendaInvalida } = require('./tiendaService');
 
 // Publicación del catálogo, precios online y disponibilidad (Ventas Online RF02 a RF04, RN03, RN04). Los artículos y sus precios son de Ventas; la tienda elige cuáles publica y cómo,
@@ -153,12 +155,19 @@ const ficha = async (p, { listaId = null, ahora = new Date(), sync } = {}) => {
     ...(sync?.desactualizada && disp !== null && { disponibilidad_no_confirmada: true }),
   };
 };
-const publicados = async ({ q, categoria, orden, listaId, ahora = new Date() } = {}) => {
+const publicados = async ({ q, categoria, orden, listaId, sinAlergenos = [], ahora = new Date() } = {}) => {
   const [filas] = await pool.query(
     `SELECT pub.*, p.nombre, p.tipo, p.agotado, p.agotado_auto, d.cantidad, d.agotado AS agotado_online FROM onl_publicados pub JOIN productos p ON p.id = pub.producto_id LEFT JOIN onl_disponibilidad d ON d.producto_id = pub.producto_id ORDER BY pub.orden, p.nombre`);
   const sync = await estadoSync();
   let lista = [];
-  for (const f of filas) if (visible(f, ahora)) lista.push(await ficha(f, { listaId, ahora, sync }));
+  const conAlergenos = await Funciones.estaActiva('VEN-ALERGENOS');
+  for (const f of filas) {
+    if (!visible(f, ahora)) continue;
+    const x = await ficha(f, { listaId, ahora, sync });
+    if (conAlergenos) { const a = await alergenosDe(f.producto_id); x.alergenos = a.alergenos; x.alergenos_pendientes = a.pendientes; }
+    lista.push(x);
+  }
+  if (sinAlergenos.length) lista = lista.filter((x) => !(x.alergenos ?? []).some((a) => sinAlergenos.includes(a.codigo)) && !x.alergenos_pendientes);
   if (categoria) lista = lista.filter((x) => x.categoria === categoria);
   if (q) { const t = String(q).toLowerCase(); lista = lista.filter((x) => x.titulo.toLowerCase().includes(t) || (x.descripcion ?? '').toLowerCase().includes(t)); }
   if (orden === 'precio') lista.sort((a, b) => a.precio - b.precio); else if (orden === '-precio') lista.sort((a, b) => b.precio - a.precio); else if (orden === 'nombre') lista.sort((a, b) => a.titulo.localeCompare(b.titulo));
@@ -170,4 +179,60 @@ const categoriasPublicas = async (ahora = new Date()) => {
   return [...mapa].map(([nombre, articulos]) => ({ nombre, articulos })).sort((a, b) => a.nombre.localeCompare(b.nombre));
 };
 
-module.exports = { publicar, despublicar, administrar, ajustes, fijarAjustes, precioOnline, fijarDisponibilidad, sincronizar, estadoSync, publicados, categoriasPublicas, ficha, visible };
+// ---- Alérgenos y modificadores (RF05, RF22, RN33) ----
+
+// Alérgenos de un artículo con las opciones elegidas: los del artículo, los de cada opción y los derivados de Stock (Ventas Online RF22, Ventas RN42). Si no se pudieron calcular todos,
+// `pendientes` es verdadero y la tienda no puede afirmar que el artículo está libre de un alérgeno.
+const alergenosDe = async (productoId, opcionIds = []) => {
+  if (!(await Funciones.estaActiva('VEN-ALERGENOS'))) return { aplica: false, alergenos: [], pendientes: false };
+  const l = await Alergenos.calcularLinea(pool, productoId, opcionIds);
+  return { aplica: true, alergenos: l.alergenos.map((a) => ({ codigo: a.codigo, nombre: a.nombre })), pendientes: !!l.pendientes, ...(l.pendientes && { leyenda: Alergenos.LEYENDA_PENDIENTE }) };
+};
+const gruposDe = async (productoId) => {
+  if (!(await Funciones.estaActiva('VEN-MODIF'))) return [];
+  const base = new Set((await alergenosDe(productoId)).alergenos.map((a) => a.codigo));
+  const grupos = [];
+  for (const g of await Modificadores.paraProducto(productoId)) {
+    const opciones = [];
+    for (const o of g.opciones) {
+      const propios = (await alergenosDe(productoId, [o.id])).alergenos.filter((a) => !base.has(a.codigo));
+      opciones.push({ id: o.id, nombre: o.nombre, ajuste_precio: o.ajuste_precio, alergenos: propios });
+    }
+    grupos.push({ id: g.id, nombre: g.nombre, obligatorio: !!g.obligatorio, minimo: g.minimo, maximo: g.maximo, opciones });
+  }
+  return grupos;
+};
+const publicado = async (productoId, ahora = new Date()) => {
+  const [[f]] = await pool.query(
+    `SELECT pub.*, p.nombre, p.tipo, p.agotado, p.agotado_auto, d.cantidad, d.agotado AS agotado_online FROM onl_publicados pub JOIN productos p ON p.id = pub.producto_id LEFT JOIN onl_disponibilidad d ON d.producto_id = pub.producto_id WHERE pub.producto_id = ?`, [productoId]);
+  return f && visible(f, ahora) ? f : null;
+};
+// La ficha completa: datos, precio, disponibilidad, alérgenos y los grupos de opciones con sus ajustes y alérgenos.
+const detalle = async (productoId, { listaId = null, ahora = new Date() } = {}) => {
+  const f = await publicado(productoId, ahora);
+  if (!f) return null;
+  const x = await ficha(f, { listaId, ahora, sync: await estadoSync() });
+  const a = await alergenosDe(productoId);
+  return { ...x, alergenos: a.alergenos, alergenos_pendientes: a.pendientes, ...(a.leyenda && { leyenda_alergenos: a.leyenda }), grupos: await gruposDe(productoId) };
+};
+// Valida la elección de opciones de un artículo antes de agregarlo al carrito (RN33, EX23): un grupo obligatorio incompleto lo impide. Devuelve el precio unitario con los ajustes y los alérgenos.
+const seleccion = async (productoId, opcionIds = [], { listaId = null } = {}) => {
+  const f = await publicado(productoId);
+  if (!f) throw invalida('El artículo no está publicado.', 404, { codigo: 'ARTICULO_NO_PUBLICADO' });
+  if (!Array.isArray(opcionIds) || opcionIds.some((o) => !Number.isInteger(o))) throw invalida('Las opciones son una lista de ids.');
+  let elegidas = [];
+  if (await Funciones.estaActiva('VEN-MODIF')) {
+    try { elegidas = await Modificadores.resolver(pool, productoId, opcionIds); } catch (err) { throw invalida(err.message, 400, { codigo: 'OPCION_INVALIDA' }); }
+    for (const g of (await Modificadores.paraProducto(productoId)).filter((g) => g.obligatorio || g.minimo > 0)) {
+      const n = elegidas.filter((o) => o.grupo_id === g.id).length;
+      if (n < Math.max(g.minimo, g.obligatorio ? 1 : 0)) throw invalida(`Elegí ${Math.max(g.minimo, 1)} opción(es) de "${g.nombre}".`, 400, { codigo: 'GRUPO_INCOMPLETO', grupo: g.nombre });
+    }
+  } else if (opcionIds.length) throw invalida('Este artículo no admite opciones.', 400, { codigo: 'OPCION_INVALIDA' });
+  const precio = await precioOnline(productoId, { listaId });
+  const ajuste = r2(elegidas.reduce((a, o) => a + Number(o.ajuste_precio_aplicado), 0));
+  const al = await alergenosDe(productoId, opcionIds);
+  return { producto_id: productoId, titulo: f.titulo || f.nombre, opciones: elegidas, precio_base: precio.precio, ajuste, precio_unitario: r2(precio.precio + ajuste), lista: precio.lista_id ? { id: precio.lista_id, nombre: precio.lista } : null,
+    alergenos: al.alergenos, alergenos_pendientes: al.pendientes, ...(al.leyenda && { leyenda_alergenos: al.leyenda }) };
+};
+
+module.exports = { alergenosDe, gruposDe, detalle, seleccion, publicado, publicar, despublicar, administrar, ajustes, fijarAjustes, precioOnline, fijarDisponibilidad, sincronizar, estadoSync, publicados, categoriasPublicas, ficha, visible };
