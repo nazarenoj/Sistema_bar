@@ -78,6 +78,7 @@ const conConfigRoutes = require('./routes/conConfigRoutes');
 const conReglasRoutes = require('./routes/conReglasRoutes');
 const conAsientosRoutes = require('./routes/conAsientosRoutes');
 const conPendientesRoutes = require('./routes/conPendientesRoutes');
+const conLibrosRoutes = require('./routes/conLibrosRoutes');
 const finPlataformaRoutes = require('./routes/finPlataformaRoutes');
 const mantenimientoCompras = require('./compras/mantenimientoCompras');
 const correoRoutes = require('./routes/correoRoutes');
@@ -309,6 +310,7 @@ app.use('/api/contable', conConfigRoutes);
 app.use('/api/contable', conReglasRoutes);
 app.use('/api/contable', conAsientosRoutes);
 app.use('/api/contable', conPendientesRoutes);
+app.use('/api/contable', conLibrosRoutes);
 app.use('/api/financiero', finPlataformaRoutes);
 require('./financiero/plataformaService'); // comisiones y liquidaciones de plataformas (I11)
 require('./ventas_online/conectorService'); // estados hacia la plataforma y comision a Financiero (I11)
