@@ -131,7 +131,7 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
       if (!v || rr.fallo) throw invalida('El canje no está disponible. Pagá con otro medio.', 409, { codigo: 'CANJE_NO_DISPONIBLE' });
       if (v.estado === 'saldo_insuficiente') throw invalida(`El saldo disponible es ${v.saldo_actual}: usá ese importe y pagá el resto con otro medio.`, 409, { codigo: 'SALDO_INSUFICIENTE', saldo: v.saldo_actual });
       if (v.estado === 'rechazada') throw invalida(v.motivo, 409, { codigo: 'INSTRUMENTO_RECHAZADO' });
-      canje = { id_retencion: v.id_retencion, importe: imp };
+      canje = { id_retencion: v.id_retencion, importe: imp, codigo: d.canje.codigo ?? null, puntos: !!d.canje.puntos };
       canjeImporte = imp;
     }
     const aPagar = r2(a.total - canjeImporte);

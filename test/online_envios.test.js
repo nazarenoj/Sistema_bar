@@ -146,6 +146,10 @@ test('Ventas Online.RF11: un envio no se despacha sin pago acreditado y el despa
   const sin = await api('POST', `/api/ventas-online/pedidos/${d.json.id}/despachar`, { token: gerente.token });
   assert.equal(sin.status, 409); assert.equal(sin.json.codigo, 'PEDIDO_NO_PAGADO');
   assert.equal((await api('POST', `/api/ventas-online/pedidos/${d.json.id}/aceptar`, { token: gerente.token })).json.estado, 'pagado');
+  const estado = (id, e) => api('POST', `/api/ventas-online/pedidos/${id}/estado`, { token: gerente.token, body: { estado: e } });
+  assert.equal((await api('POST', `/api/ventas-online/pedidos/${d.json.id}/despachar`, { token: gerente.token })).json.codigo, 'ESTADO_INVALIDO'); // antes hay que prepararlo
+  assert.equal((await estado(d.json.id, 'en_preparacion')).status, 200);
+  assert.equal((await estado(d.json.id, 'listo')).status, 200);
   const ok = await api('POST', `/api/ventas-online/pedidos/${d.json.id}/despachar`, { token: gerente.token });
   assert.equal(ok.json.estado, 'despachado');
   const retiro = await pedir(await carrito([{ producto_id: V.id, cantidad: 1 }]), { tipo: 'retiro' });

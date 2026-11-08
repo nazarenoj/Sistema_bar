@@ -33,10 +33,5 @@ router.put('/envios/configuracion', CONFIGURAR, manejar(async (req, res) => {
   res.json(c);
 }));
 router.put('/catalogo/:id/preparacion', CONFIGURAR, manejar(async (req, res) => res.json(await Envios.fijarPreparacion(Number(req.params.id), req.body?.prep_min))));
-router.post('/pedidos/:id/despachar', requierePermiso('ventas_online.envios.despachar'), manejar(async (req, res) => {
-  const r = await Envios.despachar(Number(req.params.id), { userId: req.usuario.sub });
-  await auditar(req, { modulo: 'ventas_online', accion: 'despachar_pedido', entidad: 'onl_pedidos', entidad_id: req.params.id, detalle: 'delivery propio' });
-  res.json(r);
-}));
 
 module.exports = router;

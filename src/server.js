@@ -68,6 +68,7 @@ const onlCatalogoRoutes = require('./routes/onlCatalogoRoutes');
 const onlCuponRoutes = require('./routes/onlCuponRoutes');
 const onlPagoRoutes = require('./routes/onlPagoRoutes');
 const onlEnvioRoutes = require('./routes/onlEnvioRoutes');
+const onlPedidoRoutes = require('./routes/onlPedidoRoutes');
 const mantenimientoCompras = require('./compras/mantenimientoCompras');
 const correoRoutes = require('./routes/correoRoutes');
 const lecturaRoutes = require('./routes/lecturaComprobanteRoutes');
@@ -288,6 +289,8 @@ app.use('/api/ventas-online', onlCatalogoRoutes);
 app.use('/api/ventas-online', onlCuponRoutes);
 app.use('/api/ventas-online', onlPagoRoutes);
 app.use('/api/ventas-online', onlEnvioRoutes);
+app.use('/api/ventas-online', onlPedidoRoutes);
+require('./ventas_online/gestionService'); // entrega a Ventas y avisos al cliente (I8)
 app.use('/api/correo', correoRoutes);
 app.use('/api/lectura-comprobantes', lecturaRoutes.lectura);
 app.use('/api/equivalencias-terceros', lecturaRoutes.equivalencias);

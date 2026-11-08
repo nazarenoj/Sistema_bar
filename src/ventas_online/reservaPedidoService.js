@@ -63,7 +63,8 @@ const confirmarPendientes = async () => {
       await pool.query('INSERT INTO onl_pedido_historial (pedido_id, estado, detalle, ts_ms) VALUES (?, ?, ?, ?)', [p.id, 'reserva_rechazada', 'Stock no pudo confirmar la reserva', Date.now()]);
     } else {
       salida.confirmadas++;
-      await pool.query("UPDATE onl_pedidos SET reserva_estado = ?, reserva_id = ?, reserva_vence_ms = ?, estado = IF(estado = 'reserva_pendiente', 'pagado', estado), updated_ms = ? WHERE id = ?", [r.estado, r.id ?? null, r.vence_ms ?? null, Date.now(), p.id]);
+      await pool.query("UPDATE onl_pedidos SET reserva_estado = ?, reserva_id = ?, reserva_vence_ms = ?, estado = IF(estado = 'reserva_pendiente', 'pagado', estado), pagado_ms = IF(estado = 'reserva_pendiente', ?, pagado_ms), updated_ms = ? WHERE id = ?", [r.estado, r.id ?? null, r.vence_ms ?? null, Date.now(), Date.now(), p.id]);
+      if (p.estado === 'reserva_pendiente') await require('./eventos').pagado(p.id); // con la reserva confirmada recién ahora pasa a Ventas y a la comanda (RN45)
     }
   }
   return salida;

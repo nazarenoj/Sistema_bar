@@ -127,15 +127,13 @@ const cotizar = async ({ entrega = { tipo: 'retiro' }, subtotal, lineas = [], ah
 
 // ---- Despacho ----
 
-// Un envío no sale sin pago acreditado (RF11, RN37): el delivery se despacha y entrega por un usuario con permiso.
-const despachar = async (id, { userId } = {}) => {
+// Un envio no sale sin pago acreditado (RF11, RN37): solo el delivery se despacha. El cambio de estado y el aviso al cliente los hace la gestion de pedidos.
+const verificarDespacho = async (id) => {
   const [[p]] = await pool.query('SELECT * FROM onl_pedidos WHERE id = ?', [id]);
   if (!p) throw invalida('Pedido no encontrado.', 404);
   if (p.entrega_tipo !== 'delivery') throw invalida('Solo el delivery se despacha: el retiro se entrega en barra.', 409);
-  if (!p.pagado_ms || !['pagado', 'en_preparacion', 'listo'].includes(p.estado)) throw invalida(p.pagado_ms ? `El pedido está ${p.estado}.` : 'El pedido no tiene el pago acreditado: no se despacha.', 409, { codigo: 'PEDIDO_NO_PAGADO' });
-  await pool.query("UPDATE onl_pedidos SET estado = 'despachado', updated_ms = ? WHERE id = ?", [Date.now(), id]);
-  await pool.query('INSERT INTO onl_pedido_historial (pedido_id, estado, detalle, user_id, ts_ms) VALUES (?, ?, ?, ?, ?)', [id, 'despachado', 'Salió el delivery', userId ?? null, Date.now()]);
-  return { id, estado: 'despachado' };
+  if (!p.pagado_ms) throw invalida('El pedido no tiene el pago acreditado: no se despacha.', 409, { codigo: 'PEDIDO_NO_PAGADO' });
+  return p;
 };
 
-module.exports = { zonas, guardarZona, configurar, fijarPreparacion, tiempoEstimado, franjas, cotizar, despachar, r2, dia };
+module.exports = { zonas, guardarZona, configurar, fijarPreparacion, tiempoEstimado, franjas, cotizar, verificarDespacho, r2, dia };
