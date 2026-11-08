@@ -31,7 +31,7 @@ const MODULOS = {
   financiero: { nombre: 'Financiero', capa: 2, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/fin[A-Z]/, /^financiero\//, /^models\/fin[A-Z]/] },
   clientes: { nombre: 'Clientes y CC', capa: 3, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/cliente/, /^clientes\//, /^models\/cliente/] }, // Stock es opcional (Clientes RF30)
   compras: { nombre: 'Compras', capa: 3, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/cmp[A-Z]/, /^compras\//, /^models\/cmp[A-Z]/] }, // Stock y Financiero son opcionales
-  contable: { nombre: 'Contable', capa: 4, dependeDe: ['usuarios', 'ventas', 'stock', 'clientes'], archivos: [], noConstruido: true },
+  contable: { nombre: 'Contable', capa: 4, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/con[A-Z]/, /^contable\//, /^models\/con[A-Z]/] }, // Stock, Clientes, Compras y Financiero son opcionales
   ventas_online: { nombre: 'Ventas Online', capa: 4, dependeDe: ['usuarios', 'ventas'], archivos: [/^(controllers|routes)\/onl[A-Z]/, /^ventas_online\//, /^models\/onl[A-Z]/] }, // Stock, Clientes y Financiero son opcionales
 };
 

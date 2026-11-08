@@ -26,7 +26,7 @@ test('Usuarios.RF13: instalar y desinstalar módulos es del Administrador, valid
   assert.equal(r.status, 400);
   assert.match(r.json.error, /stock necesita que esté instalado ventas/);
   assert.equal((await api('POST', '/api/modulos/usuarios/desinstalar', { token })).status, 400);
-  assert.equal((await api('POST', '/api/modulos/contable/instalar', { token })).status, 400); // no disponible
+  assert.equal((await api('POST', '/api/modulos/inexistente/instalar', { token })).status, 400); // no existe
   const despues = (await api('GET', '/api/modulos', { token })).json.modulos.filter((m) => m.instalado).map((m) => m.codigo).sort();
   assert.deepEqual(despues, ['stock', 'usuarios', 'ventas']);
 
