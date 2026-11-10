@@ -221,6 +221,21 @@ test('Ventas Online.RN19: la cuenta corriente solo se ofrece a cuentas vinculada
   assert.equal(sin.status, 409, JSON.stringify(sin.json));
   assert.ok(['CREDITO_BLOQUEADO', 'CREDITO_REQUIERE_AUTORIZACION'].includes(sin.json.codigo), sin.json.codigo);
   assert.equal((await pool.query("SELECT COUNT(*) AS n FROM onl_pedidos WHERE medio_pago = 'cuenta_corriente'"))[0][0].n, 1);
+  // De punta a punta: al aceptar el pedido Ventas registra la venta a cuenta corriente y la reserva de crédito se convierte en deuda de la cuenta.
+  assert.equal((await api('POST', `/api/ventas-online/pedidos/${ok.json.id}/aceptar`, { token: gerente.token })).status, 200);
+  const { esperarMensajes: esperar } = require('./ayudas');
+  await esperar(pool);
+  const [[v]] = await pool.query('SELECT id, id_global, total FROM ventas ORDER BY id DESC LIMIT 1');
+  assert.equal(Number(v.total), 600);
+  assert.equal((await pool.query('SELECT metodo_pago FROM pago_venta WHERE venta_id = ?', [v.id]))[0][0].metodo_pago, 'cuenta_corriente');
+  const [[deuda]] = await pool.query("SELECT importe, estado FROM movimientos_cc WHERE comprobante_ref = ? AND naturaleza = 'debito'", [v.id_global]);
+  assert.equal(Number(deuda.importe), 600);
+  // Cancelar un pedido a cuenta corriente antes de aceptarlo libera su reserva de crédito: se puede volver a pedir hasta el límite.
+  const otro = await conCuenta([{ producto_id: B.id, cantidad: 1 }]); // 300 (el límite de 1000 menos la deuda de 600 deja 400)
+  assert.equal(otro.status, 201, JSON.stringify(otro.json));
+  assert.equal((await conCuenta([{ producto_id: B.id, cantidad: 1 }])).status, 409); // 300 + 600 de deuda + 300 reservados pasa el límite
+  await Checkout.abandonar(otro.json.id, { motivo: 'prueba' });
+  assert.equal((await conCuenta([{ producto_id: B.id, cantidad: 1 }])).status, 201); // la reserva de crédito se liberó
 });
 
 test('Ventas Online.RF24/RN07: el canje de un vale es una forma de pago, puede ser parcial y retiene el saldo (llamada 9)', async () => {

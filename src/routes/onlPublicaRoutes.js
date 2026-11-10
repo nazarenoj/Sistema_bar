@@ -27,7 +27,7 @@ router.use(async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/', async (req, res, next) => { try { await require('../ventas_online/informeService').registrarVisita().catch(() => {}); res.json(await Tienda.publica()); } catch (err) { next(err); } });
+router.get('/', async (req, res, next) => { try { await require('../ventas_online/informeService').registrarVisita(req).catch(() => {}); res.json(await Tienda.publica()); } catch (err) { next(err); } });
 router.get('/paginas/:slug', async (req, res, next) => {
   try {
     const p = await Tienda.paginaPublica(req.params.slug);

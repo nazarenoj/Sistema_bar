@@ -25,18 +25,19 @@ const INFORMES = {
       return (await pool.query(`SELECT FROM_UNIXTIME(p.created_ms / 1000, '%Y-%m-%d') AS dia, COUNT(*) AS pedidos, SUM(p.total) AS total FROM onl_pedidos p WHERE ${[VENDIDOS, ...w].join(' AND ')} GROUP BY dia ORDER BY dia`, par))[0]
         .map((x) => ({ dia: x.dia, pedidos: Number(x.pedidos), total: r2(x.total), ticket: r2(Number(x.total) / Number(x.pedidos)) }));
     } },
-  conversion: { titulo: 'Conversión (visitas, carritos y pedidos)', columnas: [col('dia', 'Día'), col('visitas', 'Visitas', 'numero'), col('carritos', 'Carritos', 'numero'), col('pedidos', 'Pedidos', 'numero'), col('conversion', 'Conversión %', 'numero')],
+  conversion: { titulo: 'Conversión (visitas, carritos y pedidos)', columnas: [col('dia', 'Día'), col('visitas', 'Visitas', 'numero'), col('visitantes', 'Visitantes únicos', 'numero'), col('carritos', 'Carritos', 'numero'), col('pedidos', 'Pedidos', 'numero'), col('conversion', 'Conversión %', 'numero')],
     corrida: async (q) => {
       const { desde, hasta } = rango(q);
       const w = [], par = [];
       if (desde !== null) { w.push('dia >= ?'); par.push(dia(desde)); }
       if (hasta !== null) { w.push('dia <= ?'); par.push(dia(hasta)); }
       const visitas = new Map((await pool.query(`SELECT dia, visitas FROM onl_visitas ${w.length ? `WHERE ${w.join(' AND ')}` : ''}`, par))[0].map((v) => [dia(v.dia instanceof Date ? v.dia.getTime() : new Date(v.dia).getTime()), Number(v.visitas)]));
+      const unicos = new Map((await pool.query(`SELECT dia, COUNT(*) AS n FROM onl_visitantes ${w.length ? `WHERE ${w.join(' AND ')}` : ''} GROUP BY dia`, par))[0].map((v) => [dia(v.dia instanceof Date ? v.dia.getTime() : new Date(v.dia).getTime()), Number(v.n)]));
       const c = donde(q, 'creado_ms'), p = donde(q);
       const carritos = new Map((await pool.query(`SELECT FROM_UNIXTIME(creado_ms / 1000, '%Y-%m-%d') AS d, COUNT(*) AS n FROM onl_carritos ${c.w.length ? `WHERE ${c.w.join(' AND ')}` : ''} GROUP BY d`, c.par))[0].map((x) => [x.d, Number(x.n)]));
       const pedidos = new Map((await pool.query(`SELECT FROM_UNIXTIME(p.created_ms / 1000, '%Y-%m-%d') AS d, COUNT(*) AS n FROM onl_pedidos p WHERE p.origen = 'tienda' ${p.w.length ? `AND ${p.w.join(' AND ')}` : ''} GROUP BY d`, p.par))[0].map((x) => [x.d, Number(x.n)]));
       const dias = [...new Set([...visitas.keys(), ...carritos.keys(), ...pedidos.keys()])].sort();
-      return dias.map((d) => { const v = visitas.get(d) ?? 0, ca = (carritos.get(d) ?? 0) + (pedidos.get(d) ?? 0), pe = pedidos.get(d) ?? 0; return { dia: d, visitas: v, carritos: ca, pedidos: pe, conversion: v ? r2(pe / v * 100) : 0 }; });
+      return dias.map((d) => { const v = visitas.get(d) ?? 0, ca = (carritos.get(d) ?? 0) + (pedidos.get(d) ?? 0), pe = pedidos.get(d) ?? 0; return { dia: d, visitas: v, visitantes: unicos.get(d) ?? 0, carritos: ca, pedidos: pe, conversion: v ? r2(pe / v * 100) : 0 }; });
     } },
   'mas-vendidos': { titulo: 'Artículos más vendidos', columnas: [col('articulo', 'Artículo'), col('cantidad', 'Cantidad', 'numero'), col('importe', 'Importe', 'moneda')],
     corrida: async (q) => {
@@ -65,7 +66,11 @@ const ejecutar = async (tipo, q = {}) => {
   if (inf.funcion && !(await Funciones.estaActiva(inf.funcion))) throw Object.assign(invalida(`Este informe necesita la función ${inf.funcion}.`, 409), { codigo: 'FUNCION_INACTIVA' });
   return { tipo, titulo: inf.titulo, columnas: inf.columnas, filas: await inf.corrida(q) };
 };
-const registrarVisita = () => pool.query('INSERT INTO onl_visitas (dia, visitas) VALUES (CURDATE(), 1) ON DUPLICATE KEY UPDATE visitas = visitas + 1');
+// Cada carga de la portada suma una visita; un visitante (la misma IP y navegador en el día) se cuenta además una sola vez (Ventas Online RF17).
+const registrarVisita = async (req = null) => {
+  await pool.query('INSERT INTO onl_visitas (dia, visitas) VALUES (CURDATE(), 1) ON DUPLICATE KEY UPDATE visitas = visitas + 1');
+  if (req) await pool.query('INSERT IGNORE INTO onl_visitantes (dia, huella) VALUES (CURDATE(), ?)', [require('crypto').createHash('sha256').update(`${req.ip}|${req.get('user-agent') ?? ''}`).digest('hex').slice(0, 16)]);
+};
 
 // ---- Indicadores (RF28) ----
 

@@ -263,6 +263,7 @@ test('Ventas Online.RF17: los informes se filtran y exportan; la conversion usa 
   assert.equal((await inf('ventas', '?desde=hoy')).status, 400);
   const filas = (await inf('conversion')).json.filas;
   assert.equal(filas.find((x) => x.dia === local(Date.now()).slice(0, 10)).visitas, 5);
+  assert.equal(filas.find((x) => x.dia === local(Date.now()).slice(0, 10)).visitantes, 1); // las cinco cargas son del mismo visitante (misma IP y navegador)
   assert.ok(filas.every((x) => x.carritos >= x.pedidos)); // los pedidos de la tienda salen de un carrito; los de plataforma no cuentan
   assert.equal((await inf('mas-vendidos')).json.filas[0].articulo, 'Medialuna');
   const ab = (await inf('carritos-abandonados')).json.filas;
