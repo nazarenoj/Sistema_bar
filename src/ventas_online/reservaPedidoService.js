@@ -21,6 +21,31 @@ const reservar = async ({ lineas, solicitud, reemplazaA = null }) => {
   return { estado: 'confirmada', id: v.id_compromiso, vence_ms: Number(v.vence_ms) };
 };
 
+// Pedidos que reservan stock sin pago aprobado (transferencia con confirmación manual, pago al retirar, efectivo contra entrega): por artículo no pueden reservar más que un porcentaje del disponible
+// (parámetro `online_reserva_sin_pago_pct`, 30 % por defecto), sumando las reservas sin pago vigentes (Ventas Online RN56). Sin Stock no hay reserva ni tope.
+const SIN_PAGO = ['transferencia', 'pago_al_retirar', 'efectivo_contra_entrega'];
+const excedeTopeSinPago = async (lineas, { excluirPedido = null } = {}) => {
+  let puerto;
+  try { puerto = await puertos.obtener('stock'); } catch { return null; }
+  if (!puerto?.disponibleUnidades) return null;
+  const pct = Number((await pool.query("SELECT valor FROM parametros WHERE clave = 'online_reserva_sin_pago_pct'"))[0][0]?.valor ?? 30);
+  if (!(pct > 0 && pct < 100)) return null;
+  const pedidos = new Map();
+  for (const l of lineas) pedidos.set(l.producto_id, (pedidos.get(l.producto_id) ?? 0) + Number(l.cantidad));
+  const exceden = [];
+  for (const [productoId, cantidad] of pedidos) {
+    const disp = await puerto.disponibleUnidades(productoId).catch(() => null);
+    if (!disp || disp.cantidad === null || disp.cantidad === undefined) continue; // no controla stock
+    const [[{ vigente }]] = await pool.query(`SELECT COALESCE(SUM(l.cantidad), 0) AS vigente FROM onl_pedido_lineas l JOIN onl_pedidos p ON p.id = l.pedido_id
+      WHERE l.producto_id = ? AND p.reserva_estado = 'confirmada' AND p.medio_pago IN (?) AND p.pagado_ms IS NULL AND p.estado NOT IN ('cancelado', 'entregado') ${excluirPedido ? 'AND p.id <> ?' : ''}`,
+    excluirPedido ? [productoId, SIN_PAGO, excluirPedido] : [productoId, SIN_PAGO]);
+    const base = Number(disp.cantidad) + Number(vigente); // lo que había antes de las reservas sin pago
+    const tope = Math.floor(base * pct / 100);
+    if (Number(vigente) + cantidad > tope) exceden.push({ producto_id: productoId, pedido: cantidad, reservado_sin_pago: Number(vigente), tope, porcentaje: pct });
+  }
+  return exceden.length ? exceden : null;
+};
+
 const liberar = async (id) => { if (id) await llamar(7, 'ventas_online', async () => (await puertos.obtener('stock')).liberarCompromiso(id)).catch(() => {}); };
 
 // Mientras el cliente sigue en el checkout se renueva la misma reserva, hasta 3 veces (RN07).
@@ -70,4 +95,4 @@ const confirmarPendientes = async () => {
   return salida;
 };
 
-module.exports = { reservar, liberar, renovar, reintentar, marcarVencidas, confirmarPendientes, MAX_RENOVACIONES, idGlobal };
+module.exports = { SIN_PAGO, excedeTopeSinPago, reservar, liberar, renovar, reintentar, marcarVencidas, confirmarPendientes, MAX_RENOVACIONES, idGlobal };

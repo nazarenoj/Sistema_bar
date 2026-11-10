@@ -27,13 +27,12 @@ Resuelto: la constatación del CAE se reintenta sola en el trabajo horario (con 
 
 ## Ventas Online (Fase I)
 
-Resuelto: prueba con dos instancias reales (la tienda de una no ve datos de la otra), promociones automáticas de Ventas en el carrito y el pedido (se muestran junto al ítem, el cupón respeta su acumulabilidad y la venta registra las promociones aplicadas), y el checkout exige DNI por encima del tope de consumidor final. Queda:
+Resuelto: tope de reserva para pedidos sin pago (30 % del disponible por artículo; por encima el pedido queda pendiente de autorización de un supervisor, con motivo, y se cancela como cualquier impago si nadie lo autoriza), prueba con dos instancias reales (la tienda de una no ve datos de la otra), promociones automáticas de Ventas en el carrito y el pedido (se muestran junto al ítem, el cupón respeta su acumulabilidad y la venta registra las promociones aplicadas), y el checkout exige DNI por encima del tope de consumidor final. Queda:
 
 - **Sin pantallas** [decisión: fase aparte]: toda la Fase I está hecha por API; falta el frontend de la tienda y del panel.
 - **Límites por IP** (I1): los contadores están en memoria de este proceso (se pierden al reiniciar); alcanza con una sola app.
 - **Pasarela** (I6) [externo]: Mercado Pago está implementado detrás de una interfaz (Checkout Pro, consulta, reintegros y firma HMAC) y las pruebas usan una pasarela simulada; falta probarlo con las credenciales de prueba reales. Las credenciales se guardan en la base de la instancia sin cifrar.
 - **Promociones** (RF21): las promociones para socios no se aplican en la tienda (haría falta identificar al socio por la cuenta); un cupón no acumulable deja el ítem con su promoción en vez de elegir el menor precio final entre ambos.
-- **Tope por pedidos sin pago** (I5, RN56): no se limita el porcentaje del disponible que pueden reservar los pedidos sin pago aprobado (transferencia, pago al retirar).
 - **Elaborados sin reserva** (I5, RN07): los elaborados de producción en venta se reservan como cualquier ítem con receta que controla stock.
 - **Pesables** (I9): en Ventas viajan como una línea de cantidad 1 por su importe estimado (la cantidad de la línea es entera) y el descuento de Stock usa esa cantidad; el ajuste del descuento al peso real (RN51 j) queda pendiente.
 - **Pago al retirar y efectivo contra entrega** (I8): Ventas registra la venta como cobrada en efectivo al aceptar el pedido, sin pasar por el turno de caja de Financiero.

@@ -118,7 +118,8 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
   const pedirReserva = async () => Reserva.reservar({ lineas: a.calculo.lineas, solicitud: `${solicitud}:reserva:1` });
 
   // 1) Reserva de stock, antes del cobro (RN07). Si no alcanza no se abre el cobro y no queda ninguna reserva (EX27).
-  const rs = await pedirReserva();
+  const excede = Reserva.SIN_PAGO.includes(medio) ? await Reserva.excedeTopeSinPago(a.calculo.lineas) : null;
+  const rs = excede ? { estado: 'sin_reserva', excede } : await pedirReserva(); // por encima del tope no reserva: queda pendiente de autorización de un supervisor (RN56)
   if (rs.estado === 'rechazada') throw invalida('No hay disponible suficiente para algún artículo: ajustá el pedido.', 409, { codigo: 'SIN_DISPONIBLE', detalle: rs.sin_disponible, lote_no_disponible: rs.lote_no_disponible });
   const liberarTodo = async () => { await Reserva.liberar(rs.id); if (canje?.id_retencion) await puertos.obtener('credito').then((p) => p.liberarRetencion?.(canje.id_retencion)).catch(() => {}); };
 
@@ -181,8 +182,8 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
       const [r] = await conn.query(
         `INSERT INTO onl_pedidos (id_global, id_solicitud, estado, cuenta_id, nombre, email, telefono, facturacion, entrega_tipo, entrega_datos, medio_pago, subtotal, descuento, envio, total, canje_importe, a_pagar, cupon_id, cupon_codigo,
            reserva_id, reserva_estado, reserva_vence_ms, credito_reserva_id, retencion_id, canje_datos, config_version, config_instantanea, terminos_ms, observaciones, created_ms, updated_ms)
-         VALUES (?, ?, 'pendiente_pago', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [idG, solicitud, cuenta?.id ?? null, cont.nombre, cont.email, cont.telefono, JSON.stringify(fact), a.entrega.tipo, JSON.stringify(a.entrega.datos ?? {}), medio, a.calculo.subtotal, descuentoPedido, a.envio, a.total, canjeImporte, aPagar, cuponId, a.calculo.cupon?.codigo ?? null,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [idG, solicitud, rs.estado === 'sin_reserva' ? 'pendiente_autorizacion' : 'pendiente_pago', cuenta?.id ?? null, cont.nombre, cont.email, cont.telefono, JSON.stringify(fact), a.entrega.tipo, JSON.stringify(a.entrega.datos ?? {}), medio, a.calculo.subtotal, descuentoPedido, a.envio, a.total, canjeImporte, aPagar, cuponId, a.calculo.cupon?.codigo ?? null,
           rs.id ?? null, rs.estado, rs.vence_ms ?? null, creditoId, canje?.id_retencion ?? null, canje ? JSON.stringify(canje) : null, cfg.version, JSON.stringify(activas), ahora, d.observaciones ? String(d.observaciones).slice(0, 255) : null, ahora, ahora]);
       const inicioDia = new Date(); inicioDia.setHours(0, 0, 0, 0);
       const [[{ hoyN }]] = await conn.query('SELECT COUNT(*) AS hoyN FROM onl_pedidos WHERE created_ms >= ?', [inicioDia.getTime()]);
@@ -192,10 +193,10 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
       const [pes] = await conn.query("UPDATE onl_pedido_lineas l JOIN productos pr ON pr.id = l.producto_id SET l.es_pesable = 1, l.peso_min = pr.peso_minimo, l.peso_max = pr.peso_maximo, l.pesaje_estado = 'pendiente' WHERE l.pedido_id = ? AND pr.tipo = 'pesable'", [r.insertId]);
       if (pes.affectedRows) await conn.query("UPDATE onl_pedidos SET tiene_pesables = 1, pesaje_estado = 'pendiente' WHERE id = ?", [r.insertId]);
       if (cuponId) await Cupones.consumir(conn, cuponId, { quien, pedidoId: idG, importe: descuento });
-      await historial(conn, r.insertId, 'pendiente_pago', rs.estado === 'pendiente' ? 'Stock no respondió: reserva pendiente de confirmación' : null);
+      await historial(conn, r.insertId, rs.estado === 'sin_reserva' ? 'pendiente_autorizacion' : 'pendiente_pago', rs.estado === 'pendiente' ? 'Stock no respondió: reserva pendiente de confirmación' : rs.estado === 'sin_reserva' ? 'Supera el tope de reserva sin pago: necesita la autorización de un supervisor' : null);
       await conn.query('DELETE FROM onl_carritos WHERE token = ?', [token]);
       await conn.commit();
-      return { ...(await vista(r.insertId)), repetido: false, ...(rs.estado === 'pendiente' && { aviso: 'La disponibilidad se confirma en cuanto Stock responda.' }) };
+      return { ...(await vista(r.insertId)), repetido: false, ...(rs.estado === 'pendiente' && { aviso: 'La disponibilidad se confirma en cuanto Stock responda.' }), ...(rs.estado === 'sin_reserva' && { aviso: 'El pedido supera lo que se puede reservar sin pago: queda pendiente de autorización del comercio.', excede: rs.excede }) };
     } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
   } catch (err) {
     await liberarTodo();
@@ -231,7 +232,7 @@ const abandonar = async (id, { motivo = 'Abandonado por el cliente' } = {}) => {
     await conn.beginTransaction();
     [[p]] = await conn.query('SELECT * FROM onl_pedidos WHERE id = ? FOR UPDATE', [id]);
     if (!p) throw invalida('Pedido no encontrado.', 404);
-    if (p.estado !== 'pendiente_pago') throw invalida(`Un pedido ${p.estado} no se abandona.`, 409);
+    if (!['pendiente_pago', 'pendiente_autorizacion'].includes(p.estado)) throw invalida(`Un pedido ${p.estado} no se abandona.`, 409);
     await conn.query("UPDATE onl_pedidos SET estado = 'cancelado', reserva_estado = IF(reserva_estado = 'confirmada', 'liberada', reserva_estado), motivo_cancelacion = ?, updated_ms = ? WHERE id = ?", [motivo, Date.now(), id]);
     if (p.cupon_id) await Cupones.reponer(conn, p.cupon_id, p.id_global);
     await historial(conn, id, 'cancelado', motivo);
@@ -244,13 +245,32 @@ const abandonar = async (id, { motivo = 'Abandonado por el cliente' } = {}) => {
   return vista(id);
 };
 
+// Un supervisor autoriza la reserva de un pedido que superaba el tope sin pago, con motivo (RN56): se reserva y el pedido sigue como cualquier otro pendiente de pago.
+const autorizarReserva = async (id, { motivo, userId }) => {
+  if (typeof motivo !== 'string' || motivo.trim().length < 3) throw invalida('La autorización pide un motivo.');
+  const [[p]] = await pool.query('SELECT * FROM onl_pedidos WHERE id = ?', [id]);
+  if (!p) throw invalida('Pedido no encontrado.', 404);
+  if (p.estado !== 'pendiente_autorizacion') throw invalida(`El pedido está ${p.estado}: no necesita autorización.`, 409, { codigo: 'NO_PENDIENTE_AUTORIZACION' });
+  const [lineas] = await pool.query('SELECT producto_id, cantidad FROM onl_pedido_lineas WHERE pedido_id = ?', [id]);
+  const r = await Reserva.reservar({ lineas, solicitud: `${p.id_global}:reserva:autorizada` });
+  if (r.estado === 'rechazada') throw invalida('Ya no hay disponible suficiente para reservar este pedido.', 409, { codigo: 'SIN_DISPONIBLE', detalle: r.sin_disponible });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query("UPDATE onl_pedidos SET estado = 'pendiente_pago', reserva_id = ?, reserva_estado = ?, reserva_vence_ms = ?, updated_ms = ? WHERE id = ?", [r.id ?? null, r.estado, r.vence_ms ?? null, Date.now(), id]);
+    await historial(conn, id, 'pendiente_pago', `Reserva autorizada por el comercio: ${motivo.trim()}`);
+    await conn.commit();
+  } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+  return vista(id);
+};
+
 // Los impagos se cancelan pasadas N horas (RN06) y liberan todo lo que reservaron.
 const cancelarImpagos = async () => {
   const [[t]] = await pool.query('SELECT impagos_horas FROM onl_tienda WHERE id = 1');
-  const [ids] = await pool.query("SELECT id FROM onl_pedidos WHERE estado = 'pendiente_pago' AND created_ms < ?", [Date.now() - t.impagos_horas * 3600000]);
+  const [ids] = await pool.query("SELECT id FROM onl_pedidos WHERE estado IN ('pendiente_pago', 'pendiente_autorizacion') AND created_ms < ?", [Date.now() - t.impagos_horas * 3600000]);
   let n = 0;
   for (const { id } of ids) { await abandonar(id, { motivo: `Sin pago pasadas ${t.impagos_horas} horas` }).then(() => n++).catch(() => {}); }
   return n;
 };
 
-module.exports = { resumen, confirmar, obtener, renovarReserva, abandonar, cancelarImpagos, vista, historial, MEDIOS, FUNCIONES_PEDIDO };
+module.exports = { resumen, confirmar, obtener, renovarReserva, abandonar, autorizarReserva, cancelarImpagos, vista, historial, MEDIOS, FUNCIONES_PEDIDO };

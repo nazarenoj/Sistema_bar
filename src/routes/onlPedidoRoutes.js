@@ -21,6 +21,12 @@ router.get('/pedidos', VER, manejar(async (req, res) => { await Gestion.sincroni
 router.get('/preparacion', VER, manejar(async (req, res) => res.json(await Gestion.preparacion())));
 router.post('/pedidos/sincronizar-cocina', GESTIONAR, manejar(async (req, res) => res.json(await Gestion.sincronizarCocina())));
 router.post('/pedidos/entregar-pendientes', GESTIONAR, manejar(async (req, res) => res.json(await Gestion.entregarPendientes())));
+// Autorizar la reserva de un pedido que superó el tope sin pago (RN56): un supervisor, con motivo.
+router.post('/pedidos/:id/autorizar-reserva', requierePermiso('ventas_online.pedidos.autorizar_reserva'), manejar(async (req, res) => {
+  const p = await require('../ventas_online/checkoutService').autorizarReserva(Number(req.params.id), { motivo: req.body?.motivo, userId: req.usuario.sub });
+  await auditar(req, { modulo: 'ventas_online', accion: 'autorizar_reserva', entidad: 'onl_pedidos', entidad_id: req.params.id, detalle: req.body.motivo });
+  res.json(p);
+}));
 router.get('/pedidos/:id', VER, manejar(async (req, res) => { await Gestion.sincronizarCocina().catch(() => {}); res.json(await Gestion.detalle(Number(req.params.id))); }));
 router.post('/pedidos/:id/estado', GESTIONAR, manejar(async (req, res) => {
   const p = await Gestion.cambiarEstado(Number(req.params.id), req.body?.estado, { userId: req.usuario.sub, motivo: req.body?.motivo });

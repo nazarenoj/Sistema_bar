@@ -17,6 +17,7 @@ const T = '/tienda/cafe-ges';
 before(async () => {
   ({ api, pool, cerrar } = await iniciarApp());
   simularArca();
+  await pool.query("UPDATE parametros SET valor = '100' WHERE clave = 'online_reserva_sin_pago_pct'"); // 100 = sin tope de reserva para pedidos sin pago (RN56): estas pruebas son del flujo de gestión
   Pasarela.usarProveedor({ nombre: 'mercadopago', crearCobro: async () => ({ preferencia_id: 'P', url: 'https://x' }), obtenerPago: async (id) => ({ ...pagos.get(String(id)), id: String(id) }), buscarPagos: async () => [], reintegrar: async () => ({ id: 'R', estado: 'approved' }), verificarFirma: async () => true });
   adm = await usuario(api, pool, 'adm', 'administrador');
   gerente = await usuario(api, pool, 'gero', 'gerente');
