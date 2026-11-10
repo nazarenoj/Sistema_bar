@@ -12,11 +12,12 @@ const consolidar = (lineas) => {
   const m = new Map();
   for (const l of lineas) {
     const k = `${l.cuenta_id}:${cts(l.debe) > 0 ? 'D' : 'H'}`;
-    const e = m.get(k) ?? { cuenta_id: l.cuenta_id, debe: 0, haber: 0, detalle: l.detalle ?? null };
+    const e = m.get(k) ?? { cuenta_id: l.cuenta_id, debe: 0, haber: 0, detalle: l.detalle ?? null, divisa: 0, cotizacion: null };
     e.debe += cts(l.debe); e.haber += cts(l.haber);
+    if (l.importe_divisa) { e.divisa += Math.round(Number(l.importe_divisa) * 10000); e.cotizacion = l.cotizacion ?? e.cotizacion; }
     m.set(k, e);
   }
-  return [...m.values()].map((l) => ({ cuenta_id: l.cuenta_id, debe: l.debe / 100, haber: l.haber / 100, detalle: l.detalle }));
+  return [...m.values()].map((l) => ({ cuenta_id: l.cuenta_id, debe: l.debe / 100, haber: l.haber / 100, detalle: l.detalle, ...(l.divisa && { importe_divisa: l.divisa / 10000, cotizacion: l.cotizacion }) }));
 };
 
 // EX01: un asiento desbalanceado no se guarda y se informa la diferencia.

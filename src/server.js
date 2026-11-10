@@ -324,6 +324,7 @@ require('./ventas_online/conectorService'); // estados hacia la plataforma y com
 require('./contable/receptor'); // eventos hacia Contable (J1)
 require('./contable/automaticos'); // asientos automaticos (J3)
 require('./contable/conceptos'); // conceptos del rubro (J6)
+require('./contable/divisas'); // cuentas y operaciones en moneda extranjera
 require('./contable/consolidacion'); // paquete y balance consolidado (J9)
 for (const f of ['financiero', 'stock', 'clientes', 'compras', 'services']) require(`./${f}/consultasContable`); // consultas hacia Contable (J7, llamada n.º 18)
 require('./ventas_online/gestionService'); // entrega a Ventas y avisos al cliente (I8)

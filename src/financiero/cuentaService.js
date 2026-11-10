@@ -87,6 +87,12 @@ const crear = async (d) => {
       `INSERT INTO fin_cuentas (id_global, tipo, nombre, moneda, saldo_inicial, cbu_alias, limite_descubierto, fondo_cambio, tope_efectivo, terminal_id, cierre_ciego)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [await idGlobal(), v.tipo, v.nombre, v.moneda, v.saldoInicial, v.cbu, v.descubierto, ES_CAJA(v.tipo) ? v.fondo : 0, ES_CAJA(v.tipo) ? v.tope : null, v.terminalId, v.ciego]);
+    // Una caja o cuenta en divisa tiene su propia cuenta contable (Contable RN10): se informa el alta para que se cree.
+    if (v.moneda !== 'ARS') {
+      const [[c]] = await pool.query('SELECT id_global, nombre, tipo, moneda FROM fin_cuentas WHERE id = ?', [r.insertId]);
+      const cx = await pool.getConnection();
+      try { await cx.beginTransaction(); await require('./aContable').publicar(cx, 'cuenta_divisa', 'cuenta', c.id_global, { id_global: c.id_global, nombre: c.nombre, tipo: c.tipo, moneda: c.moneda }); await cx.commit(); } catch { await cx.rollback().catch(() => {}); } finally { cx.release(); }
+    }
     return obtener(r.insertId, { conSaldo: true });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') throw invalida(`Ya existe una caja o cuenta con el nombre "${v.nombre}".`, 409);

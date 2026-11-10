@@ -35,6 +35,7 @@ const ejecutar = async ({ usuarioId = null } = {}) => {
     const diferencia = r2(contable - modulo);
     salida.push({ id: c.id, nombre: c.nombre, estado: Math.abs(diferencia) <= TOLERANCIA ? 'ok' : 'diferencia', saldo_contable: contable, saldo_modulo: modulo, diferencia });
   }
+  salida.push(...await require('./divisas').controlDivisas()); // cajas y cuentas en divisa
   const conDiferencias = salida.filter((s) => s.estado === 'diferencia').length;
   const [r] = await pool.query('INSERT INTO con_controles (ms, usuario_id, con_diferencias, resultado) VALUES (?, ?, ?, ?)', [Date.now(), usuarioId, conDiferencias, JSON.stringify(salida)]);
   return { id: r.insertId, controles: salida, con_diferencias: conDiferencias, no_disponibles: salida.filter((s) => s.estado === 'no_disponible').length, bloquea_cierre: conDiferencias > 0 && !!(await pool.query('SELECT bloquear_cierre_controles AS b FROM con_config WHERE id = 1'))[0][0].b };

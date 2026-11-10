@@ -4,6 +4,7 @@ const Monedas = require('../servicios/monedaService');
 const { idGlobal } = require('../utils/idGlobal');
 const Cuentas = require('./cuentaService');
 const { invalida, r2, movimiento } = require('./comun');
+const Contable = require('./aContable');
 
 // Compra y venta de moneda extranjera entre una caja en pesos y otra en divisa (Financiero RF05, RN09, RF15, EX10), con la cotización pactada. La cotización se guarda tal cual en los
 // dos movimientos. Si se aparta más de X% de la vigente (parametrizable) pide autorización. El resultado por diferencia de cambio queda aparte, sin mover dinero.
@@ -57,6 +58,10 @@ const operar = async (d, { userId, autorizar }) => {
       `INSERT INTO fin_operaciones_divisa (id_global, tipo, origen_id, destino_id, moneda, importe_divisa, cotizacion, cotizacion_vigente, importe_pesos, resultado_cambio, mov_origen_id, mov_destino_id, autorizante_id, motivo, user_id, ts_ms)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [await idGlobal(), d.tipo, d.tipo === 'compra' ? cPesos.id : cDivisa.id, d.tipo === 'compra' ? cDivisa.id : cPesos.id, cDivisa.moneda, divisa, cot, referencia, pesos, resultado, d.tipo === 'compra' ? idP : idD, d.tipo === 'compra' ? idD : idP, autorizante, d.motivo.trim().slice(0, 255), userId ?? null, Date.now()]);
+    // Contable (RN10): la cuenta en divisa sube o baja con su importe en divisa y su cotización; la diferencia de cambio de una venta sale de comparar con su costo.
+    const idOp = (await conn.query('SELECT id_global FROM fin_operaciones_divisa WHERE id = ?', [r.insertId]))[0][0].id_global;
+    await Contable.publicar(conn, 'operacion_divisa', 'operacion_divisa', idOp, { operacion_id_global: idOp, tipo: d.tipo, moneda: cDivisa.moneda, importe_divisa: divisa, cotizacion: cot, importe_pesos: pesos,
+      medio: Contable.claseDe(cPesos.tipo), cuenta_divisa: { id_global: cDivisa.id_global, nombre: cDivisa.nombre, tipo: cDivisa.tipo, moneda: cDivisa.moneda } }, { userId });
     await conn.commit();
     return { id: r.insertId, tipo: d.tipo, moneda: cDivisa.moneda, importe_divisa: divisa, cotizacion: cot, cotizacion_vigente: referencia, importe_pesos: pesos, resultado_cambio: resultado, autorizado: !!autorizante, ...(aviso && { aviso }) };
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }

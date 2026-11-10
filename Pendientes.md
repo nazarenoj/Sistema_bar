@@ -12,7 +12,7 @@ Lista de lo que quedó diferido o limitado al cerrar las Fases G (Financiero) y 
 ## Financiero (Fase G)
 
 - **RF24 (pasarelas y plataformas de cobro)**: resuelto en la Fase I (Ventas Online): comisiones, liquidaciones y diferencias de conciliación, que además llegan a Contable.
-- **Operaciones de divisa**: ver Contable (cuentas en divisa).
+- **Operaciones de divisa**: resuelto, llegan a Contable (compra, venta y diferencia de cambio).
 
 ## Compras (Fase H)
 
@@ -49,9 +49,8 @@ Todo Contable (J1 a J9) está por API; **no hay pantallas**. Lo que sigue quedó
 
 ### Fuentes que todavía no publican a Contable
 
-Resueltos: recibos de cuenta corriente, gastos y su anulación, pago de comisiones, transferencias entre caja y banco, liquidaciones de tarjeta, comisión y liquidación de plataformas con su diferencia de conciliación, factura y anulación de remitos, vencimiento de gift cards y vales, producción valorizada, egresos de stock «otra», packaging en el costo de ventas, costo de una venta no fiscal al regularizarse, mercadería e insumos de las compras, medios de pago de las órdenes, compras en moneda extranjera y canje por vale o gift card. Queda:
+Resueltos: operaciones y cuentas en divisa (una cuenta contable por cada caja o cuenta en moneda extranjera de Financiero, con importe en divisa y cotización, apertura, control cruzado y revaluación), recibos de cuenta corriente, gastos y su anulación, pago de comisiones, transferencias entre caja y banco, liquidaciones de tarjeta, comisión y liquidación de plataformas con su diferencia de conciliación, factura y anulación de remitos, vencimiento de gift cards y vales, producción valorizada, egresos de stock «otra», packaging en el costo de ventas, costo de una venta no fiscal al regularizarse, mercadería e insumos de las compras, medios de pago de las órdenes, compras en moneda extranjera y canje por vale o gift card. Queda:
 
-- **Operaciones de divisa** (compra y venta de moneda de Financiero) y **cuentas en divisa**: el plan no tiene cuentas de caja o banco en moneda extranjera por clave; hace falta decidir cómo se modelan (ver Dudas).
 - **Cheques rechazados y gastos bancarios** de Financiero: no se informan a Contable.
 - **Ingresos de stock** con motivo «otra» (ajustes positivos): no se informan; solo los egresos.
 - **Órdenes de pago en moneda extranjera**: el evento no trae cotización; se imputan como pesos.
@@ -63,8 +62,8 @@ Resueltos: recibos de cuenta corriente, gastos y su anulación, pago de comision
 Resueltos: conflicto de idempotencia (EX18), plazo de conservación informado (los libros nunca se purgan), adjuntos de asientos manuales, recurrentes y escalada al Administrador por un trabajo horario, confirmación al anular un resumido, propuesta de inicio (primer día del período abierto más cercano), revaluación propuesta al cerrar un período, historial de controles, plantilla también para el plan de cuentas, y actualización del plan y las reglas cuando se instala un módulo después (`POST /api/contable/plan/actualizar`). Por especificación no hay reapertura de un ejercicio cerrado (Contable RN12). Queda:
 
 - **Cierre de ejercicio**: el ejercicio siguiente es de año calendario (se crea solo si no existe).
-- **Revaluación**: solo revalúa cuentas con importe en divisa cargado a mano (ningún flujo automático lo trae todavía) y se registra a pedido; si falta la cotización de cierre el cierre del período no se bloquea.
-- **Controles cruzados**: no comparan cuentas en moneda extranjera; el de existencias compara el total, no por depósito.
+- **Revaluación**: revalúa las cuentas en divisa de Financiero y las que tengan importe en divisa cargado a mano; se registra a pedido; si falta la cotización de cierre el cierre del período no se bloquea.
+- **Controles cruzados**: el de existencias compara el total, no por depósito. Los movimientos de Financiero en divisa que no son compra o venta de moneda (gastos o cobros en dólares) no se informan a Contable.
 
 ### Consolidación (J9)
 

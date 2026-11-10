@@ -10,7 +10,10 @@ Consultas.registrar('financiero', 'saldos', async () => {
     LEFT JOIN (SELECT cuenta_id, SUM(importe) AS total FROM fin_movimientos GROUP BY cuenta_id) s ON s.cuenta_id = c.id`);
   let caja = 0, bancos = 0, otras = 0;
   for (const f of filas) { if (f.moneda !== 'ARS') { otras++; continue; } if (CAJAS.includes(f.tipo)) caja += Number(f.saldo); else bancos += Number(f.saldo); }
-  return { caja: r2(caja), bancos: r2(bancos), total: r2(caja + bancos), cuentas_en_otras_monedas: otras };
+  const [divisas] = await pool.query(`SELECT c.id_global, c.nombre, c.tipo, c.moneda, c.saldo_inicial + COALESCE(s.total, 0) AS saldo FROM fin_cuentas c
+    LEFT JOIN (SELECT cuenta_id, SUM(importe) AS total FROM fin_movimientos GROUP BY cuenta_id) s ON s.cuenta_id = c.id WHERE c.moneda <> 'ARS'`);
+  return { caja: r2(caja), bancos: r2(bancos), total: r2(caja + bancos), cuentas_en_otras_monedas: otras,
+    divisas: divisas.map((d) => ({ id_global: d.id_global, nombre: d.nombre, tipo: d.tipo, moneda: d.moneda, saldo_divisa: r2(d.saldo) })) };
 });
 
 Consultas.registrar('financiero', 'documento', async ({ tipo, id }) => {

@@ -26,7 +26,17 @@ const propuesta = async () => {
     await procesar(r.valor);
     fuentes.push({ modulo, estado: 'ok' });
   };
-  await fuente('financiero', 'saldos', async (v) => { await agregar('caja', v.caja, 'debe', 'financiero', 'Cajas'); await agregar('bancos', v.bancos, 'debe', 'financiero', 'Bancos y billeteras'); });
+  await fuente('financiero', 'saldos', async (v) => {
+    await agregar('caja', v.caja, 'debe', 'financiero', 'Cajas'); await agregar('bancos', v.bancos, 'debe', 'financiero', 'Bancos y billeteras');
+    // Las cajas y cuentas en divisa entran a la cotización de hoy (comprador), con su importe en divisa (RN10).
+    for (const d of v.divisas ?? []) {
+      if (!(d.saldo_divisa > 0)) continue;
+      const cuenta = await require('./divisas').asegurarCuenta(pool, d);
+      const cot = await require('../servicios/monedaService').vigente(d.moneda).catch(() => null);
+      if (!cot) { fuentes.push({ modulo: 'financiero', estado: 'sin_cotizacion', motivo: `Falta la cotización de ${d.moneda} para valuar ${d.nombre}.` }); continue; }
+      lineas.push({ cuenta_id: cuenta.id, codigo: cuenta.codigo, nombre: cuenta.nombre, debe: r2(d.saldo_divisa * cot.comprador), haber: 0, importe_divisa: d.saldo_divisa, cotizacion: cot.comprador, origen: 'financiero', nota: `${d.saldo_divisa} ${d.moneda}` });
+    }
+  });
   await fuente('stock', 'inventario', async (v) => agregar('insumos', v.total, 'debe', 'stock', 'Existencias valorizadas'));
   await fuente('clientes', 'deudores', async (v) => agregar('deudores', v.total, 'debe', 'clientes', 'Saldo de deudores'));
   await fuente('clientes', 'instrumentos', async (v) => { await agregar('gift_cards', v.gift_cards, 'haber', 'clientes', 'Gift cards vigentes'); await agregar('vales', v.vales, 'haber', 'clientes', 'Vales vigentes'); }, { funcion: 'CLI-FIDEL' });
@@ -46,7 +56,7 @@ const registrar = async ({ lineas, leyenda } = {}, usuarioId, idSolicitud = null
     const [[cfg]] = await conn.query('SELECT fecha_inicio, asiento_apertura_id FROM con_config WHERE id = 1 FOR UPDATE');
     if (!cfg.fecha_inicio) throw invalida('Todavía no se inició la contabilidad.', 409, { codigo: 'SIN_INICIO' });
     if (cfg.asiento_apertura_id) throw invalida('Ya hay un asiento de apertura. Corregí con un asiento manual de ajuste.', 409, { codigo: 'APERTURA_REGISTRADA' }); // EX12
-    const limpias = (lineas ?? []).map((l) => ({ cuenta_id: Number(l.cuenta_id), debe: Number(l.debe ?? 0), haber: Number(l.haber ?? 0), detalle: l.nota ?? l.detalle ?? null }));
+    const limpias = (lineas ?? []).map((l) => ({ cuenta_id: Number(l.cuenta_id), debe: Number(l.debe ?? 0), haber: Number(l.haber ?? 0), detalle: l.nota ?? l.detalle ?? null, importe_divisa: l.importe_divisa ?? null, cotizacion: l.cotizacion ?? null }));
     const a = await Asientos.crear(conn, { fecha: iso(cfg.fecha_inicio), tipo: 'apertura', leyenda: String(leyenda ?? 'Asiento de apertura').slice(0, 200), lineas: limpias, usuarioId, idSolicitud, exacto: true });
     await conn.query('UPDATE con_config SET asiento_apertura_id = ? WHERE id = 1', [a.id]);
     await conn.commit();
