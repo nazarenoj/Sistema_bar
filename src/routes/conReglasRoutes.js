@@ -20,7 +20,7 @@ router.get('/periodos/:id/historial', VER, manejar(async (req, res) => res.json(
 // Aceptar pendientes al cerrar exige además el permiso de aceptarlos (con la autorización de un supervisor, RN08).
 const ACEPTAR = requierePermiso('contable.pendientes.aceptar');
 router.post('/periodos/:id/cerrar', CERRAR, (req, res, next) => (req.body?.aceptar?.length ? ACEPTAR(req, res, next) : next()), manejar(async (req, res) => {
-  const r = await Periodos.cerrar(Number(req.params.id), req.usuario.sub, { aceptar: req.body?.aceptar });
+  const r = await Periodos.cerrar(Number(req.params.id), req.usuario.sub, { aceptar: req.body?.aceptar, sinRevaluar: !!req.body?.sin_revaluar });
   await aud(req, 'cerrar_periodo', 'periodo', r.id, `${r.anio}-${r.mes}${req.body?.aceptar?.length ? ` con ${req.body.aceptar.length} pendiente(s) aceptado(s)` : ''}`);
   res.json(r);
 }));

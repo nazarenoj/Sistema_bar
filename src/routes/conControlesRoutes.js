@@ -14,6 +14,8 @@ const VER = requierePermiso('contable.ver'), EJECUTAR = requierePermiso('contabl
 const aud = (req, accion, entidad, id, detalle) => auditar(req, { modulo: 'contable', accion, entidad, entidad_id: id, detalle });
 
 router.get('/controles', VER, manejar(async (req, res) => res.json(await Controles.ultimo() ?? { controles: [] })));
+router.get('/controles/historial', VER, manejar(async (req, res) => res.json(await Controles.historial(req.query))));
+router.get('/controles/:id', VER, manejar(async (req, res) => res.json(await Controles.ejecucion(Number(req.params.id)))));
 router.post('/controles/ejecutar', EJECUTAR, manejar(async (req, res) => {
   const r = await Controles.ejecutar({ usuarioId: req.usuario.sub });
   await aud(req, 'controles_cruzados', 'control', r.id, `${r.con_diferencias} diferencia(s)`);

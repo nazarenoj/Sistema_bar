@@ -165,6 +165,7 @@ const PERMISOS = [
   { id: 'contable.plantillas.editar', modulo: 'contable', funcion: 'CON-EXPORT-PLANTILLAS', descripcion: 'Crear y editar las plantillas de exportacion al estudio contable' },
   { id: 'contable.pendientes.aceptar', modulo: 'contable', descripcion: 'Aceptar pendientes de imputar al cerrar un periodo (con motivo y autorizacion de un supervisor)' },
   { id: 'contable.consolidacion.configurar', modulo: 'contable', funcion: 'CON-CONSOL', descripcion: 'Definir las equivalencias de cuentas de cada sucursal con la Casa Central' },
+  { id: 'contable.plan.actualizar', modulo: 'contable', descripcion: 'Sumar al plan de cuentas y a las reglas lo de los modulos instalados despues de iniciar' },
   { id: 'integracion.pendientes.descartar', modulo: 'usuarios', descripcion: 'Descartar mensajes con motivo (con autorización de un supervisor)' },
   { id: 'integracion.conciliar', modulo: 'usuarios', descripcion: 'Ejecutar la conciliación de integración bajo demanda' },
   { id: 'auditoria.exportar', modulo: 'usuarios', descripcion: 'Exportar la auditoría' },

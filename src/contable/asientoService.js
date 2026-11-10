@@ -96,7 +96,7 @@ const listar = async ({ desde, hasta, tipo, cuenta_id: cuenta, limite = 200, pag
 };
 
 // Un asiento se anula con un contraasiento que invierte sus líneas y conserva el número del original (RN07).
-const anular = async (id, { usuarioId, motivo, idSolicitud }) => {
+const anular = async (id, { usuarioId, motivo, idSolicitud, confirmarResumen = false }) => {
   if (String(motivo ?? '').trim().length < 5) throw invalida('Anular un asiento requiere un motivo.');
   const conn = await pool.getConnection();
   try {
@@ -105,6 +105,10 @@ const anular = async (id, { usuarioId, motivo, idSolicitud }) => {
     if (!a) throw invalida('Asiento no encontrado.', 404);
     if (a.estado === 'anulado') throw invalida('El asiento ya está anulado.', 409, { codigo: 'YA_ANULADO' });
     if (a.tipo === 'anulacion') throw invalida('Un contraasiento no se anula.', 409, { codigo: 'NO_ANULABLE' });
+    if (a.resumen_clave) { // un asiento resumido junta muchos documentos: anularlo anula todos juntos
+      const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM con_asiento_origen WHERE asiento_id = ?', [id]);
+      if (Number(n) > 1 && !confirmarResumen) throw invalida(`Es un asiento resumido de ${n} documentos: anularlo anula todos. Confirmá para seguir o corregí con un asiento manual.`, 409, { codigo: 'RESUMEN_CONFIRMAR', documentos: Number(n) });
+    }
     const [lineas] = await conn.query('SELECT cuenta_id, debe, haber, detalle FROM con_asiento_lineas WHERE asiento_id = ?', [id]);
     const c = await crear(conn, { fecha: new Date(), tipo: 'anulacion', leyenda: `Anulación del asiento ${a.numero}: ${String(motivo).trim()}`, usuarioId, anulaId: id, idSolicitud, exacto: false,
       lineas: lineas.map((l) => ({ cuenta_id: l.cuenta_id, debe: Number(l.haber), haber: Number(l.debe), detalle: l.detalle })) });

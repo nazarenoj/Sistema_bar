@@ -48,7 +48,7 @@ const rangoDe = (p) => {
 
 // Un período no se cierra con pendientes de imputar, salvo que se acepten con motivo (y la autorización que pide la ruta): pasan al período siguiente y siguen pendientes (RN08).
 // Si está configurado, tampoco con diferencias en los controles cruzados (EX06).
-const cerrar = async (id, usuarioId, { aceptar = null } = {}) => {
+const cerrar = async (id, usuarioId, { aceptar = null, sinRevaluar = false } = {}) => {
   const [[p]] = await pool.query('SELECT * FROM con_periodos WHERE id = ?', [id]);
   if (!p) throw invalida('Período no encontrado.', 404);
   if (p.estado === 'cerrado') return cambiarPeriodo(id, 'cerrado', { usuarioId }); // informa que ya está cerrado
@@ -59,6 +59,11 @@ const cerrar = async (id, usuarioId, { aceptar = null } = {}) => {
     const sinAceptar = pend.filter((x) => !aceptados.has(x.id) || aceptados.get(x.id).length < 5);
     if (sinAceptar.length) throw invalida(`El período tiene ${sinAceptar.length} pendiente(s) de imputar: resolvelos o aceptalos con un motivo.`, 409, { codigo: 'PENDIENTES_SIN_RESOLVER', pendientes: sinAceptar });
     for (const x of pend) await pool.query('UPDATE con_pendientes SET fecha_original = COALESCE(fecha_original, fecha), fecha = ?, aceptado_motivo = ?, aceptado_ms = ?, aceptado_por = ? WHERE id = ?', [r.siguiente, aceptados.get(x.id).slice(0, 255), Date.now(), usuarioId ?? null, x.id]);
+  }
+  // Con CON-REVALUACION activa, al cierre se propone el asiento de diferencia de cambio: no se cierra con una propuesta sin registrar salvo que se decida no revaluar (RF09).
+  if (!sinRevaluar && await require('../funciones/servicio').estaActiva('CON-REVALUACION')) {
+    const prop = await require('./revaluacionService').propuesta({ periodo: `${p.anio}-${String(p.mes).padStart(2, '0')}` }).catch(() => null);
+    if (prop && !prop.registrada && prop.lineas.length) throw invalida('Hay una revaluación de moneda extranjera propuesta para este período: registrala o cerrá indicando que no se revalúa.', 409, { codigo: 'REVALUACION_PENDIENTE', lineas: prop.lineas.length });
   }
   const [[cfg]] = await pool.query('SELECT bloquear_cierre_controles AS b FROM con_config WHERE id = 1');
   if (cfg.b) {

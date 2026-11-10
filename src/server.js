@@ -381,6 +381,7 @@ if (process.env.NODE_ENV !== 'test') {
         mantenimientoVentas.iniciar(); // reservas vencidas, recordatorios y pedidos especiales (D8)
         mantenimientoFinanciero.iniciar(); // recordatorios de gastos recurrentes (G7)
         mantenimientoCompras.iniciar(); // avisos de vencimientos de proveedores (H4)
+        require('./contable/mantenimientoContable').iniciar(); // asientos recurrentes y escalada de pendientes (J4)
       });
     })
     .catch(async (err) => {

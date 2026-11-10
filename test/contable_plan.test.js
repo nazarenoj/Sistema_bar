@@ -27,7 +27,8 @@ test('Contable.RF13: se instala con Ventas operando y exige permiso', async () =
   assert.equal((await api('POST', '/api/modulos/contable/instalar', { token: adm.token })).status, 200);
   const e = (await api('GET', '/api/contable/config', { token: gerente.token })).json;
   assert.equal(e.iniciada, false);
-  assert.equal(e.propuesta_inicio, hoy);
+  const d = new Date();
+  assert.equal(e.propuesta_inicio, hoy.slice(8) === '01' ? hoy : fechaLocal(new Date(d.getFullYear(), d.getMonth() + 1, 1))); // el primer día del período abierto más cercano
   assert.equal((await api('GET', '/api/contable/config', { token: cajero.token })).status, 403);
 });
 

@@ -7,6 +7,7 @@ const Form = require('./formularios');
 const Periodos = require('./periodoService');
 const Pendientes = require('./pendienteService');
 const { consultar } = require('./consultaService');
+const Notificacion = require('../models/notificacionModel');
 const { gancho } = require('./receptor');
 const { invalida, r2, cts, iso, fechaLocal } = require('./comun');
 
@@ -109,8 +110,15 @@ const esperarMensajes = async (conn, docIdGlobal, tipos, que) => {
 const aplicar = async (conn, tipo, c, ctx, fecha) => {
   const def = EVENTOS[tipo];
   const formulario = def.formulario;
-  const [[ya]] = await conn.query('SELECT asiento_id FROM con_asiento_origen WHERE id_operacion = ?', [ctx.idOperacion]);
-  if (ya) return { asiento_id: ya.asiento_id, ya_procesado: true }; // RN28
+  const [[ya]] = await conn.query('SELECT asiento_id, contenido_hash FROM con_asiento_origen WHERE id_operacion = ?', [ctx.idOperacion]);
+  if (ya) {
+    // Misma ID_Operacion con otro contenido: se rechaza, se alerta al Administrador y queda en la bandeja de pendientes de integración (EX18). Con el mismo contenido es un reenvío (RN28).
+    if (ya.contenido_hash && ya.contenido_hash !== Asientos.hashDe(c)) {
+      await Notificacion.crear({ modulo: 'contable', tipo: 'conflicto_idempotencia', severidad: 'alta', roles: ['administrador'], clave: `conflicto-operacion:${ctx.idOperacion}`, mensaje: `La operación ${ctx.idOperacion} llegó otra vez con un contenido distinto: no se contabilizó de nuevo.` }).catch(() => {});
+      throw new M.RechazoNegocio('Conflicto de idempotencia: la misma operación llegó con otro contenido.');
+    }
+    return { asiento_id: ya.asiento_id, ya_procesado: true }; // RN28
+  }
   if (def.esperar) await def.esperar(conn, c, ctx);
   const lineas = Asientos.consolidar(await def.construir(conn, c, fecha, ctx));
   const origen = { modulo: def.modulo, tipo_documento: tipo, id_documento: ctx.docIdGlobal, id_operacion: ctx.idOperacion, relacionado: (def.relacionado ? def.relacionado(c) : c.venta_id_global) ?? null, importe: def.importe ? def.importe(c) : importeDe(c), contenido: c, tipo_evento: tipo, fecha_documento: fecha, instantanea: ctx.instantanea };

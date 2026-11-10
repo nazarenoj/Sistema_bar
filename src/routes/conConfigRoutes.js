@@ -24,6 +24,12 @@ router.put('/config', CONF, manejar(async (req, res) => {
   await auditar(req, { modulo: 'contable', accion: 'configurar', entidad: 'con_config', entidad_id: 1, detalle: JSON.stringify(req.body ?? {}) });
   res.json(r);
 }));
+router.get('/retencion', VER, manejar(async (req, res) => res.json(await Config.retencion())));
+router.post('/plan/actualizar', requierePermiso('contable.plan.actualizar'), manejar(async (req, res) => {
+  const r = await Config.actualizarPlan();
+  await auditar(req, { modulo: 'contable', accion: 'actualizar_plan', entidad: 'plan', entidad_id: 'plan', detalle: `${r.cuentas_nuevas} cuenta(s), ${r.reglas_nuevas} regla(s)` });
+  res.json(r);
+}));
 router.get('/movimientos-previos', VER, manejar(async (req, res) => {
   const [filas] = await pool.query('SELECT modulo, tipo_documento, id_documento, fecha, importe FROM con_previos_inicio ORDER BY fecha DESC, id DESC LIMIT 500');
   res.json(filas);

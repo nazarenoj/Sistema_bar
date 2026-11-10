@@ -44,7 +44,11 @@ const cargarPlan = async (conn, perfil) => {
 const estado = async () => {
   const c = await config();
   const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM con_cuentas');
-  return { ...vista(c), propuesta_inicio: fechaLocal(), cuentas: Number(n), perfiles: PERFILES };
+  // Propone el primer día del período abierto más cercano a hoy: hoy si es el primero del mes y, si no, el primero del mes siguiente (nunca antes de hoy, RF13).
+  const hoy = fechaLocal();
+  const d = new Date(); const sig = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  const propuesta = hoy.slice(8) === '01' ? hoy : fechaLocal(sig);
+  return { ...vista(c), propuesta_inicio: propuesta, cuentas: Number(n), perfiles: PERFILES };
 };
 
 // Fija (o corrige, mientras no haya asiento de apertura) la fecha de inicio y arma el primer ejercicio con sus períodos y el plan de cuentas del perfil.
@@ -80,4 +84,29 @@ const actualizar = async (d) => {
   return estado();
 };
 
-module.exports = { config, estado, iniciar, actualizar, crearEjercicio, MESES, cargarPlan };
+// Suma al plan las cuentas de módulos o funciones que se incorporaron después de iniciar (RN19) y las reglas predeterminadas que les corresponden; no toca lo que ya existe.
+const actualizarPlan = async () => {
+  const c = await config();
+  if (!c.perfil_rubro) throw invalida('Todavía no se inició la contabilidad.', 409, { codigo: 'SIN_INICIO' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[{ antes }]] = await conn.query('SELECT COUNT(*) AS antes FROM con_cuentas');
+    await cargarPlan(conn, c.perfil_rubro);
+    const [[{ despues }]] = await conn.query('SELECT COUNT(*) AS despues FROM con_cuentas');
+    const r = await Reglas.sembrar(conn, iso(c.fecha_inicio) > fechaLocal() ? iso(c.fecha_inicio) : fechaLocal());
+    await conn.commit();
+    return { cuentas_nuevas: Number(despues) - Number(antes), reglas_nuevas: r.nuevas };
+  } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+};
+
+// Plazo de conservación (RN15): los libros no se borran nunca; se informa cuántos asientos ya cumplieron el plazo legal para que el estudio los archive por fuera.
+const retencion = async () => {
+  const cfg = await config();
+  const limite = new Date(); limite.setFullYear(limite.getFullYear() - Number(cfg.retencion_anios));
+  const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM con_asientos WHERE fecha < ?', [fechaLocal(limite)]);
+  const [[{ total }]] = await pool.query('SELECT COUNT(*) AS total FROM con_asientos');
+  return { retencion_anios: cfg.retencion_anios, fecha_limite: fechaLocal(limite), asientos_fuera_de_plazo: Number(n), asientos_total: Number(total), se_purga: false };
+};
+
+module.exports = { config, estado, iniciar, actualizar, actualizarPlan, retencion, crearEjercicio, MESES, cargarPlan };

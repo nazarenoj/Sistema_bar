@@ -76,4 +76,16 @@ const exportarDiario = async (plantillaId, rango) => {
   return { texto: `${filas.join('\r\n')}\r\n`, nombre: `diario-${p.nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${iso(d.desde)}.csv`, lineas: filas.length - (p.encabezado ? 1 : 0), total_debe: d.total_debe, total_haber: d.total_haber };
 };
 
-module.exports = { listar, crear, editar, eliminar, exportarDiario, COLUMNAS };
+// El plan de cuentas con los códigos del estudio: código externo, nombre, tipo e imputable. Si falta alguna equivalencia no se genera nada (EX07).
+const exportarPlan = async (plantillaId) => {
+  await exigirFuncion();
+  const p = vista(await obtener(plantillaId));
+  const [cuentas] = await pool.query("SELECT codigo, nombre, tipo, imputable FROM con_cuentas WHERE estado = 'activa' ORDER BY codigo");
+  const sin = cuentas.filter((x) => x.imputable && !p.equivalencias[x.codigo]).map((x) => ({ codigo: x.codigo, nombre: x.nombre }));
+  if (sin.length) throw invalida(`${sin.length} cuenta(s) sin equivalencia en la plantilla: no se genera el archivo.`, 409, { codigo: 'SIN_EQUIVALENCIA', cuentas: sin });
+  const filas = [p.encabezado ? ['codigo', 'nombre', 'tipo', 'imputable'].join(p.separador) : null,
+    ...cuentas.map((x) => [p.equivalencias[x.codigo] ?? x.codigo, x.nombre, x.tipo, x.imputable ? 1 : 0].map((v) => celda(v, p.separador)).join(p.separador))].filter(Boolean);
+  return { texto: `${filas.join('\r\n')}\r\n`, nombre: `plan-${p.nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.csv`, cuentas: cuentas.length };
+};
+
+module.exports = { listar, crear, editar, eliminar, exportarDiario, exportarPlan, COLUMNAS };

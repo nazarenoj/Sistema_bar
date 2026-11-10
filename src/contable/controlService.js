@@ -45,4 +45,11 @@ const ultimo = async () => {
   return u ? { id: u.id, ms: Number(u.ms), con_diferencias: u.con_diferencias, controles: JSON.parse(u.resultado) } : null;
 };
 
-module.exports = { ejecutar, ultimo, saldoContable, CONTROLES };
+const historial = async ({ limite = 50 } = {}) => (await pool.query('SELECT id, ms, usuario_id, con_diferencias FROM con_controles ORDER BY id DESC LIMIT ?', [Math.min(Number(limite) || 50, 200)]))[0].map((h) => ({ ...h, ms: Number(h.ms) }));
+const ejecucion = async (id) => {
+  const [[u]] = await pool.query('SELECT * FROM con_controles WHERE id = ?', [id]);
+  if (!u) throw invalida('Ejecución no encontrada.', 404);
+  return { id: u.id, ms: Number(u.ms), con_diferencias: u.con_diferencias, controles: JSON.parse(u.resultado) };
+};
+
+module.exports = { ejecutar, ultimo, historial, ejecucion, saldoContable, CONTROLES };

@@ -70,26 +70,20 @@ Resueltos: recibos de cuenta corriente, gastos y su anulación, pago de comision
 
 ### Reglas y asientos
 
-- **EX18**: si llega la misma ID_Operacion con otro contenido se descarta como «ya procesado»; no se detecta el conflicto ni se alerta.
-- **RN15/RN16**: la retención legal (`retencion_anios`) se guarda pero no archiva ni purga nada; no se midieron los tiempos de rendimiento.
-- **Adjuntos** de asientos manuales: no están.
-- **Asientos recurrentes**: se generan con `POST /api/contable/modelos/recurrentes/generar`; no hay un trabajador que lo dispare solo.
-- **Anular un asiento resumido** anula el resumen del día completo.
-- **RN08**: el pendiente aceptado al cerrar un período pasa al siguiente, pero la escalada al Administrador (Usuarios RN85) no está.
-- **RF13**: la fecha de inicio propuesta es la de hoy, no «el primer día del período abierto más cercano».
-- **Cierre de ejercicio**: el ejercicio siguiente es de año calendario (se crea solo si no existe); no hay reapertura de un ejercicio cerrado.
-- **Revaluación**: se propone y registra a pedido para un período; no se dispara sola al cerrarlo. Solo revalúa cuentas con importe en divisa cargado a mano (ningún flujo automático lo trae todavía).
-- **Controles cruzados**: no comparan cuentas en moneda extranjera; el de existencias compara el total, no por depósito; el informe guarda la última ejecución sin historial navegable.
-- **Plantillas de exportación**: solo el diario; el plan de cuentas sale en CSV propio.
+Resueltos: conflicto de idempotencia (EX18), plazo de conservación informado (los libros nunca se purgan), adjuntos de asientos manuales, recurrentes y escalada al Administrador por un trabajo horario, confirmación al anular un resumido, propuesta de inicio (primer día del período abierto más cercano), revaluación propuesta al cerrar un período, historial de controles, plantilla también para el plan de cuentas, y actualización del plan y las reglas cuando se instala un módulo después (`POST /api/contable/plan/actualizar`). Por especificación no hay reapertura de un ejercicio cerrado (Contable RN12). Queda:
+
+- **Cierre de ejercicio**: el ejercicio siguiente es de año calendario (se crea solo si no existe).
+- **Revaluación**: solo revalúa cuentas con importe en divisa cargado a mano (ningún flujo automático lo trae todavía) y se registra a pedido; si falta la cotización de cierre el cierre del período no se bloquea.
+- **Controles cruzados**: no comparan cuentas en moneda extranjera; el de existencias compara el total, no por depósito.
 
 ### Consolidación (J9)
 
 - El paquete contable es mensual (balance del mes hasta el día publicado) y viaja por el mecanismo diario de Usuarios: el control de «paquetes faltantes» de Usuarios no distingue períodos contables, así que el faltante contable se resuelve en el propio balance consolidado.
-- No se midió el tiempo de generación con 2.000 cuentas ni el del consolidado con 20 sucursales.
+- Medido: el paquete y el balance de un plan de 2.000 cuentas y el consolidado de 20 sucursales salen en menos de 10 segundos (`test/contable_rendimiento.test.js`).
 
 ### Instalación y dependencias
 
-- Contable depende de Usuarios y Ventas; Stock, Clientes, Compras y Financiero son opcionales. Si un módulo se instala **después** de iniciar la contabilidad, hay que correr `POST /api/contable/reglas/predeterminadas` para sumar sus reglas y agregar a mano las cuentas que falten (el plan se carga una sola vez, al iniciar).
+- Contable depende de Usuarios y Ventas; Stock, Clientes, Compras y Financiero son opcionales. Si un módulo se instala o una función se activa **después** de iniciar la contabilidad hay que correr `POST /api/contable/plan/actualizar`, que suma las cuentas y reglas que faltan (no se corre solo).
 
 ## Pruebas
 

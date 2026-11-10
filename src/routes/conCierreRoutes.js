@@ -32,6 +32,11 @@ router.get('/plantillas', VER, manejar(async (req, res) => res.json(await Planti
 router.post('/plantillas', PLANTILLAS, manejar(async (req, res) => { const r = await Plantillas.crear(req.body ?? {}); await aud(req, 'crear_plantilla', 'plantilla', r.id, r.nombre); res.status(201).json(r); }));
 router.put('/plantillas/:id', PLANTILLAS, manejar(async (req, res) => { const r = await Plantillas.editar(Number(req.params.id), req.body ?? {}); await aud(req, 'editar_plantilla', 'plantilla', r.id, r.nombre); res.json(r); }));
 router.delete('/plantillas/:id', PLANTILLAS, manejar(async (req, res) => { const r = await Plantillas.eliminar(Number(req.params.id)); await aud(req, 'eliminar_plantilla', 'plantilla', req.params.id, ''); res.json(r); }));
+router.get('/exportar/plan', EXPORTAR, manejar(async (req, res) => {
+  const r = await Plantillas.exportarPlan(Number(req.query.plantilla));
+  await aud(req, 'exportar_plantilla', 'libro', 'plan', `${r.cuentas} cuenta(s)`);
+  res.type('text/csv').attachment(r.nombre).send(r.texto);
+}));
 router.get('/exportar/diario', EXPORTAR, manejar(async (req, res) => {
   const r = await Plantillas.exportarDiario(Number(req.query.plantilla), req.query);
   await aud(req, 'exportar_plantilla', 'libro', 'diario', `${r.lineas} línea(s)`);
