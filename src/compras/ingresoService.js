@@ -74,6 +74,8 @@ const idOp = (c, vinculoId, tipo) => `compras:${tipo}:${c.id_global}:${vinculoId
 // Vincula la factura con uno o varios ingresos existentes (RF04).
 const hooksVincular = [];
 const alVincular = (fn) => hooksVincular.push(fn);
+const hooksDesvincular = [];
+const alDesvincular = (fn) => hooksDesvincular.push(fn);
 
 const vincular = async (comprobanteId, ingresoIds, ctx) => {
   await exigirStock();
@@ -121,6 +123,8 @@ const desvincular = async (comprobanteId, vinculoId, { motivo }, ctx) => {
     await conn.commit();
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
   M.despertar();
+  // Lo que ese ingreso había contado como recibido en los pedidos abiertos se descuenta (RN08).
+  if (v.ingreso_id_global) for (const h of hooksDesvincular) await h(v.ingreso_id_global).catch(() => {});
   const restantes = (await pool.query("SELECT ingreso_id_global FROM cmp_vinculos_ingreso WHERE comprobante_id = ? AND estado = 'activo'", [c.id]))[0];
   await actualizarEstado(c, restantes.length > 0, []);
   return { ...(await Comprobantes.obtener(c.id)), vinculos: await vinculos(c.id) };
@@ -219,4 +223,4 @@ const reclamos = async () => {
   return [...por.values()];
 };
 
-module.exports = { alVincular, pendientes, vincular, desvincular, vinculos, generar, reclamos, comparar, r2 };
+module.exports = { alVincular, alDesvincular, pendientes, vincular, desvincular, vinculos, generar, reclamos, comparar, r2 };

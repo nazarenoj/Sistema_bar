@@ -28,6 +28,20 @@ const filasCsv = (texto) => {
 };
 
 // Resuelve cada fila a un ítem, una presentación y un costo por unidad base. Devuelve las líneas y los errores (con la fila).
+// Planilla de Excel (primera hoja, con encabezados en la primera fila): las mismas columnas que el CSV (codigo, descripcion, precio, bonificacion, ...).
+const filasXlsx = async (base64) => {
+  const ExcelJS = require('exceljs');
+  const libro = new ExcelJS.Workbook();
+  try { await libro.xlsx.load(Buffer.from(String(base64), 'base64')); } catch { throw invalida('El archivo no es una planilla de Excel válida.', 400, { codigo: 'LISTA_INVALIDA' }); }
+  const hoja = libro.worksheets[0];
+  if (!hoja || hoja.rowCount < 2) return [];
+  const texto = (c) => { const v = c?.value; return v === null || v === undefined ? '' : typeof v === 'object' ? String(v.result ?? v.text ?? '') : String(v); };
+  const cab = hoja.getRow(1).values.slice(1).map((c) => texto({ value: c }).trim().toLowerCase());
+  const filas = [];
+  hoja.eachRow((row, n) => { if (n === 1) return; const v = row.values.slice(1); if (v.every((x) => x === null || x === undefined || x === '')) return; filas.push({ fila: n, ...Object.fromEntries(cab.map((k, j) => [k, texto({ value: v[j] }).trim()])) }); });
+  return filas;
+};
+
 const resolver = async (prov, filas, aviso) => {
   const lineas = [], errores = [];
   const stock = await Modulos.estaInstalado('stock');
@@ -65,7 +79,7 @@ const datos = async (d) => {
   const moneda = String(d.moneda ?? prov.moneda).toUpperCase();
   const desde = d.vigente_desde ?? hoy();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(desde))) throw invalida('La vigencia va como AAAA-MM-DD.');
-  const filas = d.contenido !== undefined ? filasCsv(d.contenido) : (d.filas ?? []).map((f, i) => ({ fila: i + 1, ...f }));
+  const filas = d.xlsx_base64 !== undefined ? await filasXlsx(d.xlsx_base64) : d.contenido !== undefined ? filasCsv(d.contenido) : (d.filas ?? []).map((f, i) => ({ fila: i + 1, ...f }));
   if (!filas.length) throw invalida('La lista no tiene líneas.', 400, { codigo: 'LISTA_INVALIDA' });
   const r = await resolver(prov, filas);
   return { prov, moneda, desde, nombre: String(d.nombre ?? `Lista ${desde}`).slice(0, 80), ...r };

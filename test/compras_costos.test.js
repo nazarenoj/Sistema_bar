@@ -122,6 +122,16 @@ test('Compras.RF10: vista previa, importacion con unidad de compra y bonificacio
   assert.equal(vp.status, 200, JSON.stringify(vp.json));
   assert.equal(vp.json.cambios[0].costo_actual, 720);
   assert.equal((await api('GET', '/api/compras/listas', { token: gerente.token })).json.length, 0);
+  // La misma lista como planilla de Excel da la misma vista previa (Compras RF10).
+  const ExcelJS = require('exceljs');
+  const libro = new ExcelJS.Workbook();
+  const hoja = libro.addWorksheet('Lista');
+  hoja.addRow(['codigo', 'descripcion', 'precio', 'bonificacion']);
+  hoja.addRow(['CAF-001', 'Cafe', 725, 0]);
+  const xl = await api('POST', '/api/compras/listas/vista-previa', { token: gerente.token, body: { proveedor_id: prov.id, xlsx_base64: Buffer.from(await libro.xlsx.writeBuffer()).toString('base64') } });
+  assert.equal(xl.status, 200, JSON.stringify(xl.json));
+  assert.deepEqual(xl.json.cambios, vp.json.cambios);
+  assert.equal((await api('POST', '/api/compras/listas/vista-previa', { token: gerente.token, body: { proveedor_id: prov.id, xlsx_base64: 'no-es-excel' } })).status, 400);
   const r = await api('POST', '/api/compras/listas', { token: gerente.token, body: { proveedor_id: prov.id, nombre: 'Lista enero', filas: [
     { item_tipo: 'insumo', item_id: cafe.id, precio: 725 }, { item_tipo: 'insumo', item_id: harina.id, presentacion_id: bolsa.id, precio: 1250, bonificacion: 10 }] } });
   assert.equal(r.status, 201, JSON.stringify(r.json));

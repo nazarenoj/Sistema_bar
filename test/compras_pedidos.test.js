@@ -165,9 +165,17 @@ test('Compras.RF12: el pedido pendiente viaja a Stock como en transito (baja la 
   await esperarMensajes(pool);
   assert.equal((await sug()).en_transito, 25);
   const f2 = await facturar(1);
-  await api('POST', `/api/compras/comprobantes/${f2.id}/vincular`, { token: administrativo.token, body: { ingreso_ids: [await ingreso(25)] } });
+  const v2 = await api('POST', `/api/compras/comprobantes/${f2.id}/vincular`, { token: administrativo.token, body: { ingreso_ids: [await ingreso(25)] } });
   p = await ver(r.id);
   assert.equal(p.estado, 'recibido');
   await esperarMensajes(pool);
   assert.equal((await sug())?.en_transito ?? 0, 0); // cerrado: ya no esta en transito
+  // Desvincular el segundo ingreso descuenta lo que había contado como recibido y el pedido vuelve a parcial (RN08).
+  const des = await api('POST', `/api/compras/comprobantes/${f2.id}/desvincular`, { token: administrativo.token, body: { vinculo_id: v2.json.vinculos[0].id, motivo: 'ingreso mal asociado' } });
+  assert.equal(des.status, 200, JSON.stringify(des.json));
+  p = await ver(r.id);
+  assert.equal(p.estado, 'recibido_parcial');
+  assert.equal(p.lineas[0].cantidad_recibida, 25);
+  await esperarMensajes(pool);
+  assert.equal((await sug()).en_transito, 25);
 });

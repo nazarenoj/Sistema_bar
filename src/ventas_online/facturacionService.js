@@ -18,7 +18,7 @@ const pedido = async (id) => { const [[p]] = await pool.query('SELECT * FROM onl
 // El comprador, para el comprobante: consumidor final, o CUIT y condición de IVA para la factura A (RN10).
 const receptorDe = (p) => {
   const f = JSON.parse(p.facturacion);
-  if (f.tipo !== 'factura_a') return { doc_tipo: 99, doc_nro: '0', condicion_iva_receptor_id: 5, nombre: p.nombre };
+  if (f.tipo !== 'factura_a') return f.dni ? { doc_tipo: 96, doc_nro: f.dni, condicion_iva_receptor_id: 5, nombre: p.nombre } : { doc_tipo: 99, doc_nro: '0', condicion_iva_receptor_id: 5, nombre: p.nombre };
   return { doc_tipo: 80, doc_nro: f.cuit, condicion_iva_receptor_id: COND[String(f.condicion_iva).toLowerCase()] ?? 1, nombre: f.razon_social, domicilio: f.domicilio };
 };
 

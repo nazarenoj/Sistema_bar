@@ -3,6 +3,8 @@ const pool = require('../config/db');
 const Catalogo = require('./catalogoService');
 const Cuentas = require('./cuentaService');
 const Cupones = require('./cuponService');
+const Funciones = require('../funciones/servicio');
+const Promos = require('../services/promocionService');
 const { TiendaInvalida } = require('./tiendaService');
 
 // Carrito (Ventas Online RF06, RN05, RN23, EX09, EX12): se guarda N días para invitados y para cuentas, y se recalcula (precio, disponibilidad, cupón) cada vez que se muestra. Un artículo
@@ -38,6 +40,21 @@ const pesable = async (productoId) => ((await pool.query("SELECT tipo FROM produ
 const mismaSeleccion = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
 // Recalcula el carrito completo: quita lo despublicado, reprecia y compara con el precio que se había mostrado, marca lo que no alcanza y valida el cupón. Guarda los precios vistos.
+// Un cupón no acumulable no se suma a un ítem con promoción: esas líneas quedan fuera de su base; uno acumulable se calcula sobre el precio ya promocionado (Ventas Online RN24). El descuento se
+// reparte entre las líneas que alcanza, en proporción a su importe, para dejar el de cada línea en el pedido.
+const evaluarCupon = async (codigo, lineas, { quien } = {}) => {
+  const base = (acum) => lineas.filter((l) => acum || !(l.descuento_promo > 0)).map((l) => ({ linea: l.linea, producto_id: l.producto_id, categoria_id: l.categoria_id, importe: r2(l.importe - (acum ? (l.descuento_promo ?? 0) : 0)) }));
+  let usada = base(false);
+  let e = await Cupones.evaluar(codigo, usada, { quien });
+  if (e.valido && e.cupon.acumulable) { usada = base(true); e = await Cupones.evaluar(codigo, usada, { quien }); }
+  if (!e.valido) return e;
+  const alc = usada.filter((l) => e.alcanzadas.includes(l.linea));
+  const suma = alc.reduce((a, l) => a + l.importe, 0) || 1;
+  let resto = e.descuento;
+  const partes = new Map(alc.map((l, i) => { const p = i === alc.length - 1 ? resto : r2(e.descuento * l.importe / suma); resto = r2(resto - p); return [l.linea, p]; }));
+  return { ...e, partes };
+};
+
 const calcular = async (c, cuenta = null) => {
   const listaId = await Cuentas.listaDe(cuenta);
   const quien = cuenta ? `c:${cuenta.id}` : null;
@@ -61,15 +78,24 @@ const calcular = async (c, cuenta = null) => {
     lineas.push(l);
   }
   const subtotal = r2(lineas.reduce((a, l) => a + l.importe, 0));
+  // Promociones automáticas de Ventas: se aplican solas y se muestran junto al ítem (RF21). Las de socios necesitan identificar al socio y por ahora no se aplican en la tienda.
+  let descuentoPromos = 0;
+  if (lineas.length && await Funciones.estaActiva('VEN-PROMOS')) {
+    const rp = await Promos.calcularLineas(pool, lineas.map((l) => ({ id: l.linea, producto_id: l.producto_id, cantidad: l.cantidad, precio_unitario: l.precio_unitario, categoria_id: l.categoria_id })), {});
+    for (const x of rp.lineas) lineas.find((y) => y.linea === x.id).descuento_promo = x.descuento;
+    for (const a of rp.aplicadas) for (const x of a.reparto) { const l = lineas.find((y) => y.linea === x.item_id); (l.promociones ??= []).push({ promocion_id: a.promocion_id, nombre: a.nombre, importe: x.importe }); }
+    descuentoPromos = r2(rp.total_descuento);
+    if (descuentoPromos > 0) avisos.push({ tipo: 'promocion_aplicada', mensaje: `Promoción aplicada: ${rp.aplicadas.map((a) => a.nombre).join(', ')}.` });
+  }
   let cupon = null, descuento = 0;
   if (c.cupon) {
-    const e = await Cupones.evaluar(c.cupon, lineas.map((l) => ({ linea: l.linea, producto_id: l.producto_id, categoria_id: l.categoria_id, importe: l.importe })), { quien });
-    if (e.valido) { cupon = e.cupon; descuento = e.descuento; }
+    const e = await evaluarCupon(c.cupon, lineas, { quien });
+    if (e.valido) { cupon = e.cupon; descuento = e.descuento; for (const [n, p] of e.partes) lineas.find((l) => l.linea === n).descuento_cupon = p; }
     else { cupon = { codigo: c.cupon, valido: false, motivo: e.motivo, causa: e.codigo }; avisos.push({ tipo: 'cupon_invalido', mensaje: e.motivo }); }
   }
-  const total = Math.max(0, r2(subtotal - descuento));
+  const total = Math.max(0, r2(subtotal - descuentoPromos - descuento));
   const envio = await Cupones.envioGratis(subtotal);
-  return { lineas, quitadas, avisos, subtotal, cupon, descuento, total, envio_gratis: envio, cambios: avisos.length > 0, listaId };
+  return { lineas, quitadas, avisos, subtotal, cupon, descuento, descuento_promos: descuentoPromos, total, envio_gratis: envio, cambios: avisos.length > 0, listaId };
 };
 
 // Muestra el carrito: recalcula, descarta lo que ya no se vende y guarda los precios que se acaban de mostrar.
@@ -145,4 +171,4 @@ const asociar = async (token, cuenta) => {
 
 const limpiarVencidos = async () => (await pool.query('DELETE FROM onl_carritos WHERE vence_ms < ?', [Date.now()]))[0].affectedRows;
 
-module.exports = { mostrar, agregar, modificar, quitar, ponerCupon, sacarCupon, asociar, calcular, cargar, exigirCarrito, limpiarVencidos };
+module.exports = { evaluarCupon, mostrar, agregar, modificar, quitar, ponerCupon, sacarCupon, asociar, calcular, cargar, exigirCarrito, limpiarVencidos };

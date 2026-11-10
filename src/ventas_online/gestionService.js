@@ -19,7 +19,7 @@ const pedido = async (id) => { const [[p]] = await pool.query('SELECT * FROM onl
 const FORMA = { plataforma: 'cobro_plataforma', pasarela: 'cobro_online', transferencia: 'transferencia', pago_al_retirar: 'efectivo', efectivo_contra_entrega: 'efectivo', cuenta_corriente: 'cuenta_corriente' };
 
 const armarEntrega = async (p) => {
-  const [lineas] = await pool.query('SELECT producto_id, titulo, cantidad, precio_unitario, importe, es_pesable, observaciones, opciones FROM onl_pedido_lineas WHERE pedido_id = ? ORDER BY linea', [p.id]);
+  const [lineas] = await pool.query('SELECT producto_id, titulo, cantidad, precio_unitario, importe, es_pesable, observaciones, opciones, descuento_linea, promociones FROM onl_pedido_lineas WHERE pedido_id = ? ORDER BY linea', [p.id]);
   const [[cta]] = p.cuenta_id ? await pool.query('SELECT cliente_id FROM onl_clientes WHERE id = ?', [p.cuenta_id]) : [[null]];
   const [[pago]] = await pool.query("SELECT id_externo FROM onl_pagos WHERE pedido_id = ? AND estado = 'aprobado' ORDER BY id LIMIT 1", [p.id]);
   const pagos = [];
@@ -31,8 +31,8 @@ const armarEntrega = async (p) => {
     idGlobal: p.id_global, referencia: `Online #${p.id}${p.numero_retiro ? ` ${p.numero_retiro}` : ''} ${p.nombre}`, modalidad: p.entrega_tipo === 'delivery' ? 'delivery' : 'retiro', transaccion: pago?.id_externo ?? null,
     // Un pesable viaja como una línea por su importe estimado: la cantidad de la línea de Ventas es entera; el peso real se ajusta después (RN51).
     lineas: lineas.map((l) => (l.es_pesable
-      ? { producto_id: l.producto_id, titulo: `${l.titulo} (aprox. ${Number(l.cantidad)} kg)`, cantidad: 1, precio_unitario: Number(l.importe), observaciones: l.observaciones, opciones: [] }
-      : { producto_id: l.producto_id, titulo: l.titulo, cantidad: Number(l.cantidad), precio_unitario: Number(l.precio_unitario), observaciones: l.observaciones, opciones: l.opciones ? JSON.parse(l.opciones) : [] })),
+      ? { producto_id: l.producto_id, titulo: `${l.titulo} (aprox. ${Number(l.cantidad)} kg)`, cantidad: 1, precio_unitario: Number(l.importe), observaciones: l.observaciones, opciones: [], descuento_linea: Number(l.descuento_linea), promociones: l.promociones ? JSON.parse(l.promociones) : [] }
+      : { producto_id: l.producto_id, titulo: l.titulo, cantidad: Number(l.cantidad), precio_unitario: Number(l.precio_unitario), observaciones: l.observaciones, opciones: l.opciones ? JSON.parse(l.opciones) : [], descuento_linea: Number(l.descuento_linea), promociones: l.promociones ? JSON.parse(l.promociones) : [] })),
     envio: Number(p.envio), descuento: Number(p.descuento), total: Number(p.total), pagos, idCompromiso: p.reserva_id ?? null, clienteId,
     credito: p.credito_reserva_id && clienteId ? { clienteId, moneda: 'ARS', importe: Number(p.a_pagar), importePesos: Number(p.a_pagar), reservaId: p.credito_reserva_id } : null,
   };

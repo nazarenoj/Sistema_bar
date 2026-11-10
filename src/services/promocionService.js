@@ -147,10 +147,15 @@ const prorratear = (lineas, pesos, total) => {
 };
 
 // Calcula las promociones sobre las líneas de los pedidos (sin guardar): { lineas: [{ id, descuento }], aplicadas: [{ promocion_id, nombre, importe, reparto }] }.
-const calcular = async (conn, pedidoIds, { formaPago = null, ahora = new Date(), socio = false } = {}) => {
+const calcular = async (conn, pedidoIds, opciones = {}) => {
   const [items] = await conn.query(
     `SELECT pp.id, pp.pedido_id, pp.producto_id, pp.cantidad, pp.precio_unitario, p.categoria_id
      FROM pedido_productos pp JOIN productos p ON p.id = pp.producto_id WHERE pp.pedido_id IN (?) ORDER BY pp.id`, [pedidoIds]);
+  return calcularLineas(conn, items, opciones);
+};
+
+// El mismo motor sobre líneas sueltas ([{ id, pedido_id?, producto_id, cantidad, precio_unitario, categoria_id }]): lo usa el carrito de la tienda online, que todavía no tiene pedido (Ventas Online RF21).
+const calcularLineas = async (conn, items, { formaPago = null, ahora = new Date(), socio = false } = {}) => {
   const lineas = items.map((i) => ({ ...i, cantidad: Number(i.cantidad), bruto: cts(Number(i.cantidad) * Number(i.precio_unitario)), desc: 0, promos: [], acumulables: true }));
   const [promos] = await conn.query("SELECT * FROM promociones WHERE estado = 'activa' ORDER BY prioridad, id");
   const aplicadas = [];
@@ -232,4 +237,4 @@ const informe = async ({ desde, hasta } = {}) => (await pool.query(
    WHERE created_at >= ? AND created_at <= ? GROUP BY promocion_id, nombre ORDER BY importe_descontado DESC`,
   [desde ? `${desde} 00:00:00` : '1970-01-01', hasta ? `${hasta} 23:59:59` : '2999-12-31']))[0].map((r) => ({ ...r, veces: Number(r.veces), importe_descontado: Number(r.importe_descontado) }));
 
-module.exports = { PromocionInvalida, soloSocios, listar, obtener, guardar, pausar, bajoCosto, calcular, aplicar, simular, informe };
+module.exports = { PromocionInvalida, soloSocios, listar, obtener, guardar, pausar, bajoCosto, calcular, calcularLineas, aplicar, simular, informe };

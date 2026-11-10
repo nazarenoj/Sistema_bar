@@ -67,6 +67,26 @@ test('Ventas Online.RF09/EX14: el checkout exige datos de contacto, terminos, al
   assert.equal(await reservado(), 0); // ninguno de los rechazos dejo una reserva
 });
 
+test('Ventas Online.RN10: por encima del tope de consumidor final el checkout exige identificar al comprador', async () => {
+  const c = await carrito([{ producto_id: L.id, cantidad: 1 }]);
+  const base = datos(c, { acepta_alergenos: true, total_confirmado: (await api('POST', `${T}/checkout/resumen`, { body: { carrito: c.token } })).json?.total });
+  const tope = async (v) => { await pool.query("UPDATE parametros SET valor = ? WHERE clave = 'tope_consumidor_final'", [String(v)]); require('../src/models/parametroModel').invalidar(); };
+  await tope(1);
+  try {
+    const sin = await pagar({ ...base, facturacion: { tipo: 'consumidor_final' } });
+    assert.equal(sin.status, 400, JSON.stringify(sin.json));
+    assert.equal(sin.json.codigo, 'IDENTIFICACION_REQUERIDA');
+    assert.equal((await pagar({ ...base, facturacion: { tipo: 'consumidor_final', dni: '12' } })).json.codigo, 'DNI_INVALIDO');
+    assert.equal(await reservado(), 0);
+    const con = await pagar({ ...base, facturacion: { tipo: 'consumidor_final', dni: '30.111.222' } });
+    assert.notEqual(con.json.codigo, 'IDENTIFICACION_REQUERIDA', JSON.stringify(con.json));
+    // Con el tope en cero (sin control) un consumidor final sin identificar pasa.
+    await tope(0);
+    const c2 = await carrito([{ producto_id: L.id, cantidad: 1 }]);
+    assert.notEqual((await pagar({ ...datos(c2, { acepta_alergenos: true }), facturacion: { tipo: 'consumidor_final' } })).json.codigo, 'IDENTIFICACION_REQUERIDA');
+  } finally { await tope(0); require('../src/ventas_online/limites').pedidos.reiniciar(); }
+});
+
 test('Ventas Online.EX09/RN05: si cambio el total desde que se mostro, se informa y se pide confirmar de nuevo', async () => {
   const c = await carrito([{ producto_id: B.id, cantidad: 2 }]);
   await pool.query('UPDATE productos SET precio = 400 WHERE id = ?', [B.id]);

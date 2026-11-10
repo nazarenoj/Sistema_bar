@@ -287,6 +287,7 @@ const registrarRecepcion = async (proveedorId, ingresos) => {
           if (disp <= 0 || falta <= 0) continue;
           const toma = Math.min(disp, falta);
           await conn.query('UPDATE cmp_pedido_lineas SET cantidad_recibida = cantidad_recibida + ? WHERE id = ?', [toma, l.id]);
+          await conn.query('INSERT INTO cmp_pedido_recepcion_lineas (pedido_id, ingreso_id_global, linea_id, cantidad) VALUES (?, ?, ?, ?)', [id, ing, l.id, toma]); // para poder revertirlo si se desvincula
           restante.set(k, disp - toma); toco = true;
         }
         if (toco) {
@@ -303,6 +304,33 @@ const registrarRecepcion = async (proveedorId, ingresos) => {
   M.despertar();
 };
 Ingresos.alVincular(registrarRecepcion);
+
+// Si se desvincula el ingreso, lo que contó como recibido en cada pedido se descuenta y el pedido vuelve al estado que le corresponde (Compras RN08, RF12).
+const revertirRecepcion = async (ingreso) => {
+  const [recs] = await pool.query('SELECT pedido_id FROM cmp_pedido_recepciones WHERE ingreso_id_global = ?', [ingreso]);
+  for (const { pedido_id: id } of recs) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [lin] = await conn.query('SELECT linea_id, cantidad FROM cmp_pedido_recepcion_lineas WHERE pedido_id = ? AND ingreso_id_global = ?', [id, ingreso]);
+      for (const l of lin) await conn.query('UPDATE cmp_pedido_lineas SET cantidad_recibida = GREATEST(cantidad_recibida - ?, 0) WHERE id = ?', [l.cantidad, l.linea_id]);
+      await conn.query('DELETE FROM cmp_pedido_recepcion_lineas WHERE pedido_id = ? AND ingreso_id_global = ?', [id, ingreso]);
+      await conn.query('DELETE FROM cmp_pedido_recepciones WHERE pedido_id = ? AND ingreso_id_global = ?', [id, ingreso]);
+      const [[ped]] = await conn.query('SELECT estado FROM cmp_pedidos WHERE id = ? FOR UPDATE', [id]);
+      if (['pendiente', 'recibido_parcial', 'recibido'].includes(ped.estado)) {
+        const todas = await lineasDe2(conn, id);
+        const conItem = todas.filter((l) => l.item_id);
+        const algo = conItem.some((l) => l.cantidad_recibida > 0.0005);
+        const completo = conItem.length > 0 && conItem.every((l) => l.cantidad_recibida >= l.cantidad * l.factor_aplicado - 0.0005);
+        await conn.query('UPDATE cmp_pedidos SET estado = ? WHERE id = ?', [completo ? 'recibido' : algo ? 'recibido_parcial' : 'pendiente', id]);
+        await publicarTransito(conn, await fila(id, conn), todas);
+      }
+      await conn.commit();
+    } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+  }
+  M.despertar();
+};
+Ingresos.alDesvincular(revertirRecepcion);
 
 // ---- Pedido sugerido (RF20, RN26, EX17) ----
 

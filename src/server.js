@@ -135,6 +135,7 @@ require('./compras/pedidoService'); // pedidos, recepcion y puerto de plazos de 
 require('./compras/devolucionService'); // devoluciones a proveedor que informa Stock (H9)
 require('./compras/informeService'); // indicadores de Compras para el tablero (H9)
 require('./compras/chequeReceptor'); // cheque rechazado que se endosó a un proveedor (H5)
+require('./compras/gastoReceptor'); // gasto con comprobante fiscal de Financiero al Libro IVA (RF03)
 require('./financiero/chequeService'); // cheques que llegan de Clientes y Compras (G8)
 require('./financiero/indicadoresFinanciero'); // tablero y paquete de consolidación (G9)
 require('./financiero/proyeccionService'); // vencimientos que publican Clientes y Compras (G9)

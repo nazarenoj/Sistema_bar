@@ -12,6 +12,7 @@ const vuelta = async () => {
         await Vencimientos.avisos();
         await Ordenes.avisarProgramadas();
         await Vencimientos.publicar();
+        if (await require('../funciones/servicio').estaActiva('CMP-CONTROL-ARCA')) await require('./arcaService').constatarPendientes(null); // reintenta la constatación del CAE (H8)
       } catch (err) {
         logger.error(`[compras] instancia ${inst.codigo}: ${err.message}`);
       }

@@ -29,7 +29,11 @@ const contacto = (c) => {
 };
 // Consumidor final, o factura A con CUIT válido y condición frente al IVA (EX14: con un CUIT inválido no se puede pedir factura A y se sugiere consumidor final).
 const facturacion = (f) => {
-  if (!f || f.tipo === 'consumidor_final') return { tipo: 'consumidor_final' };
+  if (!f || f.tipo === 'consumidor_final') {
+    const dni = String(f?.dni ?? '').replace(/\D/g, '');
+    if (f?.dni !== undefined && f?.dni !== null && f?.dni !== '' && !/^\d{7,8}$/.test(dni)) throw invalida('El DNI son 7 u 8 dígitos.', 400, { codigo: 'DNI_INVALIDO' });
+    return { tipo: 'consumidor_final', ...(dni && { dni }) };
+  }
   if (f.tipo !== 'factura_a') throw invalida('La facturación es consumidor_final o factura_a.');
   const cuit = String(f.cuit ?? '').replace(/\D/g, '');
   if (!cuitValido(cuit)) throw invalida('El CUIT no es válido: no se puede pedir factura A. Podés pedir la factura como consumidor final.', 400, { codigo: 'CUIT_INVALIDO' });
@@ -57,8 +61,8 @@ const armar = async (token, d, cuenta) => {
   return { carrito: c, calculo: r, entrega, envio, total, alergenos: alerg, alergenos_pendientes: r.lineas.some((l) => l.alergenos_pendientes) };
 };
 const vistaResumen = (a) => ({
-  lineas: a.calculo.lineas.map((l) => ({ linea: l.linea, producto_id: l.producto_id, titulo: l.titulo, cantidad: l.cantidad, precio_unitario: l.precio_unitario, importe: l.importe, opciones: l.opciones, alergenos: l.alergenos })),
-  alergenos: a.alergenos, subtotal: a.calculo.subtotal, descuento: a.calculo.descuento, cupon: a.calculo.cupon, envio: a.envio, envio_gratis: a.calculo.envio_gratis.gratis, total: a.total, avisos: a.calculo.avisos,
+  lineas: a.calculo.lineas.map((l) => ({ linea: l.linea, producto_id: l.producto_id, titulo: l.titulo, cantidad: l.cantidad, precio_unitario: l.precio_unitario, importe: l.importe, opciones: l.opciones, alergenos: l.alergenos, ...(l.promociones && { promociones: l.promociones, descuento_promo: l.descuento_promo }) })),
+  alergenos: a.alergenos, subtotal: a.calculo.subtotal, descuento: a.calculo.descuento, descuento_promos: a.calculo.descuento_promos, cupon: a.calculo.cupon, envio: a.envio, envio_gratis: a.calculo.envio_gratis.gratis, total: a.total, avisos: a.calculo.avisos,
   requiere_aceptar_alergenos: a.alergenos.length > 0,
 });
 const resumen = async (token, d, cuenta) => vistaResumen(await armar(token, d ?? {}, cuenta));
@@ -96,6 +100,10 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
 
   const a = await armar(token, d, cuenta);
   if (a.calculo.lineas.some((l) => l.sin_stock || l.faltante)) throw invalida('Hay artículos agotados o con menos cantidad disponible: ajustá el carrito.', 409, { codigo: 'SIN_DISPONIBLE', detalle: a.calculo.lineas.filter((l) => l.sin_stock || l.faltante).map((l) => ({ linea: l.linea, titulo: l.titulo, disponible: l.disponible })) });
+  // Un consumidor final por encima del tope vigente tiene que identificarse (Ventas Online RN10, Ventas RN14).
+  const tope = Number((await require('../models/parametroModel').todos()).tope_consumidor_final ?? 0);
+  if (fact.tipo === 'consumidor_final' && tope > 0 && a.total > tope && !fact.dni)
+    throw invalida(`El pedido supera $${tope}: para facturarlo identificá al comprador con su DNI (facturacion.dni) o pedí factura A.`, 400, { codigo: 'IDENTIFICACION_REQUERIDA', tope });
   // EX09: si cambió el total desde que se mostró, se informa y se pide confirmar de nuevo.
   if (d.total_confirmado === undefined || Math.abs(Number(d.total_confirmado) - a.total) > 0.004)
     throw invalida(`El total es ${a.total}: confirmá de nuevo con el importe actualizado.`, 409, { codigo: 'TOTAL_CAMBIO', resumen: vistaResumen(a) });
@@ -164,21 +172,23 @@ const confirmar = async (token, d, cuenta, { idSolicitud } = {}) => {
       // El cupón se vuelve a evaluar con el tope por cliente real (el invitado se identifica por su correo).
       let cuponId = null, descuento = a.calculo.descuento;
       if (a.calculo.cupon?.valido !== false && a.calculo.cupon) {
-        const e = await Cupones.evaluar(a.calculo.cupon.codigo, a.calculo.lineas.map((l) => ({ linea: l.linea, producto_id: l.producto_id, categoria_id: l.categoria_id, importe: l.importe })), { quien });
+        const e = await Carrito.evaluarCupon(a.calculo.cupon.codigo, a.calculo.lineas, { quien });
         if (!e.valido) throw invalida(e.motivo, 409, { codigo: 'CUPON_INVALIDO' });
         cuponId = e.cupon.id; descuento = e.descuento;
+        for (const l of a.calculo.lineas) l.descuento_cupon = e.partes.get(l.linea) ?? 0;
       }
+      const descuentoPedido = r2(descuento + (a.calculo.descuento_promos ?? 0)); // el descuento del pedido junta promociones y cupón
       const [r] = await conn.query(
         `INSERT INTO onl_pedidos (id_global, id_solicitud, estado, cuenta_id, nombre, email, telefono, facturacion, entrega_tipo, entrega_datos, medio_pago, subtotal, descuento, envio, total, canje_importe, a_pagar, cupon_id, cupon_codigo,
            reserva_id, reserva_estado, reserva_vence_ms, credito_reserva_id, retencion_id, canje_datos, config_version, config_instantanea, terminos_ms, observaciones, created_ms, updated_ms)
          VALUES (?, ?, 'pendiente_pago', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [idG, solicitud, cuenta?.id ?? null, cont.nombre, cont.email, cont.telefono, JSON.stringify(fact), a.entrega.tipo, JSON.stringify(a.entrega.datos ?? {}), medio, a.calculo.subtotal, descuento, a.envio, a.total, canjeImporte, aPagar, cuponId, a.calculo.cupon?.codigo ?? null,
+        [idG, solicitud, cuenta?.id ?? null, cont.nombre, cont.email, cont.telefono, JSON.stringify(fact), a.entrega.tipo, JSON.stringify(a.entrega.datos ?? {}), medio, a.calculo.subtotal, descuentoPedido, a.envio, a.total, canjeImporte, aPagar, cuponId, a.calculo.cupon?.codigo ?? null,
           rs.id ?? null, rs.estado, rs.vence_ms ?? null, creditoId, canje?.id_retencion ?? null, canje ? JSON.stringify(canje) : null, cfg.version, JSON.stringify(activas), ahora, d.observaciones ? String(d.observaciones).slice(0, 255) : null, ahora, ahora]);
       const inicioDia = new Date(); inicioDia.setHours(0, 0, 0, 0);
       const [[{ hoyN }]] = await conn.query('SELECT COUNT(*) AS hoyN FROM onl_pedidos WHERE created_ms >= ?', [inicioDia.getTime()]);
       await conn.query('UPDATE onl_pedidos SET programado_ms = ?, tiempo_estimado_min = ?, zona_id = ?, numero_retiro = ? WHERE id = ?', [a.entrega.programado_ms ?? null, a.entrega.tiempo_estimado_min ?? 0, a.entrega.zona_id ?? null, a.entrega.tipo === 'retiro' ? `R${String(hoyN).padStart(3, '0')}` : null, r.insertId]);
-      for (const l of a.calculo.lineas) await conn.query('INSERT INTO onl_pedido_lineas (pedido_id, linea, producto_id, titulo, cantidad, precio_unitario, importe, opciones, alergenos, observaciones, lista) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [r.insertId, l.linea, l.producto_id, l.titulo, l.cantidad, l.precio_unitario, l.importe, JSON.stringify(l.opciones), JSON.stringify(l.alergenos), l.observaciones, null]);
+      for (const l of a.calculo.lineas) await conn.query('INSERT INTO onl_pedido_lineas (pedido_id, linea, producto_id, titulo, cantidad, precio_unitario, importe, opciones, alergenos, observaciones, lista, descuento_linea, promociones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [r.insertId, l.linea, l.producto_id, l.titulo, l.cantidad, l.precio_unitario, l.importe, JSON.stringify(l.opciones), JSON.stringify(l.alergenos), l.observaciones, null, r2((l.descuento_promo ?? 0) + (l.descuento_cupon ?? 0)), l.promociones ? JSON.stringify(l.promociones) : null]);
       const [pes] = await conn.query("UPDATE onl_pedido_lineas l JOIN productos pr ON pr.id = l.producto_id SET l.es_pesable = 1, l.peso_min = pr.peso_minimo, l.peso_max = pr.peso_maximo, l.pesaje_estado = 'pendiente' WHERE l.pedido_id = ? AND pr.tipo = 'pesable'", [r.insertId]);
       if (pes.affectedRows) await conn.query("UPDATE onl_pedidos SET tiene_pesables = 1, pesaje_estado = 'pendiente' WHERE id = ?", [r.insertId]);
       if (cuponId) await Cupones.consumir(conn, cuponId, { quien, pedidoId: idG, importe: descuento });

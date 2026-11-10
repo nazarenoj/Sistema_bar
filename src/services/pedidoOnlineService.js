@@ -43,7 +43,15 @@ const abrirPedido = async (d) => {
     }
     if (d.envio > 0) { const e = await productoEnvio(conn); productos.push({ producto_id: e.id, cantidad: 1, nombre: e.nombre, precio_unitario: d.envio, observaciones: null }); }
     await Pedido.addProductos(pedido.id, productos, conn);
-    if (d.descuento > 0) {
+    // Con el descuento ya calculado por línea (promociones y cupón del carrito) se deja tal cual y se registran las promociones aplicadas; si no, se reparte el total entre las líneas.
+    const porLinea = d.lineas.length && d.lineas.every((l) => l.descuento_linea !== undefined) && Math.abs(r2(d.lineas.reduce((x, l) => x + l.descuento_linea, 0)) - r2(d.descuento ?? 0)) < 0.01;
+    if (porLinea) {
+      const [items] = await conn.query('SELECT id FROM pedido_productos WHERE pedido_id = ? ORDER BY id', [pedido.id]);
+      for (const [n, l] of d.lineas.entries()) {
+        if (l.descuento_linea > 0) await conn.query('UPDATE pedido_productos SET importe_descuento = ? WHERE id = ?', [r2(l.descuento_linea), items[n].id]);
+        for (const x of l.promociones ?? []) await conn.query('INSERT INTO promociones_aplicadas (clave, promocion_id, nombre, pedido_id, item_id, importe) VALUES (?, ?, ?, ?, ?, ?)', [d.idGlobal, x.promocion_id, x.nombre, pedido.id, items[n].id, x.importe]);
+      }
+    } else if (d.descuento > 0) {
       const [items] = await conn.query('SELECT id, cantidad, precio_unitario FROM pedido_productos WHERE pedido_id = ? ORDER BY id', [pedido.id]);
       const lineasMercaderia = items.slice(0, d.lineas.length);
       const bruto = lineasMercaderia.reduce((a, i) => a + Number(i.cantidad) * Number(i.precio_unitario), 0);
