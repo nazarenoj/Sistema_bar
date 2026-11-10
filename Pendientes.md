@@ -4,15 +4,15 @@ Lista de lo que quedó diferido o limitado al cerrar las Fases G (Financiero) y 
 
 ## General
 
-- **Sin pantallas para Financiero ni Compras**: están hechos por API y probados por API. Falta el frontend (React) de ambos módulos.
-- **Suite completa**: la última corrida completa de `npm test` fue después de G9 (504 de 507 pasaban). Desde entonces solo se corrieron los tests nuevos y los vecinos de cada checkpoint, en tandas chicas. Conviene volver a correr todo.
-- **Tests que ya fallaban antes** (no son de G ni H): Usuarios.RF11, Usuarios.RF22 y Usuarios.EX12.
-- **`X-ID-Solicitud`**: el encabezado de idempotencia funciona en todo el sistema, pero no es obligatorio en las rutas nuevas de Financiero y Compras (por ejemplo pedidos, listas, devoluciones).
-- **Pruebas de campo**: sigue pendiente el checkpoint B0 (periféricos con el equipo real del cliente piloto) y la versión exacta de MySQL/MariaDB del plan de Hostinger.
+- **Sin pantallas** [decisión: fase aparte]: Financiero, Compras, Ventas Online y Contable están hechos por API y probados por API. Falta el frontend (React) de los cuatro.
+- **Suite completa**: la corrida completa de `npm test` del 2026-11-10 dio 775 de 775 en verde.
+- **`X-ID-Solicitud`**: el encabezado de idempotencia funciona en todo el sistema y es obligatorio en las operaciones de Contable que mueven asientos (manuales, apertura, anulación, cierre de ejercicio, revaluación), pero no en las rutas de Financiero y Compras (pedidos, listas, devoluciones, gastos, órdenes de pago). Ver Dudas.
+- **Pruebas de campo** [externo]: sigue pendiente el checkpoint B0 (periféricos con el equipo real del cliente piloto) y la versión exacta de MySQL/MariaDB del plan de Hostinger.
 
 ## Financiero (Fase G)
 
-- **G9, RF24 (pasarelas y plataformas de cobro)**: diferido a la Fase I (Ventas Online), que es donde aparece Mercado Pago.
+- **RF24 (pasarelas y plataformas de cobro)**: resuelto en la Fase I (Ventas Online): comisiones, liquidaciones y diferencias de conciliación, que además llegan a Contable.
+- **Operaciones de divisa**: ver Contable (cuentas en divisa).
 
 ## Compras (Fase H)
 
@@ -77,7 +77,6 @@ Resueltos: conflicto de idempotencia (EX18), plazo de conservación informado (l
 
 ## Pruebas
 
-- **Tests que dependen de la hora del día**: dos pruebas de Financiero (`financiero_informes`: balance de actividad y paquete de consolidación) fallan cuando se corren después de las 21:00 hora de Argentina, porque comparan fechas UTC con fechas locales. Con `TZ=UTC` pasan.
+- **Hora local y UTC**: las pruebas deben correr con la misma zona horaria que la base (sin `TZ=UTC` si el servidor de MySQL corre en hora local); con `TZ=UTC` fallan las que comparan con `NOW()` de MySQL. Las de franjas de Ventas Online usaban la fecha UTC y se corrigieron a fecha local; después de las 21:00 hora de Argentina conviene volver a correr la suite.
 - **ARCA en los tests de la tienda**: las pruebas de Ventas Online simulan ARCA (`test/ayudas_online.js`); sin la simulación cada pedido pagado intenta salir a internet y espera su tiempo máximo.
-- **MySQL local para las pruebas**: el servicio `MySQL80` de esta máquina no arranca sin permisos de administrador; para correr las pruebas se levantó un `mysqld` descartable (`--initialize-insecure`, puerto 3306) en una carpeta temporal.
-- **Pruebas que fallan en domingo** (corrida completa del 2026-11-08, 733 de 744 en verde): Usuarios (cotización automática por día hábil, retención de copias, cola de correo), Ventas (reservas, pedido especial, `EX40` clave sin resolver) y Financiero (gastos recurrentes). No tocan Contable; los mensajes apuntan a fechas y días hábiles, pero no se verificó que fallen igual sin los cambios de la Fase J. Volver a correrlas en un día hábil o en el commit anterior a J1.
+- **MySQL local para las pruebas**: el servicio `MySQL80` de esta máquina no arranca sin permisos de administrador; para correr las pruebas se levanta un `mysqld` descartable (`--initialize-insecure`, puerto 3306) en una carpeta temporal.
