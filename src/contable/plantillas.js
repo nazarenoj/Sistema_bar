@@ -17,6 +17,7 @@ const CUENTAS = [
   ['1.1.08', 'Productos elaborados', T.A, '1.1', 1, 'productos_elaborados', { modulo: 'stock' }, PRODUCCION],
   ['1.1.09', 'Productos en proceso', T.A, '1.1', 1, 'productos_en_proceso', { modulo: 'stock' }, PRODUCCION],
   ['1.1.10', 'Retenciones y percepciones sufridas', T.A, '1.1', 1, 'retenciones_sufridas'],
+  ['1.1.11', 'Valores a depositar', T.A, '1.1', 1, 'valores_a_depositar'],
   ['2', 'PASIVO', T.P, null, 0],
   ['2.1', 'Pasivo corriente', T.P, '2', 0],
   ['2.1.01', 'Proveedores', T.P, '2.1', 1, 'proveedores'],

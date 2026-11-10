@@ -32,10 +32,12 @@ const FORMULARIOS = [
   F('comision_plataforma', 'Comisión de plataforma', 'financiero', { funcion: 'ONL-MARKETPLACES' }, [['comision', 'comisiones_plataformas', 'plataformas_a_cobrar', null, 'Comisión descontada en la liquidación']]),
   F('liquidacion_plataforma', 'Liquidación de plataforma', 'financiero', { funcion: 'ONL-MARKETPLACES' }, [['cobro', 'bancos', 'plataformas_a_cobrar', null, 'Acreditación de la plataforma']]),
   F('comprobante_compra', 'Comprobante de compra', 'compras', null, [
+    ['insumos', 'insumos', 'proveedores', null, 'Mercadería e insumos que ingresan a Stock'],
     ['gasto', 'compras', 'proveedores', 'categoria', 'Compra o gasto neto de IVA'],
     ['iva', 'iva_credito', 'proveedores', null, 'IVA crédito fiscal'],
     ['percepcion', 'retenciones_sufridas', 'proveedores', null, 'Percepciones sufridas']]),
   F('nota_credito_compra', 'Nota de crédito de compra', 'compras', null, [
+    ['insumos', 'proveedores', 'insumos', null, 'Mercadería e insumos devueltos'],
     ['gasto', 'proveedores', 'compras', 'categoria', 'Compra o gasto revertido'],
     ['iva', 'proveedores', 'iva_credito', null, 'IVA crédito fiscal revertido'],
     ['percepcion', 'proveedores', 'retenciones_sufridas', null, 'Percepciones revertidas']]),
@@ -46,9 +48,21 @@ const FORMULARIOS = [
   F('costo_ventas', 'Costo de ventas', 'stock', null, [
     ['insumos', 'costo_insumos', 'insumos', 'categoria', 'Costo de insumos'],
     ['packaging', 'costo_packaging', 'packaging', 'categoria', 'Costo de packaging']]),
+  F('ajuste_stock', 'Egreso de stock por motivo', 'stock', null, [['egreso', 'mermas', 'insumos', 'motivo', 'Egreso valorizado de un motivo de clase «otra»']]),
   F('merma_produccion', 'Merma de producción', 'stock', null, [['merma', 'mermas', 'insumos', 'motivo', 'Desperdicio, vencimientos y desvío fuera de tolerancia']]),
   F('produccion', 'Producción valorizada', 'stock', { funcion: 'STK-PRODUCCION' }, [['produccion', 'productos_elaborados', 'insumos', null, 'Insumos consumidos por el producto terminado']]),
-  F('gasto', 'Gasto', 'financiero', null, [['gasto', 'compras', 'caja', 'categoria', 'Gasto pagado por caja o cuenta']]),
+  F('gasto', 'Gasto', 'financiero', null, [
+    ['gasto', 'compras', 'caja', 'medio', 'Gasto neto de IVA pagado por caja o cuenta'],
+    ['iva', 'iva_credito', 'caja', 'medio', 'IVA crédito fiscal del comprobante del gasto']]),
+  F('recibo_cobro', 'Cobro de cuenta corriente', 'clientes', null, [['cobro', 'caja', 'deudores', 'forma_pago', 'Recibo cobrado por forma de pago']]),
+  F('transferencia_cuentas', 'Transferencia entre caja y banco', 'financiero', null, [['traspaso', 'bancos', 'caja', 'sentido', 'Depósito o extracción entre una caja y una cuenta bancaria']]),
+  F('liquidacion_tarjeta', 'Liquidación de tarjeta o billetera', 'financiero', null, [
+    ['comision', 'comisiones_tarjetas', 'bancos', null, 'Comisión del procesador'],
+    ['iva', 'iva_credito', 'bancos', null, 'IVA de la comisión'],
+    ['retencion', 'retenciones_sufridas', 'bancos', null, 'Retenciones y percepciones de la liquidación']]),
+  F('diferencia_conciliacion', 'Diferencia de conciliación', 'financiero', { funcion: 'ONL-MARKETPLACES' }, [
+    ['faltante', 'diferencias_conciliacion', 'plataformas_a_cobrar', null, 'La plataforma liquidó menos de lo esperado'],
+    ['sobrante', 'plataformas_a_cobrar', 'diferencias_conciliacion', null, 'La plataforma liquidó más de lo esperado']]),
   F('diferencia_caja', 'Diferencia de caja', 'financiero', null, [
     ['faltante', 'diferencias_caja', 'caja', null, 'Faltante en el arqueo'],
     ['sobrante', 'caja', 'diferencias_caja', null, 'Sobrante en el arqueo']]),

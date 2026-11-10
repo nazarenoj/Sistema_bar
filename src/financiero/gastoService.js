@@ -8,6 +8,7 @@ const { idGlobal } = require('../utils/idGlobal');
 const Cuentas = require('./cuentaService');
 const Turnos = require('./turnoService');
 const { invalida, r2, movimiento } = require('./comun');
+const Contable = require('./aContable');
 
 // Gastos (Financiero RF10): fecha, categoría, importe, caja o cuenta de pago y comprobante adjunto. Con comprobante fiscal se calcula su clave unívoca con el servicio de
 // la plataforma (Usuarios RF27) antes de guardar (RN13, EX26) y se publica el evento «Gasto con comprobante fiscal» (Compras, si está instalado, lo toma para el Libro
@@ -109,6 +110,8 @@ const registrar = async (d, { userId, idSolicitud = null, autorizanteId = null, 
         fiscal ? JSON.stringify(d.comprobante) : null, reserva?.clave ?? null, reserva?.id_reserva ?? null, d.adjunto?.nombre ? String(d.adjunto.nombre).slice(0, 120) : null, d.adjunto?.tipo ?? null, adjunto,
         d.recurrente_id ?? null, d.recurrente_fecha ?? null, movId, userId ?? null, Date.now()]);
     if (fiscal && !borrador) await publicarFiscal(conn, { id: r.insertId, idGasto, reserva, d, importe, fecha, userId });
+    // Contable imputa el gasto (neto e IVA crédito contra la caja o cuenta que lo pagó); el comprobante fiscal que va a Compras es solo para el Libro IVA (RN32).
+    if (!borrador && cuenta.moneda === 'ARS') await Contable.publicar(conn, 'gasto_registrado', 'gasto', idGasto, { gasto_id_global: idGasto, fecha, importe, iva: fiscal ? Number(d.comprobante.iva ?? 0) : 0, fiscal, medio: Contable.claseDe(cuenta.tipo), categoria: cat.nombre ?? null }, { userId });
     await conn.commit();
     M.despertar();
     const g = await obtener(r.insertId);
@@ -160,6 +163,7 @@ const anular = async (id, { motivo }, userId) => {
         motivo: motivo.trim(), docIdGlobal: g.id_global, userId });
     }
     await conn.query("UPDATE fin_gastos SET estado = 'anulado', motivo_anulacion = ? WHERE id = ?", [motivo.trim().slice(0, 255), id]);
+    if (g.movimiento_id !== null && g.moneda === 'ARS') await Contable.publicar(conn, 'gasto_anulado', 'gasto', g.id_global, { gasto_id_global: g.id_global, motivo: motivo.trim() }, { docVersion: 2, secuencia: 2, userId });
     await conn.commit();
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
   if (g.fiscal && g.clave) await Claves.anular({ modulo: 'financiero', id_documento: g.id_global }).catch(() => {});

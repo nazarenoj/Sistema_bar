@@ -116,8 +116,11 @@ M.registrarReceptor('stock', 'descuento_stock', async (conn, c, ctx) => {
   }
   // El costo de la venta, congelado en este descuento, también lo toma Contable (RF03, RN11); una venta no fiscal pendiente de facturar no se contabiliza (RF26).
   const costoTotal = Math.round(c.items.reduce((s, it) => s + (lineasCosto.find((l) => l.linea === it.linea)?.costo_unitario ?? 0) * it.cantidad, 0) * 100) / 100;
+  const [pack] = await conn.query('SELECT id FROM insumos WHERE packaging = 1');
+  const idsPack = new Set(pack.map((x) => `insumo:${x.id}`));
+  const costoPack = Math.round(lineasCosto.reduce((s, l) => s + (l.detalle ?? []).filter((x) => idsPack.has(x.item) && x.costo_unitario !== null).reduce((t, x) => t + x.cantidad * x.costo_unitario, 0), 0) * 100) / 100;
   if (costoTotal > 0 && !(c.no_fiscal && (c.doc_tipo ?? 'venta') === 'venta'))
-    await M.publicar(conn, { origen: 'stock', destino: 'contable', tipo: 'costo_venta', docTipo: c.doc_tipo ?? 'venta', docIdGlobal: ctx.docIdGlobal, contenido: { documento: ctx.docIdGlobal, insumos: costoTotal, packaging: 0, total_costo: costoTotal, fecha_ms: Date.now() } });
+    await M.publicar(conn, { origen: 'stock', destino: 'contable', tipo: 'costo_venta', docTipo: c.doc_tipo ?? 'venta', docIdGlobal: ctx.docIdGlobal, contenido: { documento: ctx.docIdGlobal, insumos: Math.round((costoTotal - costoPack) * 100) / 100, packaging: costoPack, total_costo: costoTotal, fecha_ms: Date.now() } });
   // La confirmación viaja a Ventas como mensaje (en la misma transacción), con el costo congelado de cada línea.
   await M.publicar(conn, { origen: 'stock', destino: 'ventas', tipo: 'costo_confirmado', docTipo: c.doc_tipo ?? 'venta', docIdGlobal: ctx.docIdGlobal, contenido: { doc_tipo: c.doc_tipo ?? 'venta', lineas: lineasCosto } });
   return { movimientos: aplicados, lineas: lineasCosto.length };

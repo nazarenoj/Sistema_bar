@@ -185,6 +185,9 @@ const registrar = async (d, { userId = null, idOperacion } = {}) => {
       if (FORMAS_PROPIAS.includes(v.forma)) await Mensajeria.publicar(conn, { origen: 'clientes', destino: 'financiero', tipo: 'cheque_recibido', docTipo: 'recibo', docIdGlobal: ref, docVersion: i + 1, userId,
         contenido: { recibo: ref, cliente_id: cuenta.cliente_id, importe: v.importe, moneda: v.moneda, tipo: v.forma === 'echeq' ? 'echeq' : 'fisico', cheque: { tipo: v.forma === 'echeq' ? 'echeq' : 'fisico', ...v.cheque, identificador_red: v.forma === 'echeq' ? v.referencia ?? v.cheque.numero : undefined } } });
     }
+    // El cobro baja la deuda de Deudores contra la caja o el banco según la forma de pago (Contable RF03); en cuentas en moneda extranjera todavía no se informa.
+    if (cuenta.moneda === 'ARS') await Mensajeria.publicar(conn, { origen: 'clientes', destino: 'contable', tipo: 'recibo_cobro', docTipo: 'recibo', docIdGlobal: ref, userId,
+      contenido: { recibo: ref, cliente_id: cuenta.cliente_id, fecha, valores: valores.map((v) => ({ forma: v.forma, importe: v.importe })) } });
     for (const x of retenciones) {
       await conn.query('INSERT INTO recibo_retenciones (recibo_id, impuesto, regimen, jurisdiccion, nro_certificado, fecha, importe) VALUES (?, ?, ?, ?, ?, ?, ?)', [r.insertId, x.impuesto, x.regimen, x.jurisdiccion, x.nro_certificado, x.fecha, x.importe_original ?? x.importe]);
       await Mensajeria.publicar(conn, { origen: 'clientes', destino: 'contable', tipo: 'retencion_sufrida', docTipo: 'recibo', docIdGlobal: ref, docVersion: x.nro_certificado.length * 1000 + retenciones.indexOf(x), userId, contenido: { recibo: ref, cliente_id: cuenta.cliente_id, ...x } }); // lo recibe Contable si está instalado (RN38)

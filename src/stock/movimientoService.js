@@ -203,6 +203,10 @@ const egresar = async ({ deposito_id, motivo, observacion, lineas }, { userId, m
       const importe = Math.round(Number(v) * 100) / 100;
       if (importe > 0) await M.publicar(conn, { origen: 'stock', destino: 'contable', tipo: 'merma_produccion', docTipo: 'egreso', docIdGlobal: documento, userId,
         contenido: { documento, motivo: m.codigo, importe, fecha_ms: Date.now() } });
+    } else if (m.clase_contable === 'otra' && !m.reservado) { // los motivos «otra» siguen la regla de su motivo (Contable RF20); «sin asiento» no se informa
+      const [[{ v }]] = await conn.query("SELECT COALESCE(SUM(-cantidad * COALESCE(costo_unitario, 0)), 0) AS v FROM stock_movimientos WHERE documento_tipo = 'egreso' AND documento = ?", [documento]);
+      const importe = Math.round(Number(v) * 100) / 100;
+      if (importe > 0) await M.publicar(conn, { origen: 'stock', destino: 'contable', tipo: 'egreso_stock', docTipo: 'egreso', docIdGlobal: documento, userId, contenido: { documento, motivo: m.codigo, importe, fecha_ms: Date.now() } });
     }
     return { documento, deposito_id: dep.id, motivo: m.codigo, clase_contable: m.clase_contable, movimientos: movs };
   });

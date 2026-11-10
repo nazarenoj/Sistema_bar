@@ -13,7 +13,10 @@ Consultas.registrar('financiero', 'saldos', async () => {
   return { caja: r2(caja), bancos: r2(bancos), total: r2(caja + bancos), cuentas_en_otras_monedas: otras };
 });
 
-Consultas.registrar('financiero', 'documento', async ({ id }) => {
+Consultas.registrar('financiero', 'documento', async ({ tipo, id }) => {
+  const por = { gasto: 'fin_gastos', transferencia: 'fin_transferencias', liquidacion: 'fin_liquidaciones' };
+  const tabla = por[String(tipo).split('_')[0]];
+  if (tabla) { const [[d]] = await pool.query(`SELECT id_global FROM ${tabla} WHERE id_global = ?`, [id]); return d ? { tipo: String(tipo).split('_')[0], id_global: d.id_global } : null; }
   const [[t]] = await pool.query('SELECT id_global, estado FROM fin_turnos WHERE id_global = ?', [id]);
   return t ? { tipo: 'turno', id_global: t.id_global, estado: t.estado } : null;
 });

@@ -3,6 +3,7 @@ const Funciones = require('../funciones/servicio');
 const Cuentas = require('./cuentaService');
 const Turnos = require('./turnoService');
 const { r2, movimiento } = require('./comun');
+const Contable = require('./aContable');
 
 // Pago de liquidaciones de comisiones de vendedores (Financiero RF23, RN25): Ventas define el importe; Financiero lo registra como un egreso de la caja o cuenta elegida,
 // con la categoría «Comisiones de vendedores» y vinculado a la liquidación. Sin VEN-COMISIONES no hay pago. Una liquidación anulada en Ventas genera el contramovimiento.
@@ -21,6 +22,7 @@ M.registrarReceptor('financiero', 'pago_comision', async (conn, c, ctx) => {
   const [[cat]] = await conn.query("SELECT id FROM fin_categorias WHERE nombre = 'Comisiones de vendedores'");
   const id = await movimiento(conn, { cuentaId: cuenta.id, turnoId: t.turnoId, tipo: 'pago_comision', importe: -importe, moneda: cuenta.moneda, categoriaId: cat?.id ?? null, formaPago: c.medio_pago ?? null,
     idOperacion: ctx.idOperacion, docIdGlobal: ctx.docIdGlobal, motivo: `Liquidación de comisiones ${c.desde ?? ''} a ${c.hasta ?? ''}`.trim() });
+  await Contable.publicar(conn, 'pago_comision', 'pago_comision', ctx.docIdGlobal, { liquidacion_id_global: ctx.docIdGlobal, importe, medio: Contable.claseDe(cuenta.tipo) });
   return { movimiento_id: id };
 });
 
@@ -31,5 +33,6 @@ M.registrarReceptor('financiero', 'anulacion_pago_comision', async (conn, c, ctx
   const t = await Turnos.paraContramovimiento(conn, cuenta);
   const id = await movimiento(conn, { cuentaId: cuenta.id, turnoId: t.turnoId, enEspera: t.enEspera, tipo: 'anulacion_pago_comision', importe: -Number(orig.importe), moneda: cuenta.moneda, categoriaId: orig.categoria_id,
     vinculoId: orig.id, idOperacion: ctx.idOperacion, docIdGlobal: ctx.docIdGlobal, motivo: c.motivo ?? 'Liquidación anulada en Ventas' });
+  await Contable.publicar(conn, 'pago_comision_anulado', 'pago_comision', ctx.docIdGlobal, { liquidacion_id_global: ctx.docIdGlobal, motivo: c.motivo ?? 'Liquidación anulada en Ventas' }, { docVersion: 2, secuencia: 2 });
   return { movimiento_id: id };
 }, { revierte: 'pago_comision' });

@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const { idGlobal } = require('../utils/idGlobal');
 const Cuentas = require('./cuentaService');
 const { invalida, r2, cts, movimiento } = require('./comun');
+const Contable = require('./aContable');
 
 // Acreditaciones de tarjetas y billeteras y liquidaciones del procesador (Financiero RF06, RN15, EX11). Cada cobro en una cuenta de procesador, billetera o
 // pasarela genera un crédito a acreditar con su fecha estimada; la liquidación los concilia contra los cupones y registra comisiones, IVA, retenciones,
@@ -98,9 +99,10 @@ const liquidar = async (d, userId) => {
     const conciliado = r2(lineas.filter((l) => l.estado === 'conciliado').reduce((s, l) => s + l.importe, 0));
     const sinCobro = r2(bruto - conciliado);
     const estimada = r2(lineas.filter((l) => l.acreditacion).reduce((s, l) => s + Number(l.acreditacion.comision_estimada), 0));
+    const idLiq = await idGlobal();
     const [r] = await conn.query(
       `INSERT INTO fin_liquidaciones (id_global, cuenta_id, destino_id, referencia, fecha, bruto, comision, iva_comision, retenciones, percepciones, neto, comision_estimada, user_id, ts_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [await idGlobal(), cuenta.id, destino.id, referencia, f, bruto, comision, iva, retenciones, percepciones, neto, estimada, userId ?? null, Date.now()]);
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [idLiq, cuenta.id, destino.id, referencia, f, bruto, comision, iva, retenciones, percepciones, neto, estimada, userId ?? null, Date.now()]);
     const liqId = r.insertId;
     for (const l of lineas) {
       await conn.query('INSERT INTO fin_liquidacion_cupones (liquidacion_id, acreditacion_id, referencia, importe, estado, motivo) VALUES (?, ?, ?, ?, ?, ?)', [liqId, l.acreditacion?.id ?? null, l.referencia ?? l.venta, l.importe, l.estado, l.motivo]);
@@ -115,6 +117,9 @@ const liquidar = async (d, userId) => {
     if (sinCobro > 0) await movimiento(conn, { ...base, cuentaId: destino.id, tipo: 'acreditacion_sin_cobro', importe: sinCobro, marcas: 'sin_cobro_asociado', motivo: `Liquidación ${referencia}: cupones sin cobro asociado` });
     for (const [tipo, importe] of [['comision', comision], ['comision_iva', iva], ['retencion', retenciones], ['percepcion', percepciones]])
       if (importe > 0) await movimiento(conn, { ...base, cuentaId: destino.id, tipo, importe: -importe, categoriaId: catCom?.id ?? null, motivo: `Liquidación ${referencia}` });
+    // Lo que descuenta el procesador (comisión, IVA, retenciones y percepciones) sale de la cuenta donde se acreditó el cobro bruto (Contable RF19).
+    if (cuenta.moneda === 'ARS' && comision + iva + retenciones + percepciones > 0) await Contable.publicar(conn, 'liquidacion_tarjeta', 'liquidacion', idLiq,
+      { liquidacion_id_global: idLiq, referencia, comision, iva, retenciones, percepciones, fecha: f }, { userId });
     await conn.commit();
     return obtener(liqId);
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }

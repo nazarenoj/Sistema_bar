@@ -108,10 +108,10 @@ const sembrar = async (db = pool, vigencia = fechaLocal()) => {
     }
   }
   // Reglas por criterio: la modalidad de la venta elige la cuenta de ingreso y la forma de pago, la de cobro.
-  const INGRESO = { mostrador: 'ventas_mostrador', 'para llevar': 'ventas_mostrador', retiro: 'ventas_mostrador', delivery: 'ventas_delivery' };
-  const COBRO = { tarjeta_debito: 'bancos', tarjeta_credito: 'bancos', transferencia: 'bancos', cobro_online: 'bancos', cobro_plataforma: 'plataformas_a_cobrar', vale: 'gift_cards' };
+  const INGRESO = { mostrador: 'ventas_mostrador', 'para llevar': 'ventas_mostrador', retiro: 'ventas_mostrador', delivery: 'ventas_delivery', mayorista: 'ventas_mayorista' };
+  const COBRO = { tarjeta_debito: 'bancos', tarjeta_credito: 'bancos', transferencia: 'bancos', cobro_online: 'bancos', cobro_plataforma: 'plataformas_a_cobrar', vale: 'gift_cards', 'vale:gift_card': 'gift_cards', 'vale:vale': 'vales' };
   const disp = new Set(Form.disponibles((m) => modulos.get(m), funciones).map((f) => f.id));
-  for (const [form, lado] of [['venta', 'debe'], ['venta_regularizada', 'debe'], ['nota_credito_venta', 'haber']]) {
+  for (const [form, lado] of [['venta', 'debe'], ['venta_regularizada', 'debe'], ['nota_credito_venta', 'haber'], ['factura_de_remitos', 'debe']]) {
     if (!disp.has(form)) continue;
     for (const [componente, mapa, ladoCuenta] of [['ingreso', INGRESO, lado === 'debe' ? 'haber' : 'debe'], ['cobro', form === 'nota_credito_venta' ? { ...COBRO, vale: 'vales' } : COBRO, lado]]) {
       const base = (await db.query("SELECT * FROM con_reglas WHERE formulario = ? AND componente = ? AND criterio = '*' ORDER BY vigencia_desde LIMIT 1", [form, componente]))[0][0];
@@ -125,6 +125,24 @@ const sembrar = async (db = pool, vigencia = fechaLocal()) => {
         nuevas++;
       }
     }
+  }
+  // Reglas por criterio de otros formularios: [formulario, componente, criterio, cuenta del debe, cuenta del haber] (null conserva la de la regla general).
+  const POR_CRITERIO = [
+    ['gasto', 'gasto', 'bancos', null, 'bancos'], ['gasto', 'iva', 'bancos', null, 'bancos'], ['pago_comision', 'pago', 'bancos', null, 'bancos'], ['orden_pago', 'pago', 'bancos', null, 'bancos'],
+    ['vencimiento_saldo', 'vencimiento', 'vale', 'vales', null], ['transferencia_cuentas', 'traspaso', 'bancos>caja', 'caja', 'bancos'], ['transferencia_cuentas', 'traspaso', 'caja>bancos', 'bancos', 'caja'],
+    ...['tarjeta_debito', 'tarjeta_credito', 'transferencia', 'cobro_online'].map((f) => ['recibo_cobro', 'cobro', f, 'bancos', null]),
+    ...['cheque', 'echeq'].map((f) => ['recibo_cobro', 'cobro', f, 'valores_a_depositar', null]),
+  ];
+  for (const [form, comp, criterio, claveDebe, claveHaber] of POR_CRITERIO) {
+    if (!disp.has(form)) continue;
+    const base = (await db.query("SELECT * FROM con_reglas WHERE formulario = ? AND componente = ? AND criterio = '*' ORDER BY vigencia_desde LIMIT 1", [form, comp]))[0][0];
+    if (!base) continue;
+    const [[{ n }]] = await db.query('SELECT COUNT(*) AS n FROM con_reglas WHERE formulario = ? AND componente = ? AND criterio = ?', [form, comp, criterio]);
+    if (Number(n)) continue;
+    const debe = claveDebe ? await Cuentas.porClave(claveDebe, db) : { id: base.cuenta_debe_id, imputable: 1 }, haber = claveHaber ? await Cuentas.porClave(claveHaber, db) : { id: base.cuenta_haber_id, imputable: 1 };
+    if (!debe?.imputable || !haber?.imputable) continue;
+    await db.query('INSERT IGNORE INTO con_reglas (formulario, componente, criterio, cuenta_debe_id, cuenta_haber_id, vigencia_desde, activa, predeterminada, actualizada_ms) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?)', [form, comp, criterio, debe.id, haber.id, vigencia, Date.now()]);
+    nuevas++;
   }
   // La gift card se cobra con la forma de pago de la venta que la vende.
   if (disp.has('emision_gift_card')) {

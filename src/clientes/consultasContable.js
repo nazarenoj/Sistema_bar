@@ -16,11 +16,16 @@ Consultas.registrar('clientes', 'instrumentos', async () => {
   return { gift_cards: por.gift_card ?? 0, vales: por.vale ?? 0, total: r2((por.gift_card ?? 0) + (por.vale ?? 0)) };
 });
 
+Consultas.registrar('clientes', 'instrumento', async ({ codigo }) => {
+  const [[i]] = await pool.query('SELECT tipo FROM fid_instrumentos WHERE codigo = ?', [codigo]);
+  return i ? { tipo: i.tipo } : null;
+});
+
 Consultas.registrar('clientes', 'documento', async ({ tipo, id }) => {
   if (tipo === 'pasivo_instrumento') {
     const [[i]] = await pool.query('SELECT codigo, tipo, estado, importe_inicial FROM fid_instrumentos WHERE codigo = ?', [id]);
     return i ? { tipo: i.tipo, codigo: i.codigo, estado: i.estado, importe: Number(i.importe_inicial) } : null;
   }
-  const [[r]] = await pool.query('SELECT id_global, total, created_at FROM recibos WHERE id_global = ?', [id]);
+  const [[r]] = await pool.query("SELECT id_global, total FROM recibos WHERE CONCAT('REC-', LPAD(punto_emision, 4, '0'), '-', LPAD(numero, 8, '0')) = ?", [id]);
   return r ? { tipo: 'recibo', id_global: r.id_global, importe: Number(r.total) } : null;
 });

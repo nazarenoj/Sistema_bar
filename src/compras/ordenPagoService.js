@@ -201,8 +201,12 @@ const crear = async (d, ctx = {}) => {
 };
 
 // La orden y sus retenciones, como eventos para Contable (RF06, RF09, RN28).
-const publicarOrden = (conn, o) => M.publicar(conn, { origen: 'compras', destino: 'contable', tipo: 'orden_pago', docTipo: 'orden_pago', docIdGlobal: o.id_global,
-  contenido: { orden_id_global: o.id_global, numero: o.numero, tipo: o.tipo, proveedor: o.proveedor.razon_social, cuit: o.proveedor.cuit, moneda: o.moneda, deuda_aplicada: o.deuda, retenciones: o.totalRet, medios: o.totalMedios, fecha: hoy() } });
+const publicarOrden = async (conn, o) => {
+  const [mm] = await conn.query('SELECT m.medio, m.importe FROM cmp_op_medios m JOIN cmp_ordenes_pago p ON p.id = m.orden_id WHERE p.id_global = ?', [o.id_global]);
+  o = { ...o, mediosLista: mm.map((x) => ({ medio: x.medio, importe: Number(x.importe) })) };
+  return M.publicar(conn, { origen: 'compras', destino: 'contable', tipo: 'orden_pago', docTipo: 'orden_pago', docIdGlobal: o.id_global,
+  contenido: { orden_id_global: o.id_global, numero: o.numero, tipo: o.tipo, proveedor: o.proveedor.razon_social, cuit: o.proveedor.cuit, moneda: o.moneda, deuda_aplicada: o.deuda, retenciones: o.totalRet, medios: o.totalMedios, medios_detalle: (o.mediosLista ?? []).map((m) => ({ clase: m.medio === 'efectivo' ? 'caja' : 'bancos', importe: m.importe })), fecha: hoy() } });
+};
 
 // ---- Aprobar, ejecutar, anular ----
 

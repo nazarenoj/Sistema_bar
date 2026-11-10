@@ -65,7 +65,7 @@ const getOne = async (req, res) => {
 };
 
 const create = async (req, res) => {
-  const { nombre, unidad, costo_unitario, stock, disponible } = req.body;
+  const { nombre, unidad, costo_unitario, stock, disponible, packaging } = req.body;
 
   const errores = validarCampos({ nombre, unidad, costo_unitario, disponible });
   if (stock !== undefined && stock !== null && (typeof stock !== 'number' || isNaN(stock) || stock < 0)) {
@@ -80,6 +80,7 @@ const create = async (req, res) => {
       costo_unitario: costo_unitario ?? null,
       stock: stock ?? 0,
       disponible: disponible ?? true,
+      packaging: packaging === true,
     });
     res.status(201).json(nuevo);
   } catch (err) {
@@ -94,7 +95,7 @@ const update = async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'El parámetro "id" debe ser un número entero válido.' });
 
-  const { nombre, unidad, costo_unitario, disponible } = req.body;
+  const { nombre, unidad, costo_unitario, disponible, packaging } = req.body;
 
   const errores = validarCampos({ nombre, unidad, costo_unitario, disponible });
   if (errores.length) return res.status(400).json({ errores });
@@ -108,6 +109,7 @@ const update = async (req, res) => {
       unidad: unidad.trim(),
       costo_unitario: costo_unitario ?? null,
       disponible: disponible ?? !!actual.disponible,
+      packaging,
     });
 
     if (!afectados) return res.status(404).json({ error: `Insumo con id ${id} no encontrado.` });

@@ -6,6 +6,7 @@ const Funciones = require('../funciones/servicio');
 const Form = require('./formularios');
 const Periodos = require('./periodoService');
 const Pendientes = require('./pendienteService');
+const { consultar } = require('./consultaService');
 const { gancho } = require('./receptor');
 const { invalida, r2, cts, iso, fechaLocal } = require('./comun');
 
@@ -63,7 +64,15 @@ const lineasDeVenta = async (db, formulario, c, fecha, devolucion) => {
   const out = [];
   if (n > 0) out.push(...linea(await resolver(db, formulario, 'ingreso', modalidad, fecha), n, `Venta ${modalidad}`));
   if (iva > 0) out.push(...linea(await resolver(db, formulario, 'iva', null, fecha), iva, 'IVA'));
-  const pagos = devolucion ? (c.reintegros ?? []).map((x) => ({ forma: x.forma ?? x.metodo_pago, importe: x.importe })) : c.pagos;
+  let pagos = devolucion ? (c.reintegros ?? []).map((x) => ({ forma: x.forma ?? x.metodo_pago, importe: x.importe })) : c.pagos;
+  // El canje con la forma «Vale / Gift card / Puntos» cancela el pasivo de lo que sea el instrumento (RF17): se averigua su tipo en Clientes.
+  if (!devolucion) pagos = await Promise.all((pagos ?? []).map(async (p) => {
+    if ((p.forma ?? p.metodo_pago) !== 'vale' || !p.instrumento) return p;
+    const r = await consultar('clientes', 'instrumento', { codigo: p.instrumento });
+    return r.disponible && r.valor ? { ...p, forma: `vale:${r.valor.tipo}` } : p;
+  }));
+  // Una venta no fiscal que se regulariza trae su costo, que no se había contabilizado (RF26).
+  if (c.costo_total > 0) for (const comp of ['insumos']) out.push(...linea(await resolver(db, 'costo_ventas', comp, '*', fecha), Math.round(c.costo_total * 100) / 100, 'Costo de ventas'));
   for (const p of cobros(pagos, total)) out.push(...linea(await resolver(db, formulario, 'cobro', p.forma, fecha), p.importe, p.forma));
   return out;
 };

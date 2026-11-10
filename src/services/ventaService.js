@@ -369,7 +369,9 @@ const publicarRegularizada = async (venta, factura, userId) => {
   try {
     await conn.beginTransaction();
     await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'venta_regularizada', docTipo: 'venta', docIdGlobal: venta.id_global, userId,
-      contenido: { total: venta.total, pagos: venta.pagos, factura_id_global: factura.id_global, modalidad: venta.modalidad, lineas_contables: await lineasContables(conn, venta.detalle), fecha_ms: Date.now() } });
+      contenido: { total: venta.total, pagos: venta.pagos, factura_id_global: factura.id_global, modalidad: venta.modalidad, lineas_contables: await lineasContables(conn, venta.detalle), fecha_ms: Date.now(),
+        // El costo de una venta no fiscal no se contabilizó al descontarse el stock (RF26): se reconoce junto con la venta.
+        ...(venta.condicion_fiscal === 'no_fiscal' && { costo_total: Math.round(venta.detalle.reduce((s, l) => s + (l.costo?.costo_unitario ?? 0) * Number(l.cantidad), 0) * 100) / 100 }) } });
     await conn.commit();
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
   Mensajeria.despertar();

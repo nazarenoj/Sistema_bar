@@ -19,10 +19,10 @@ const getByNombre = async (nombre) => {
   return rows;
 };
 
-const create = async ({ nombre, unidad, costo_unitario, stock, disponible }) => {
+const create = async ({ nombre, unidad, costo_unitario, stock, disponible, packaging }) => {
   const [result] = await pool.query(
-    'INSERT INTO insumos (nombre, unidad, costo_unitario, stock, disponible) VALUES (?, ?, ?, ?, ?)',
-    [nombre, unidad, costo_unitario ?? null, 0, disponible === false ? 0 : 1]
+    'INSERT INTO insumos (nombre, unidad, costo_unitario, stock, disponible, packaging) VALUES (?, ?, ?, ?, ?, ?)',
+    [nombre, unidad, costo_unitario ?? null, 0, disponible === false ? 0 : 1, packaging ? 1 : 0]
   );
   await Mov.saldoInicial({ tipo: 'insumo', id: result.insertId }, stock ?? 0);
   const [newRow] = await pool.query('SELECT * FROM insumos WHERE id = ?', [result.insertId]);
@@ -30,10 +30,10 @@ const create = async ({ nombre, unidad, costo_unitario, stock, disponible }) => 
 };
 
 // El stock no se edita a mano: cada cambio es un movimiento del libro de Stock (ver src/stock/movimientoService.js).
-const update = async (id, { nombre, unidad, costo_unitario, disponible }) => {
+const update = async (id, { nombre, unidad, costo_unitario, disponible, packaging }) => {
   const [result] = await pool.query(
-    'UPDATE insumos SET nombre = ?, unidad = ?, costo_unitario = ?, disponible = ? WHERE id = ?',
-    [nombre, unidad, costo_unitario ?? null, disponible === false ? 0 : 1, id]
+    'UPDATE insumos SET nombre = ?, unidad = ?, costo_unitario = ?, disponible = ?, packaging = COALESCE(?, packaging) WHERE id = ?',
+    [nombre, unidad, costo_unitario ?? null, disponible === false ? 0 : 1, typeof packaging === 'boolean' ? (packaging ? 1 : 0) : null, id]
   );
   return result.affectedRows;
 };

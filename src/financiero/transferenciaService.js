@@ -3,6 +3,7 @@ const { idGlobal } = require('../utils/idGlobal');
 const Cuentas = require('./cuentaService');
 const Turnos = require('./turnoService');
 const { invalida, r2, movimiento } = require('./comun');
+const Contable = require('./aContable');
 
 // Transferencias entre cajas y cuentas (Financiero RF05): retiro a caja fuerte, depósito bancario, transferencia entre cuentas. Son dos movimientos vinculados que
 // nacen juntos o ninguno (RN02, RN38). Una caja de efectivo no queda en negativo y una cuenta solo hasta su descubierto (RN08, EX04).
@@ -38,8 +39,12 @@ const transferirTx = async (conn, { origenId, destinoId, importe, motivo, userId
   const idO = await movimiento(conn, { cuentaId: origen.id, turnoId: turnoO, tipo: 'transferencia', importe: -monto, moneda: origen.moneda, motivo: motivo.trim(), userId, terminalId });
   const idD = await movimiento(conn, { cuentaId: destino.id, turnoId: d.turnoId, enEspera: d.enEspera, tipo: 'transferencia', importe: monto, moneda: destino.moneda, vinculoId: idO, motivo: motivo.trim(), userId, terminalId });
   const clase = claseDe(origen, destino);
+  const idTransf = await idGlobal();
   const [r] = await conn.query('INSERT INTO fin_transferencias (id_global, clase, origen_id, destino_id, importe, motivo, mov_origen_id, mov_destino_id, user_id, ts_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [await idGlobal(), clase, origen.id, destino.id, monto, motivo.trim().slice(0, 255), idO, idD, userId ?? null, Date.now()]);
+    [idTransf, clase, origen.id, destino.id, monto, motivo.trim().slice(0, 255), idO, idD, userId ?? null, Date.now()]);
+  // Entre una caja y una cuenta bancaria cambia la cuenta contable; entre dos de la misma clase no hay asiento (Contable RF03).
+  if (origen.moneda === 'ARS' && Contable.claseDe(origen.tipo) !== Contable.claseDe(destino.tipo)) await Contable.publicar(conn, 'transferencia_cuentas', 'transferencia', idTransf,
+    { transferencia_id_global: idTransf, importe: r2(monto), desde: Contable.claseDe(origen.tipo), hacia: Contable.claseDe(destino.tipo) }, { userId });
   return { id: r.insertId, clase, origen_id: origen.id, destino_id: destino.id, importe: r2(monto), mov_origen_id: idO, mov_destino_id: idD };
 };
 

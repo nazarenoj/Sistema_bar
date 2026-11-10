@@ -400,6 +400,15 @@ const vencer = async () => {
     const saldo = await saldoDe(i.id);
     if (saldo > 0) await mover(i.id, 'vencimiento', -saldo, { motivo: 'Vencimiento' });
     await pool.query("UPDATE fid_instrumentos SET estado = 'vencido' WHERE id = ?", [i.id]);
+    // El saldo vencido sale del pasivo contra un resultado, según la regla de Contable (RF17).
+    if (saldo > 0 && ['gift_card', 'vale'].includes(i.tipo)) {
+      const cx = await pool.getConnection();
+      try {
+        await cx.beginTransaction();
+        await M.publicar(cx, { origen: 'clientes', destino: 'contable', tipo: 'vencimiento_instrumento', docTipo: 'instrumento', docIdGlobal: i.codigo, contenido: { tipo: i.tipo, codigo: i.codigo, importe: saldo, fecha: h } });
+        await cx.commit();
+      } catch { await cx.rollback().catch(() => {}); } finally { cx.release(); }
+    }
   }
   const [prox] = await pool.query("SELECT * FROM fid_instrumentos WHERE estado = 'vigente' AND vence_en IS NOT NULL AND avisado_vencimiento = 0 AND vence_en <= ?", [sumarDias(h, p.aviso_dias)]);
   let avisados = 0;

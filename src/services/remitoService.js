@@ -7,6 +7,7 @@ const afipConfig = require('../config/afipConfig');
 const Caea = require('./caeaService');
 const Venta = require('./ventaService');
 const { letraFactura } = require('./notaFiscalService');
+const { lineasContables } = require('./lineasContables');
 const { idGlobal } = require('../utils/idGlobal');
 
 // Remitos de entrega y facturación agrupada (Ventas RF12, RF17, RF27, RN31, RN73, RN74, EX36). El remito es un comprobante no fiscal con numeración propia; asignado
@@ -94,6 +95,8 @@ const anular = async (idGlobalRemito, { userId = null } = {}) => {
     if (conDescuento) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'stock', tipo: 'reingreso_stock', docTipo: 'remito', docIdGlobal: r.id_global, docVersion: 2, secuencia: 2, userId,
       contenido: { modo: 'reingreso', items: ls.map((l, linea) => ({ linea, producto_id: l.producto_id, cantidad: l.cantidad, cantidad_original: l.cantidad })), user_id: userId } });
     if (r.cuenta_asignada) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'anulacion_remito', docTipo: 'remito', docIdGlobal: r.id_global, docVersion: 2, secuencia: 2, userId, contenido: { remito_id_global: r.id_global } });
+    if (r.cuenta_asignada && await Funciones.estaActiva('VEN-CC', conn)) await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'remito_anulado', docTipo: 'remito', docIdGlobal: r.id_global, docVersion: 2, secuencia: 2, userId,
+      contenido: { remito_id_global: r.id_global, fecha_ms: Date.now() } });
     await conn.commit();
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
   Mensajeria.despertar();
@@ -155,6 +158,15 @@ const facturar = async ({ cliente_id: clienteId, remitos: ids, aceptar_diferenci
     // El evento lleva cada remito que cancela; no incluye stock ni cobro (ya ocurrieron con el remito, RN73). Clientes reemplaza el saldo de los remitos por el de la factura.
     await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'clientes', tipo: 'remitos_facturados', docTipo: 'factura_remitos', docIdGlobal: id, userId, solicitud: idSolicitud,
       contenido: { cliente_id: cli.id, factura_id_global: id, importe: total, fecha: new Date().toISOString().slice(0, 10), remitos: detalle.map((d) => ({ remito_id_global: d.remito, importe_remito: d.importe_remito, importe_facturado: d.importe_a_facturar })) } });
+    // Contable reconoce la venta y el IVA al emitirse la factura que cancela los remitos (RF24, RN35): el importe facturado se reparte entre las líneas de los remitos según su alícuota.
+    if (await Funciones.estaActiva('VEN-CC', conn)) {
+      const lineas = validos.flatMap((rm) => JSON.parse(rm.detalle));
+      const base = await lineasContables(conn, lineas);
+      const suma = base.reduce((s, l) => s + l.importe, 0) || 1;
+      await Mensajeria.publicar(conn, { origen: 'ventas', destino: 'contable', tipo: 'factura_remitos', docTipo: 'factura_remitos', docIdGlobal: id, userId, solicitud: idSolicitud,
+        contenido: { factura_id_global: id, total, remitos: detalle.map((d) => ({ remito_id_global: d.remito, importe: d.importe_remito })), modalidad: 'mayorista',
+          lineas_contables: base.map((l) => ({ ...l, importe: Math.round(l.importe * (total / suma) * 100) / 100 })), fecha_ms: Date.now() } });
+    }
     await conn.commit();
     Mensajeria.despertar();
     return { ok: true, factura: { id_global: id, tipo_comprobante: tipoComprobante, punto_venta: afipConfig.puntoVenta, numero: emitida.numero ?? null, cae: emitida.cae ?? null, importe_total: total }, ...vista };

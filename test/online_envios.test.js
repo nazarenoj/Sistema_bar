@@ -40,6 +40,9 @@ const pedir = async (c, entrega, extra = {}) => {
   return api('POST', `${T}/checkout`, { headers: { 'X-ID-Solicitud': `sol-env-${++k}-abcdef` }, body: { carrito: c.token, contacto: { nombre: 'Ana', email: 'ana@mail.test' }, entrega, medio_pago: 'pago_al_retirar', acepta_terminos: true, total_confirmado: c.total + (extra.envio ?? 0), ...extra.body } });
 };
 
+// Fecha local (AAAA-MM-DD): las franjas son del día del comercio, no del día UTC (pasadas las 21:00 de Argentina difieren).
+const fechaLocal = (ms) => { const d = new Date(ms); const p = (x) => String(x).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+
 test('Ventas Online.RF11: las zonas de delivery se configuran con permiso, por codigo postal sin repetirse', async () => {
   const z = (b, t = gerente) => api('POST', '/api/ventas-online/zonas', { token: t.token, body: b });
   assert.equal((await z({ nombre: 'Centro', codigos_postales: ['2000'], costo: 500 }, administrativo)).status, 403);
@@ -106,11 +109,11 @@ test('Ventas Online.RF26: se pide para una hora programada en franjas de 15 minu
   assert.equal((await cotizar(c, { tipo: 'retiro', programado: new Date(proxima(0) - FRANJA * 8).toISOString() })).json.codigo, 'FRANJA_PASADA');
   assert.equal((await cotizar(c, { tipo: 'retiro', programado: new Date(proxima(0) + 9 * 86400000).toISOString() })).json.codigo, 'FUERA_DE_PLAZO');
   assert.equal((await cotizar(c, { tipo: 'retiro', programado: 'ayer' })).status, 400);
-  const f = (await api('GET', `${T}/entrega/franjas?fecha=${new Date(bien).toISOString().slice(0, 10)}&carrito=${c.token}`)).json;
+  const f = (await api('GET', `${T}/entrega/franjas?fecha=${fechaLocal(bien)}&carrito=${c.token}`)).json;
   assert.ok(f.some((x) => x.desde_ms === bien));
   assert.ok(f.every((x) => x.desde_ms >= Date.now() + 35 * 60000 - FRANJA)); // nada antes de ahora mas el tiempo estimado
   assert.equal((await api('GET', `${T}/entrega/franjas?fecha=2020-01-01`)).json.length, 0);
-  assert.equal((await api('GET', `${T}/entrega/franjas?fecha=${new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10)}`)).json.codigo, 'FUERA_DE_PLAZO');
+  assert.equal((await api('GET', `${T}/entrega/franjas?fecha=${fechaLocal(Date.now() + 20 * 86400000)}`)).json.codigo, 'FUERA_DE_PLAZO');
 });
 
 test('Ventas Online.RN37: una franja que alcanza su capacidad deja de ofrecerse y no admite mas pedidos', async () => {
@@ -120,7 +123,7 @@ test('Ventas Online.RN37: una franja que alcanza su capacidad deja de ofrecerse 
   for (let i = 0; i < 2; i++) assert.equal((await pedir(await carrito([{ producto_id: E.id, cantidad: 1 }]), { tipo: 'retiro', programado: iso })).status, 201);
   const tercero = await carrito([{ producto_id: E.id, cantidad: 1 }]);
   assert.equal((await pedir(tercero, { tipo: 'retiro', programado: iso })).json.codigo, 'FRANJA_COMPLETA');
-  const f = (await api('GET', `${T}/entrega/franjas?fecha=${iso.slice(0, 10)}&carrito=${tercero.token}`)).json;
+  const f = (await api('GET', `${T}/entrega/franjas?fecha=${fechaLocal(franja)}&carrito=${tercero.token}`)).json;
   assert.equal(f.some((x) => x.desde_ms === franja), false);
   assert.equal(f.some((x) => x.desde_ms === franja + FRANJA), true);
   // La vitrina no tiene preparacion y no consume cupo.

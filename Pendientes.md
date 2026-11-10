@@ -57,16 +57,16 @@ Lista de lo que quedó diferido o limitado al cerrar las Fases G (Financiero) y 
 
 Todo Contable (J1 a J9) está por API; **no hay pantallas**. Lo que sigue quedó fuera o con límites conocidos.
 
-### Fuentes que todavía no publican a Contable (hay formulario y regla, falta el evento)
+### Fuentes que todavía no publican a Contable
 
-- **Cobros de cuenta corriente y recibos** (Clientes): Contable solo recibe las retenciones sufridas. El cobro de un recibo no genera asiento, así que *Deudores por ventas* sube con cada venta a cuenta corriente y no baja al cobrar. Es el hueco más importante: hay que publicar `recibo_registrado` (cobro por forma de pago contra Deudores). El control cruzado de Deudores lo va a mostrar como diferencia.
-- **Movimientos de Financiero**: gastos, transferencias entre cajas, acreditaciones, liquidaciones de tarjeta/plataforma y comisiones de tarjeta no se publican (solo el cierre y la reapertura de turno, para la diferencia de caja). Los formularios `gasto`, `diferencia_cambio`, `comision_plataforma` y `liquidacion_plataforma` existen pero ningún módulo los alimenta.
-- **Pago de comisiones** (`pago_comision`), **factura de remitos** (VEN-CC), **anulación de un remito** y **comisiones de plataforma** (ONL-MARKETPLACES): formulario definido, sin publicador.
-- **Vencimiento de gift cards y vales**: Contable entiende `vencimiento_instrumento`, Clientes no lo publica.
-- **Producción valorizada** (STK-PRODUCCION) y ajustes de stock: sin publicador; solo se imputan el costo de ventas y las mermas por egreso (motivos con clase `merma`).
-- **Costo de ventas**: se imputa todo a «Costo de ventas - insumos»; Stock no distingue packaging (`packaging` viaja en 0). El costo de una venta no fiscal que luego se regulariza no se contabiliza.
-- **Compras**: los comprobantes se imputan por totales (gasto, IVA, percepciones). Las compras de insumos van a «Compras y gastos generales» y no a Insumos (el evento no trae líneas ni categoría), las órdenes de pago no distinguen caja de banco (medios en un solo importe) y la moneda extranjera se trata como pesos (no hay cotización ni importe en divisa en el evento).
-- **Ventas**: el criterio «forma de pago = vale» imputa siempre a Gift cards (no distingue vale de gift card); el criterio por categoría de artículo no se usa aunque la línea lo trae.
+Resueltos: recibos de cuenta corriente, gastos y su anulación, pago de comisiones, transferencias entre caja y banco, liquidaciones de tarjeta, comisión y liquidación de plataformas con su diferencia de conciliación, factura y anulación de remitos, vencimiento de gift cards y vales, producción valorizada, egresos de stock «otra», packaging en el costo de ventas, costo de una venta no fiscal al regularizarse, mercadería e insumos de las compras, medios de pago de las órdenes, compras en moneda extranjera y canje por vale o gift card. Queda:
+
+- **Operaciones de divisa** (compra y venta de moneda de Financiero) y **cuentas en divisa**: el plan no tiene cuentas de caja o banco en moneda extranjera por clave; hace falta decidir cómo se modelan (ver Dudas).
+- **Cheques rechazados y gastos bancarios** de Financiero: no se informan a Contable.
+- **Ingresos de stock** con motivo «otra» (ajustes positivos): no se informan; solo los egresos.
+- **Órdenes de pago en moneda extranjera**: el evento no trae cotización; se imputan como pesos.
+- **Gasto con comprobante fiscal → Compras**: Compras no tiene receptor del evento (el Libro IVA no incorpora esos gastos todavía).
+- **Criterio por categoría de artículo** en ventas y costo: las líneas lo traen pero las reglas predeterminadas no lo usan.
 
 ### Reglas y asientos
 

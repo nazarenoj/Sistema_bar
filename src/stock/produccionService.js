@@ -126,6 +126,11 @@ const confirmar = async (id, { cantidad_real, peso_crudo, peso_final, lote_codig
          rendimiento_pct = ?, merma_coccion_pct = ?, lote_codigo = ?, confirmada_por = ?, confirmada_at = NOW() WHERE id = ?`,
       [producida, peso_crudo ?? null, peso_final ?? null, redondear(total), unitario, parcial, redondear(merma), redondear(producida / num(o.cantidad_planificada) * 100), merma_coccion,
         lote?.codigo ?? null, userId ?? null, id]);
+    // Contable (RF20): los insumos consumidos pasan a Productos elaborados; la merma fuera de tolerancia va aparte a resultado (RN25).
+    const consumo = redondear(total - num(p.costo_adicional) * producida);
+    const M = require('../mensajeria/servicio');
+    if (consumo > 0) await M.publicar(conn, { origen: 'stock', destino: 'contable', tipo: 'produccion_confirmada', docTipo: 'orden_produccion', docIdGlobal: o.id_global, userId, contenido: { orden: o.id_global, importe: consumo, fecha_ms: Date.now() } });
+    if (merma > 0) await M.publicar(conn, { origen: 'stock', destino: 'contable', tipo: 'merma_produccion', docTipo: 'orden_produccion', docIdGlobal: o.id_global, userId, contenido: { documento: o.id_global, motivo: 'merma_produccion', importe: redondear(merma), fecha_ms: Date.now() } });
     await conn.commit();
     return obtener(id);
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }

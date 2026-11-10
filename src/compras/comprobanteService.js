@@ -234,7 +234,7 @@ const registrar = async (d, ctx = {}) => {
       else if (reserva.estado === 'vinculable') await Claves.vincular({ id_clave: reserva.id_clave, modulo: 'compras', id_documento: idG, rol: 'registro_fiscal', userId: ctx.userId });
       // Contable (si está) se suscribe: el comprobante es un evento de la bandeja de salida (RF03, RN28).
       await M.publicar(conn, { origen: 'compras', destino: 'contable', tipo: 'comprobante_compra', docTipo: 'comprobante', docIdGlobal: idG, userId: ctx.userId,
-        contenido: { comprobante_id_global: idG, proveedor: prov.razon_social, cuit: prov.cuit, clase, tipo, clave: reserva.clave, fecha, periodo_iva: per.periodo, moneda, neto_gravado: netoGravado, no_gravado: noGravado, exento, iva, iva_computable: ivaComputable, percepciones_iva: percIva, percepciones_iibb: percIibb, impuestos_internos: internos, otros_tributos: otros, total } });
+        contenido: { comprobante_id_global: idG, proveedor: prov.razon_social, cuit: prov.cuit, clase, tipo, clave: reserva.clave, fecha, periodo_iva: per.periodo, moneda, cotizacion, neto_mercaderia: r2(lins.filter((l) => l.tipo === 'mercaderia' && l.item_tipo).reduce((s, l) => s + l.importe, 0)), neto_gravado: netoGravado, no_gravado: noGravado, exento, iva, iva_computable: ivaComputable, percepciones_iva: percIva, percepciones_iibb: percIibb, impuestos_internos: internos, otros_tributos: otros, total } });
     }
     await conn.commit();
     M.despertar();
