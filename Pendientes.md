@@ -6,7 +6,7 @@ Lista de lo que quedó diferido o limitado al cerrar las Fases G (Financiero) y 
 
 - **Sin pantallas** [decisión: fase aparte]: Financiero, Compras, Ventas Online y Contable están hechos por API y probados por API. Falta el frontend (React) de los cuatro.
 - **Suite completa**: la corrida completa de `npm test` del 2026-11-10 dio 775 de 775 en verde.
-- **`X-ID-Solicitud`**: el encabezado de idempotencia funciona en todo el sistema y es obligatorio en las operaciones de Contable que mueven asientos (manuales, apertura, anulación, cierre de ejercicio, revaluación), pero no en las rutas de Financiero y Compras (pedidos, listas, devoluciones, gastos, órdenes de pago). Ver Dudas.
+- **`X-ID-Solicitud`**: el encabezado de idempotencia es obligatorio en las operaciones que mueven dinero o asientos (gastos, transferencias, liquidaciones, divisas, comprobantes y órdenes de compras, y las de Contable); las demás rutas lo aceptan pero no lo exigen.
 - **Pruebas de campo** [externo]: sigue pendiente el checkpoint B0 (periféricos con el equipo real del cliente piloto) y la versión exacta de MySQL/MariaDB del plan de Hostinger.
 
 ## Financiero (Fase G)

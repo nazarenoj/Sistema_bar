@@ -82,3 +82,14 @@ test('Usuarios.RN70: las solicitudes vencidas se purgan y las vigentes se conser
   assert.equal(await purgar(), 1);
   assert.equal((await api('GET', '/api/solicitudes/solicitud-0004', { token })).json.estado, 'procesada');
 });
+
+test('Usuarios.RF25: las operaciones que mueven dinero (gastos, transferencias, divisas, comprobantes y órdenes de pago) no se aceptan sin X-ID-Solicitud', async () => {
+  for (const ruta of ['/api/financiero/gastos', '/api/financiero/transferencias', '/api/financiero/liquidaciones', '/api/financiero/divisas/operaciones', '/api/financiero/gastos/1/anular',
+    '/api/compras/comprobantes', '/api/compras/ordenes-pago', '/api/compras/ordenes-pago/1/ejecutar', '/api/compras/ordenes-pago/1/anular', '/api/contable/asientos-manuales', '/api/contable/apertura']) {
+    const r = await api('POST', ruta, { token, body: {}, sinClave: true });
+    assert.equal(r.status, 400, ruta);
+    assert.equal(r.json.codigo, 'FALTA_ID_SOLICITUD', ruta);
+  }
+  // Con la clave sigue el camino normal (acá, módulo no instalado).
+  assert.notEqual((await api('POST', '/api/financiero/gastos', { token, body: {} })).json.codigo, 'FALTA_ID_SOLICITUD');
+});

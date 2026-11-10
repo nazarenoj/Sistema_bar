@@ -50,12 +50,17 @@ const iniciarApp = async ({ alta = true } = {}) => {
   const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   const base = `http://127.0.0.1:${server.address().port}`;
 
-  const api = async (metodo, ruta, { token, body, headers } = {}) => {
+  // Las operaciones que mueven dinero exigen X-ID-Solicitud (Usuarios RF25): las pruebas la mandan sola salvo que la indiquen (o que `sinClave` pida probar el rechazo).
+  const EXIGEN_CLAVE = /^\/api\/(financiero\/(gastos|transferencias|liquidaciones|divisas\/operaciones|gastos\/\d+\/anular)|compras\/(comprobantes|ordenes-pago|ordenes-pago\/\d+\/(ejecutar|anular)))$/;
+  let claves = 0;
+  const api = async (metodo, ruta, { token, body, headers, sinClave } = {}) => {
+    const clave = metodo === 'POST' && !sinClave && EXIGEN_CLAVE.test(ruta.split('?')[0]) && !Object.keys(headers ?? {}).some((h) => h.toLowerCase() === 'x-id-solicitud') ? { 'X-ID-Solicitud': `auto-${process.pid}-${++claves}-${Date.now()}` } : {};
     const res = await fetch(`${base}${ruta}`, {
       method: metodo,
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...clave,
         ...headers,
       },
       ...(body !== undefined && { body: JSON.stringify(body) }),
