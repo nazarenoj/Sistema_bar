@@ -8,6 +8,8 @@ import { Reservas, Comisiones, Carta } from './modulos/ventasExtra'
 import { Cobranzas, Fidelizacion } from './modulos/clientesExtra'
 import { Copias, Correo, Padron, Consolidacion, Seguridad } from './modulos/sistema'
 import { Contable } from './modulos/contable'
+import { Financiero } from './modulos/financiero'
+import { Compras } from './modulos/compras'
 import Alergenos from './stock/Alergenos'
 import IngresoFoto from './stock/IngresoFoto'
 import Inicio from './Inicio'
@@ -38,5 +40,7 @@ export const PANTALLAS = {
   proveedores: Proveedores,
   cocina: Cocina,
   contable: Contable,
+  financiero: Financiero,
+  compras: Compras,
   'config-ventas': ConfigVentas,
 }

@@ -26,5 +26,7 @@ export const PERMISO_VISTA = {
   clientes: 'clientes.ver',
   cocina: 'ventas.pedidos.operar',
   contable: 'contable.ver',
+  financiero: 'financiero.cajas.ver',
+  compras: 'compras.proveedores.ver',
   'config-ventas': 'ventas.catalogo.ver',
 }
