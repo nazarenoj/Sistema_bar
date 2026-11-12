@@ -137,6 +137,10 @@ test('Ventas Online.RN51: los pesables se facturan despues del pesaje real, al e
   assert.equal((await pesar(p, 1, { peso: 0.3, estable: true })).json.codigo, 'FUERA_DE_RANGO'); // fuera del 0,4 a 0,7 publicado
   const ok = await pesar(p, 1, { peso: 0.45, estable: true });
   assert.deepEqual([ok.json.estado, ok.json.delta], ['confirmado', -50]);
+  // Stock descuenta el peso real (RN51 j): 0,45 kg en total, sin contarlo dos veces aunque se reintegre la diferencia.
+  await esperarMensajes(pool);
+  const stockVenta = async (pedido) => Number((await pool.query("SELECT COALESCE(SUM(m.cantidad), 0) AS s FROM stock_movimientos m WHERE m.producto_id = ? AND m.documento = ? AND m.tipo IN ('venta', 'devolucion')", [P.id, (await det(pedido)).entrega_ventas.venta_id_global]))[0][0].s);
+  assert.equal(Math.round((await stockVenta(p)) * 1000) / 1000, -0.45);
   const s = (await api('GET', `/api/ventas-online/pedidos/${p.id}/pesaje`, { token: gerente.token })).json;
   assert.deepEqual([s.pesaje, s.total_cobrado, s.total_real], ['confirmado', 500, 450]);
   assert.equal((await det(p)).comprobantes.length, 0); // todavia no se entrego el retiro
@@ -156,6 +160,10 @@ test('Ventas Online.RN51: hasta la tolerancia el comercio absorbe el exceso y se
   await estado(p, 'listo'); await estado(p, 'entregado');
   const d = await det(p);
   assert.deepEqual([d.comprobantes[0].importe, d.alineacion], [500, 'alineado']); // nunca se factura ni se cobra de mas
+  // El exceso absorbido sale del stock: Stock descuenta el peso real (0,52 kg), no el estimado.
+  await esperarMensajes(pool);
+  const real = Number((await pool.query("SELECT COALESCE(SUM(m.cantidad), 0) AS s FROM stock_movimientos m WHERE m.producto_id = ? AND m.documento = ? AND m.tipo IN ('venta', 'devolucion')", [P.id, d.entrega_ventas.venta_id_global]))[0][0].s);
+  assert.equal(Math.round(real * 1000) / 1000, -0.52);
   // Manual con permiso y motivo.
   const q = await pesable(0.5);
   await estado(q, 'en_preparacion');

@@ -5,6 +5,7 @@ const PedidoOnline = require('../services/pedidoOnlineService');
 const Pasarela = require('./pasarelaMP');
 const Reintegros = require('./reintegroService');
 const Facturacion = require('./facturacionService');
+const M = require('../mensajeria/servicio');
 const { TiendaInvalida } = require('./tiendaService');
 
 // Pesaje real y aceptación de la diferencia (Ventas Online RF29, RN11, RN51, RN52). Los pesables se cobran por el peso estimado y se facturan por el real, que se carga al preparar. Un peso
@@ -136,6 +137,29 @@ const vencerAceptaciones = async () => {
 
 // ---- Pesaje completo: total real y ajuste (RN52) ----
 
+// Stock descuenta el peso real (Ventas Online RN51 j): al pasar a Ventas el pesable viaja como una unidad (1 kg en la unidad de Stock), así que al confirmarse el pesaje se descuenta la diferencia con
+// el peso real (si pesó más) o se reingresa (si pesó menos). Es lo único que corrige el stock: el reintegro de lo pesado de menos solo se anota en el pedido y no registra una devolución en Ventas, así
+// que nada se cuenta dos veces. Cada línea se ajusta una sola vez (la ID de la operación lleva la línea). Sin Stock el mensaje no se genera.
+const ajustarStock = async (p, lineas) => {
+  if (!p.venta_id_global) return;
+  const [todas] = await pool.query('SELECT linea FROM onl_pedido_lineas WHERE pedido_id = ? ORDER BY linea', [p.id]);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    for (const l of lineas) {
+      const delta = r3(Number(l.peso_real) - 1);
+      if (delta === 0) continue;
+      const idx = todas.findIndex((x) => x.linea === l.linea); // posición de la línea en la venta de Ventas
+      if (delta > 0) await M.publicar(conn, { origen: 'ventas_online', destino: 'stock', tipo: 'descuento_stock', docTipo: 'venta', docIdGlobal: p.venta_id_global, docVersion: 1000 + l.linea, secuencia: 2,
+        contenido: { doc_tipo: 'venta', items: [{ linea: 1000 + l.linea, producto_id: l.producto_id, cantidad: delta }], no_fiscal: false, user_id: null, modalidad: p.entrega_tipo === 'delivery' ? 'delivery' : 'retiro' } });
+      else await M.publicar(conn, { origen: 'ventas_online', destino: 'stock', tipo: 'reingreso_stock', docTipo: 'venta', docIdGlobal: p.venta_id_global, docVersion: 1000 + l.linea, secuencia: 2,
+        contenido: { modo: 'reingreso', items: [{ linea: idx, producto_id: l.producto_id, cantidad: -delta, cantidad_original: 1 }], user_id: null } });
+    }
+    await conn.commit();
+  } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+  M.despertar();
+};
+
 const cerrarPesajeSiCompleto = async (id) => {
   const [ls] = await pool.query('SELECT * FROM onl_pedido_lineas WHERE pedido_id = ? AND es_pesable = 1', [id]);
   if (!ls.length || ls.some((l) => l.pesaje_estado !== 'confirmado')) return null;
@@ -150,6 +174,7 @@ const cerrarPesajeSiCompleto = async (id) => {
     neto += d < 0 ? d : (d > tol && acept ? d : 0);
   }
   neto = r2(neto);
+  await ajustarStock(p, ls);
   await pool.query("UPDATE onl_pedidos SET pesaje_estado = 'confirmado', total_real = ?, updated_ms = ? WHERE id = ?", [r2(Number(p.total) + neto), Date.now(), id]);
   if (neto < 0) await pool.query("INSERT INTO onl_ajustes (pedido_id, tipo, estado, delta_neto, reintegro, detalle, ts_ms, actualizado_ms) VALUES (?, 'pesaje', 'pendiente_comprobante', ?, ?, 'neto', ?, ?)", [id, neto, -neto, Date.now(), Date.now()]);
   await Facturacion.intentar(id);
