@@ -90,3 +90,24 @@ test('Ventas Online.RF21: el pedido guarda el descuento por línea y Ventas regi
   const venta = (await api('GET', `/api/ventas/${v.id_global}`, { token: adm.token })).json;
   assert.equal(venta.detalle.find((l) => l.producto_id === A.id).importe_descuento, 300);
 });
+
+test('Ventas Online.RF21: una promoción para socios se aplica solo a la cuenta vinculada a un cliente socio', async () => {
+  await api('POST', '/api/modulos/clientes/instalar', { token: adm.token });
+  assert.equal((await api('POST', '/api/funciones/cambiar', { token: adm.token, body: { activar: ['CLI-FIDEL'], motivo: 'prueba' } })).status, 200);
+  // Se pausan las demás y queda una sola: 20 % en cafés solo para socios.
+  await pool.query("UPDATE promociones SET estado = 'pausada'");
+  const p = await api('POST', '/api/promociones', { token: adm.token, body: { nombre: 'Cafe socios', tipo: 'cantidad', porcentaje: 20, cantidad_minima: 2, items: [{ producto_id: B.id }] } });
+  assert.equal(p.status, 201, JSON.stringify(p.json));
+  assert.equal((await api('PUT', `/api/promociones/${p.json.id}/solo-socios`, { token: adm.token, body: { solo_socios: true } })).status, 200);
+  const cli = (await api('POST', '/api/clientes', { token: adm.token, body: { tipo_documento: 'CUIT', nro_documento: '30500010912', razon_social: 'Socia SRL', consultar_arca: false } })).json;
+  const reg = (await api('POST', `${T}/cuenta/registro`, { body: { email: 'socia@mail.test', password: 'clave-larga-1', nombre: 'Socia' } })).json;
+  const conCuenta = async () => (await api('POST', `${T}/carrito`, { body: { producto_id: B.id, cantidad: 2 }, token: reg.token })).json;
+  const invitado = (await api('POST', `${T}/carrito`, { body: { producto_id: B.id, cantidad: 2 } })).json;
+  assert.equal(invitado.descuento_promos ?? 0, 0); // un invitado no es socio
+  await api('PUT', `/api/ventas-online/clientes/${reg.cuenta.id}/vinculo`, { token: gerente.token, body: { cliente_id: cli.id } });
+  assert.equal((await conCuenta()).descuento_promos ?? 0, 0); // vinculada, pero todavía no es socia
+  await pool.query("INSERT INTO fid_socios (cliente_id, estado, consentimiento_en) VALUES (?, 'activo', NOW())", [cli.id]);
+  const socia = await conCuenta();
+  assert.equal(socia.descuento_promos, 200); // 20 % de 1000
+  assert.equal(socia.total, 800);
+});

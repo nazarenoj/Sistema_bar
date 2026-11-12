@@ -3,6 +3,7 @@ const pool = require('../config/db');
 const Catalogo = require('./catalogoService');
 const Cuentas = require('./cuentaService');
 const Cupones = require('./cuponService');
+const puertos = require('../modulos/puertos');
 const Funciones = require('../funciones/servicio');
 const Promos = require('../services/promocionService');
 const { TiendaInvalida } = require('./tiendaService');
@@ -40,6 +41,13 @@ const pesable = async (productoId) => ((await pool.query("SELECT tipo FROM produ
 const mismaSeleccion = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
 // Recalcula el carrito completo: quita lo despublicado, reprecia y compara con el precio que se había mostrado, marca lo que no alcanza y valida el cupón. Guarda los precios vistos.
+// Si quien compra tiene una cuenta vinculada a una ficha de Clientes que es socia del programa, se le aplican las promociones para socios (Ventas Online RF21). Sin Clientes o sin
+// fidelización activa nadie es socio.
+const esSocio = async (cuenta) => {
+  if (!cuenta?.cliente_id) return false;
+  try { const p = await puertos.obtener('credito'); return !!(p?.esSocio && await p.esSocio(cuenta.cliente_id)); } catch { return false; }
+};
+
 // Un cupón no acumulable no se suma a un ítem con promoción: esas líneas quedan fuera de su base; uno acumulable se calcula sobre el precio ya promocionado (Ventas Online RN24). El descuento se
 // reparte entre las líneas que alcanza, en proporción a su importe, para dejar el de cada línea en el pedido.
 const evaluarCupon = async (codigo, lineas, { quien } = {}) => {
@@ -78,10 +86,10 @@ const calcular = async (c, cuenta = null) => {
     lineas.push(l);
   }
   const subtotal = r2(lineas.reduce((a, l) => a + l.importe, 0));
-  // Promociones automáticas de Ventas: se aplican solas y se muestran junto al ítem (RF21). Las de socios necesitan identificar al socio y por ahora no se aplican en la tienda.
+  // Promociones automáticas de Ventas: se aplican solas y se muestran junto al ítem (RF21). Las de socios se aplican a la cuenta vinculada a un socio.
   let descuentoPromos = 0;
   if (lineas.length && await Funciones.estaActiva('VEN-PROMOS')) {
-    const rp = await Promos.calcularLineas(pool, lineas.map((l) => ({ id: l.linea, producto_id: l.producto_id, cantidad: l.cantidad, precio_unitario: l.precio_unitario, categoria_id: l.categoria_id })), {});
+    const rp = await Promos.calcularLineas(pool, lineas.map((l) => ({ id: l.linea, producto_id: l.producto_id, cantidad: l.cantidad, precio_unitario: l.precio_unitario, categoria_id: l.categoria_id })), { socio: await esSocio(cuenta) });
     for (const x of rp.lineas) lineas.find((y) => y.linea === x.id).descuento_promo = x.descuento;
     for (const a of rp.aplicadas) for (const x of a.reparto) { const l = lineas.find((y) => y.linea === x.item_id); (l.promociones ??= []).push({ promocion_id: a.promocion_id, nombre: a.nombre, importe: x.importe }); }
     descuentoPromos = r2(rp.total_descuento);

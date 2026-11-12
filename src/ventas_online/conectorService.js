@@ -19,6 +19,8 @@ const { TiendaInvalida } = require('./tiendaService');
 const invalida = (m, status = 400, extra = {}) => Object.assign(new TiendaInvalida(m), { status, ...extra });
 const r2 = (x) => Math.round(Number(x) * 100) / 100;
 let transporte = null;
+// Sin un cliente real de la plataforma (credenciales y API propia de cada una) nada sale hacia ella: se deja dicho en el error, no solo «desconectado».
+const SIN_CLIENTE = (nombre) => `Falta la conexión con la plataforma de delivery${nombre ? ` ${nombre}` : ''}: no hay un cliente de integración (API y credenciales de la plataforma). Mientras tanto no se envían el menú ni los estados; quedan en cola.`;
 const usarTransporte = (fn) => { transporte = fn; };
 
 const exigir = async () => { if (!(await Funciones.estaActiva('ONL-MARKETPLACES'))) throw invalida('Los conectores de plataformas necesitan la función ONL-MARKETPLACES.', 409, { codigo: 'FUNCION_INACTIVA' }); };
@@ -103,7 +105,7 @@ const publicar = async (id) => {
   const c = await fila(id);
   if (c.pausado) throw invalida(`El conector está pausado: ${c.pausa_motivo ?? ''}`, 409, { codigo: 'CONECTOR_PAUSADO' });
   const m = await menu(id);
-  if (!transporte) { await pool.query("UPDATE onl_conectores SET conexion = 'desconectado' WHERE id = ?", [c.id]); throw invalida('No hay conexión con la plataforma: queda desconectada y se reintenta.', 409, { codigo: 'DESCONECTADO' }); } // EX15
+  if (!transporte) { await pool.query("UPDATE onl_conectores SET conexion = 'desconectado' WHERE id = ?", [c.id]); throw invalida(SIN_CLIENTE(c.nombre), 409, { codigo: 'DESCONECTADO' }); } // EX15
   try { await transporte('menu', c.codigo, m); } catch (err) {
     await pool.query("UPDATE onl_conectores SET conexion = 'desconectado' WHERE id = ?", [c.id]);
     await Notificacion.crear({ modulo: 'ventas_online', tipo: 'conector_desconectado', severidad: 'alta', roles: ['gerente'], clave: `conector-${c.id}`, mensaje: `El conector ${c.nombre} quedó desconectado: ${err.message}` }).catch(() => {});
@@ -223,6 +225,7 @@ const informarEstado = async (pedidoId, estado) => {
   const c = await fila(p.conector_id);
   const [r] = await pool.query('INSERT INTO onl_conector_eventos (conector_id, pedido_id, evento, ts_ms) VALUES (?, ?, ?, ?)', [c.id, pedidoId, estado, Date.now()]);
   if (transporte) await enviarEvento(r.insertId);
+  else await pool.query("UPDATE onl_conector_eventos SET error = ? WHERE id = ?", [SIN_CLIENTE(c.nombre).slice(0, 255), r.insertId]);
   if (estado === 'entregado') await entregarComision(pedidoId);
 };
 const enviarEvento = async (id) => {
@@ -234,7 +237,7 @@ const enviarEvento = async (id) => {
   }
 };
 const reintentarEventos = async () => {
-  if (!transporte) return { enviados: 0, pendientes: 0 };
+  if (!transporte) return { enviados: 0, pendientes: 0, error: SIN_CLIENTE() };
   const [ids] = await pool.query("SELECT id FROM onl_conector_eventos WHERE estado <> 'enviado' ORDER BY id LIMIT 200");
   let enviados = 0;
   for (const { id } of ids) { await enviarEvento(id); enviados += (await pool.query("SELECT estado FROM onl_conector_eventos WHERE id = ?", [id]))[0][0].estado === 'enviado' ? 1 : 0; }

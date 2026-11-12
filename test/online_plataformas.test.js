@@ -67,7 +67,9 @@ test('Ventas Online.RF18: el conector define comision, precio propio y articulos
 
 test('Ventas Online.RF18/EX15: publicar el menu necesita conexion; el conector pausado a mano no publica y los elaborados se pausan con la disponibilidad vieja', async () => {
   const pub = () => api('POST', `/api/ventas-online/plataformas/${conector.id}/publicar`, { token: gerente.token });
-  assert.equal((await pub()).json.codigo, 'DESCONECTADO');
+  const sinCliente = await pub();
+  assert.equal(sinCliente.json.codigo, 'DESCONECTADO');
+  assert.match(sinCliente.json.error, /Falta la conexión con la plataforma de delivery.*no hay un cliente de integración/);
   assert.equal((await api('GET', '/api/ventas-online/plataformas', { token: gerente.token })).json[0].conexion, 'desconectado');
   Conectores.usarTransporte(async (tipo, cod, payload) => { enviados.push({ tipo, cod, payload }); });
   const ok = await pub();
