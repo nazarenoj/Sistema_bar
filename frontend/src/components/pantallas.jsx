@@ -10,6 +10,7 @@ import { Copias, Correo, Padron, Consolidacion, Seguridad } from './modulos/sist
 import { Contable } from './modulos/contable'
 import { Financiero } from './modulos/financiero'
 import { Compras } from './modulos/compras'
+import { VentasOnline } from './modulos/ventasOnline'
 import Alergenos from './stock/Alergenos'
 import IngresoFoto from './stock/IngresoFoto'
 import Inicio from './Inicio'
@@ -42,5 +43,6 @@ export const PANTALLAS = {
   contable: Contable,
   financiero: Financiero,
   compras: Compras,
+  'ventas-online': VentasOnline,
   'config-ventas': ConfigVentas,
 }

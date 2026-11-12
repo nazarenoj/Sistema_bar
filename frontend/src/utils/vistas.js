@@ -28,5 +28,6 @@ export const PERMISO_VISTA = {
   contable: 'contable.ver',
   financiero: 'financiero.cajas.ver',
   compras: 'compras.proveedores.ver',
+  'ventas-online': 'ventas_online.pedidos.ver',
   'config-ventas': 'ventas.catalogo.ver',
 }
