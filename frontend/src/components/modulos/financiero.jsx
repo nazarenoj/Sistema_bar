@@ -8,8 +8,7 @@ const cuenta = (k, etiqueta, extra = {}) => ({ k, etiqueta, tipo: 'select', requ
 const importe = (extra = {}) => ({ k: 'importe', etiqueta: 'Importe', tipo: 'number', requerido: true, ...extra })
 const efectivo = (v) => ({ conteo: { efectivo: Number(v.efectivo) } })
 
-export const Financiero = (p) => (
-  <Modulo {...p} tabs={[
+const TABS = [
     { id: 'cuentas', titulo: 'Cajas y cuentas', ruta: `${B}/cuentas`, permiso: 'financiero.cajas.ver',
       ver: { titulo: 'Cuenta', ruta: (f) => `${B}/cuentas/${f.id}` },
       crear: { titulo: 'Cuenta', ruta: `${B}/cuentas`, permiso: 'financiero.cajas.configurar', campos: [
@@ -82,5 +81,10 @@ export const Financiero = (p) => (
     { id: 'flujo', titulo: 'Flujo de fondos', ruta: `${B}/informes/flujo`, permiso: 'financiero.informes.ver', filtros: rango },
     { id: 'balance', titulo: 'Balance', ruta: `${B}/informes/balance`, permiso: 'financiero.informes.ver', filtros: rango },
     { id: 'config', titulo: 'Configuración', ruta: `${B}/config`, permiso: 'financiero.cajas.ver' },
-  ]} />
-)
+]
+
+const grupo = (ids) => (p) => <Modulo {...p} tabs={TABS.filter(t => ids.includes(t.id))} />
+export const FinCajas = grupo(['cuentas', 'turnos', 'movimientos', 'saldos'])
+export const FinPagos = grupo(['gastos', 'recurrentes', 'transferencias', 'cheques'])
+export const FinCobros = grupo(['acreditaciones', 'liquidaciones', 'plataformas', 'conciliacion', 'divisas'])
+export const FinInformes = grupo(['flujo', 'balance', 'config'])

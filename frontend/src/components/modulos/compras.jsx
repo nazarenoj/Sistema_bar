@@ -7,8 +7,7 @@ const rango = [{ k: 'desde', etiqueta: 'Desde', tipo: 'date' }, { k: 'hasta', et
 const proveedor = (extra = {}) => ({ k: 'proveedor_id', etiqueta: 'Proveedor', tipo: 'select', requerido: true, fuente: { ruta: `${B}/proveedores`, valor: 'id', texto: 'razon_social' }, ...extra })
 const motivo = { k: 'motivo', etiqueta: 'Motivo', requerido: true, ancho: 'completo' }
 
-export const Compras = (p) => (
-  <Modulo {...p} tabs={[
+const TABS = [
     { id: 'proveedores', titulo: 'Proveedores', ruta: `${B}/proveedores`, permiso: 'compras.proveedores.ver',
       ver: { titulo: 'Proveedor', ruta: (f) => `${B}/proveedores/${f.id}` },
       crear: { titulo: 'Proveedor', ruta: `${B}/proveedores`, permiso: 'compras.proveedores.gestionar', campos: [
@@ -84,5 +83,10 @@ export const Compras = (p) => (
     { id: 'informes', titulo: 'Informes', ruta: `${B}/informes`, permiso: 'compras.informes.ver',
       ver: { titulo: 'Informe', ruta: (f) => `${B}/informes/${f.tipo ?? f.id}` } },
     { id: 'config', titulo: 'Configuración', ruta: `${B}/config`, permiso: 'compras.proveedores.ver' },
-  ]} />
-)
+]
+
+const grupo = (ids) => (p) => <Modulo {...p} tabs={TABS.filter(t => ids.includes(t.id))} />
+export const ComProveedores = grupo(['proveedores', 'config'])
+export const ComComprobantes = grupo(['comprobantes', 'devoluciones', 'libro-iva', 'arca'])
+export const ComPagos = grupo(['deuda', 'vencimientos', 'ordenes', 'retenciones'])
+export const ComAbastecimiento = grupo(['costos', 'costos-pend', 'listas', 'pedidos', 'sugerido', 'informes'])

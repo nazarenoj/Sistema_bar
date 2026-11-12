@@ -8,8 +8,8 @@ import { Reservas, Comisiones, Carta } from './modulos/ventasExtra'
 import { Cobranzas, Fidelizacion } from './modulos/clientesExtra'
 import { Copias, Correo, Padron, Consolidacion, Seguridad } from './modulos/sistema'
 import { Contable } from './modulos/contable'
-import { Financiero } from './modulos/financiero'
-import { Compras } from './modulos/compras'
+import { FinCajas, FinPagos, FinCobros, FinInformes } from './modulos/financiero'
+import { ComProveedores, ComComprobantes, ComPagos, ComAbastecimiento } from './modulos/compras'
 import { VentasOnline } from './modulos/ventasOnline'
 import Alergenos from './stock/Alergenos'
 import IngresoFoto from './stock/IngresoFoto'
@@ -41,8 +41,8 @@ export const PANTALLAS = {
   proveedores: Proveedores,
   cocina: Cocina,
   contable: Contable,
-  financiero: Financiero,
-  compras: Compras,
+  'fin-cajas': FinCajas, 'fin-pagos': FinPagos, 'fin-cobros': FinCobros, 'fin-informes': FinInformes,
+  'com-proveedores': ComProveedores, 'com-comprobantes': ComComprobantes, 'com-pagos': ComPagos, 'com-abastecimiento': ComAbastecimiento,
   'ventas-online': VentasOnline,
   'config-ventas': ConfigVentas,
 }
