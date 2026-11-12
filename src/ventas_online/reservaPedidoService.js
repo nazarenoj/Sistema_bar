@@ -11,8 +11,18 @@ const config = async () => (await pool.query('SELECT vigencia_reserva_min, timeo
 const items = (lineas) => lineas.map((l) => ({ producto_id: l.producto_id, cantidad: Number(l.cantidad) }));
 
 // -> { estado: 'confirmada' | 'pendiente' | 'no_aplica' | 'rechazada', id, vence_ms, sin_disponible? }
-const reservar = async ({ lineas, solicitud, reemplazaA = null }) => {
+// Un elaborado que se produce al venderse (modo de producción «venta») no se reserva: sus insumos se consumen al vender y la disponibilidad que se publica ya sale de ellos (Ventas Online RN07).
+const sinElaboradosEnVenta = async (lineas) => {
+  const ids = [...new Set(lineas.map((l) => l.producto_id))];
+  if (!ids.length) return lineas;
+  const [prod] = await pool.query("SELECT id FROM productos WHERE id IN (?) AND tipo = 'elaborado' AND modo_produccion = 'venta'", [ids]);
+  const fuera = new Set(prod.map((x) => x.id));
+  return lineas.filter((l) => !fuera.has(l.producto_id));
+};
+
+const reservar = async ({ lineas: todas, solicitud, reemplazaA = null }) => {
   const c = await config();
+  const lineas = await sinElaboradosEnVenta(todas);
   const r = await llamar(7, 'ventas_online', async () => (await puertos.obtener('stock')).comprometer(items(lineas), { idSolicitud: solicitud, reemplazaA, vigenciaMs: c.vigencia_reserva_min * 60000 }), { esperaMs: c.timeout_reserva_segundos * 1000 });
   if (r.fallo) return /no instalado/.test(r.motivo ?? '') ? { estado: 'no_aplica' } : { estado: 'pendiente', motivo: r.motivo };
   const v = r.valor;
@@ -24,7 +34,8 @@ const reservar = async ({ lineas, solicitud, reemplazaA = null }) => {
 // Pedidos que reservan stock sin pago aprobado (transferencia con confirmación manual, pago al retirar, efectivo contra entrega): por artículo no pueden reservar más que un porcentaje del disponible
 // (parámetro `online_reserva_sin_pago_pct`, 30 % por defecto), sumando las reservas sin pago vigentes (Ventas Online RN56). Sin Stock no hay reserva ni tope.
 const SIN_PAGO = ['transferencia', 'pago_al_retirar', 'efectivo_contra_entrega'];
-const excedeTopeSinPago = async (lineas, { excluirPedido = null } = {}) => {
+const excedeTopeSinPago = async (todas, { excluirPedido = null } = {}) => {
+  const lineas = await sinElaboradosEnVenta(todas);
   let puerto;
   try { puerto = await puertos.obtener('stock'); } catch { return null; }
   if (!puerto?.disponibleUnidades) return null;

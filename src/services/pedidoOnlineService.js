@@ -92,7 +92,7 @@ const recibir = async (d) => {
     await Pedido.cerrarPedidosMesa(m.mesa_id, conn);
     await Pedido.setMetodoPago(m.mesa_id, sesion, pagos.length > 1 ? 'mixto' : pagos[0].forma, conn);
     const venta = await Venta.registrar(conn, { mesa_id: m.mesa_id, sesion_apertura: sesion, items, total, pagos, idSolicitud: `online:${d.idGlobal}`, userId: null, modalidad: d.modalidad,
-      idCompromiso: d.idCompromiso ?? null, credito: d.credito ?? null, fid: d.clienteId ? { clienteId: d.clienteId, premio: null } : null, clienteId: d.clienteId ?? null, terminalId: null });
+      idCompromiso: d.idCompromiso ?? null, credito: d.credito ?? null, fid: d.clienteId ? { clienteId: d.clienteId, premio: null } : null, clienteId: d.clienteId ?? null, terminalId: d.terminalId ?? null });
     await Mesa.updateEstado(m.mesa_id, 'libre', conn);
     await conn.query('UPDATE ventas_pedidos_online SET venta_id_global = ? WHERE pedido_global = ?', [venta.id_global, d.idGlobal]);
     await conn.commit();

@@ -19,7 +19,7 @@ const completa = (t) => ({
   codigo: t.codigo, nombre: t.nombre, activa: !!t.activa, dominio: t.dominio, logo_url: t.logo_url, color_primario: t.color_primario, color_acento: t.color_acento,
   razon_social: t.razon_social, cuit: t.cuit, domicilio: t.domicilio, telefono: t.telefono, email: t.email, horarios: horariosDe(t),
   limite_pedidos_ip_hora: t.limite_pedidos_ip_hora, vigencia_reserva_min: t.vigencia_reserva_min, timeout_reserva_segundos: t.timeout_reserva_segundos,
-  impagos_horas: t.impagos_horas, disponibilidad_alerta_min: t.disponibilidad_alerta_min, prioridad_lista: t.prioridad_lista,
+  terminal_cobro_id: t.terminal_cobro_id, impagos_horas: t.impagos_horas, disponibilidad_alerta_min: t.disponibilidad_alerta_min, prioridad_lista: t.prioridad_lista,
   url_publica: t.codigo ? `/tienda/${t.codigo}` : null,
 });
 const config = async () => completa(await fila());
@@ -94,6 +94,14 @@ const actualizar = async (d) => {
   poner('limite_pedidos_ip_hora', entero(d.limite_pedidos_ip_hora, 'El límite de pedidos por IP', 1, 1000));
   poner('vigencia_reserva_min', entero(d.vigencia_reserva_min, 'La vigencia de la reserva', 1, 240));
   poner('timeout_reserva_segundos', entero(d.timeout_reserva_segundos, 'El tiempo de espera de la reserva', 1, 60));
+  if (d.terminal_cobro_id !== undefined) {
+    if (d.terminal_cobro_id === null) campos.terminal_cobro_id = null;
+    else {
+      const [[tm]] = await pool.query('SELECT id FROM terminales WHERE id = ?', [Number(d.terminal_cobro_id)]);
+      if (!tm) throw invalida('La terminal de cobro no existe.', 404);
+      campos.terminal_cobro_id = tm.id;
+    }
+  }
   poner('impagos_horas', entero(d.impagos_horas, 'Las horas para cancelar pedidos impagos', 1, 720));
   poner('disponibilidad_alerta_min', entero(d.disponibilidad_alerta_min, 'Los minutos de alerta de disponibilidad', 1, 1440));
   if (d.prioridad_lista !== undefined) { if (!['online', 'cliente'].includes(d.prioridad_lista)) throw invalida('La prioridad de lista es online o cliente.'); campos.prioridad_lista = d.prioridad_lista; }

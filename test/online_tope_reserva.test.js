@@ -75,3 +75,18 @@ test('Ventas Online.RN56: un pedido pendiente de autorización que nadie autoriz
   assert.equal((await estado(p.json.id)).estado, 'cancelado');
   assert.equal(await reservado(), 9); // nada que liberar
 });
+
+test('Ventas Online.RN07: un elaborado que se produce al venderse no se reserva (un artículo común con el mismo stock sí)', async () => {
+  const antes = await reservado();
+  const E = (await api('POST', '/api/productos', { token: adm.token, body: { nombre: 'Torta del día', precio: 900, stock: 5, tipo: 'elaborado' } })).json;
+  await api('PUT', `/api/stock/configuracion/producto/${E.id}`, { token: adm.token, body: { permite_negativo: false } });
+  await api('PUT', `/api/ventas-online/catalogo/${E.id}`, { token: gerente.token, body: { categoria_online: 'Menu' } });
+  await api('POST', '/api/ventas-online/sincronizar', { token: gerente.token });
+  require('../src/ventas_online/limites').pedidos.reiniciar();
+  const c = (await api('POST', `${T}/carrito`, { body: { producto_id: E.id, cantidad: 2 } })).json;
+  const r = await api('POST', `${T}/checkout`, { headers: { 'X-ID-Solicitud': `sol-elab-${++k}-abcdef` }, body: { carrito: c.token, contacto: { nombre: 'Ana', email: 'ana@mail.test' }, facturacion: { tipo: 'consumidor_final' }, entrega: { tipo: 'retiro' },
+    medio_pago: 'pasarela', acepta_terminos: true, total_confirmado: c.total } });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  assert.equal(await reservado(), antes); // el elaborado no comprometió stock
+  assert.equal((await estado(r.json.id)).reserva_estado, 'no_aplica');
+});

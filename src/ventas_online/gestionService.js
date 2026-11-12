@@ -27,7 +27,14 @@ const armarEntrega = async (p) => {
   if (canje) pagos.push({ forma: 'vale', importe: Number(p.canje_importe), instrumento: canje.codigo ?? null, puntos: !!canje.puntos, retencion_id: p.retencion_id });
   if (Number(p.a_pagar) > 0) pagos.push({ forma: FORMA[p.medio_pago] ?? 'otro', importe: Number(p.a_pagar), referencia: pago?.id_externo ?? p.id_global });
   const clienteId = cta?.cliente_id ?? null;
+  // El efectivo se cobra en el local que entrega: la terminal configurada en la tienda o, si no hay, la de la primera caja de efectivo activa (Financiero lo asienta en esa caja y su turno).
+  let terminalId = null;
+  if (pagos.some((x) => x.forma === 'efectivo')) {
+    terminalId = (await pool.query('SELECT terminal_cobro_id FROM onl_tienda WHERE id = 1'))[0][0]?.terminal_cobro_id ?? null;
+    if (!terminalId) terminalId = (await pool.query("SELECT terminal_id FROM fin_cuentas WHERE tipo = 'caja_efectivo' AND activa = 1 AND terminal_id IS NOT NULL ORDER BY id LIMIT 1").then((r) => r[0][0]?.terminal_id).catch(() => null)) ?? null;
+  }
   return {
+    terminalId,
     idGlobal: p.id_global, referencia: `Online #${p.id}${p.numero_retiro ? ` ${p.numero_retiro}` : ''} ${p.nombre}`, modalidad: p.entrega_tipo === 'delivery' ? 'delivery' : 'retiro', transaccion: pago?.id_externo ?? null,
     // Un pesable viaja como una línea por su importe estimado: la cantidad de la línea de Ventas es entera; el peso real se ajusta después (RN51).
     lineas: lineas.map((l) => (l.es_pesable
