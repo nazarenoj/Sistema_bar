@@ -7,6 +7,7 @@ import { Produccion, Inventario, Calidad, Proveedores } from './modulos/stockOpe
 import { Reservas, Comisiones, Carta } from './modulos/ventasExtra'
 import { Cobranzas, Fidelizacion } from './modulos/clientesExtra'
 import { Copias, Correo, Padron, Consolidacion, Seguridad } from './modulos/sistema'
+import { Contable } from './modulos/contable'
 import Alergenos from './stock/Alergenos'
 import IngresoFoto from './stock/IngresoFoto'
 import Inicio from './Inicio'
@@ -36,5 +37,6 @@ export const PANTALLAS = {
   calidad: Calidad,
   proveedores: Proveedores,
   cocina: Cocina,
+  contable: Contable,
   'config-ventas': ConfigVentas,
 }
